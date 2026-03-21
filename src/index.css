@@ -195,63 +195,65 @@
     box-shadow:
       0 12px 24px hsla(var(--saheli-pink), 0.32),
       0 0 16px hsla(var(--saheli-lavender), 0.18);
-    transform: translateY(-2px) scale(1.03);
+    transform: scale(1.02);
   }
 
   .saheli-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.95);
   }
 
   .chat-bubble {
-    border-radius: 1.35rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border-radius: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    padding: 0.875rem 1.25rem;
   }
 
   .chat-bubble-user {
-    background: hsl(340, 80%, 90%);
+    background: hsl(340, 75%, 88%);
     color: hsl(0, 0%, 20%);
     border: none;
   }
 
   .dark .chat-bubble-user {
-    background: linear-gradient(135deg, hsl(335, 85%, 65%) 0%, hsl(330, 80%, 60%) 100%);
+    background: linear-gradient(135deg, hsl(335, 80%, 62%) 0%, hsl(330, 75%, 58%) 100%);
     color: hsl(0, 0%, 100%);
     border: none;
-    box-shadow: 0 4px 16px rgba(240, 100, 150, 0.2);
+    box-shadow: 0 2px 8px rgba(240, 80, 140, 0.15);
   }
 
   .chat-bubble-ai {
     background: hsl(var(--card));
     color: hsl(var(--card-foreground));
     border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   }
 
   .dark .chat-bubble-ai {
     background: hsl(var(--card));
     color: hsl(var(--card-foreground));
     border: 1px solid hsl(var(--border));
-    box-shadow: 0 4px 16px rgba(240, 100, 150, 0.1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   }
 
   .chat-input-shell {
     background: hsl(var(--input));
     border: 2px solid hsl(var(--border));
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transition: border-color 200ms ease, box-shadow 200ms ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    transition: border-color 200ms ease-out, box-shadow 200ms ease-out, background-color 150ms ease-out;
   }
 
   .chat-input-shell:focus-within {
     border-color: hsl(var(--saheli-pink));
     box-shadow:
-      0 4px 12px rgba(240, 100, 150, 0.15),
-      0 0 0 3px rgba(240, 100, 150, 0.1);
+      0 4px 12px rgba(240, 100, 150, 0.2),
+      inset 0 0 0 2px hsla(var(--saheli-pink), 0.08);
   }
 
   .dark .chat-input-shell:focus-within {
     border-color: hsl(var(--saheli-pink));
     box-shadow:
-      0 4px 12px rgba(240, 100, 150, 0.25),
-      0 0 0 3px rgba(240, 100, 150, 0.15);
+      0 4px 12px rgba(240, 100, 150, 0.3),
+      inset 0 0 0 2px hsla(var(--saheli-pink), 0.12);
   }
 
   .chat-input-field {
@@ -264,17 +266,17 @@
   }
 
   .interactive-btn {
-    transition: transform 250ms ease, box-shadow 200ms ease, background-color 200ms ease, border-color 200ms ease;
+    transition: transform 200ms ease-out, box-shadow 200ms ease-out, background-color 150ms ease-out, border-color 150ms ease-out;
     will-change: transform;
   }
 
   .interactive-btn:hover {
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 6px 16px hsla(var(--romance-glow), 0.18);
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px hsla(var(--romance-glow), 0.15);
   }
 
   .interactive-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.95);
   }
 
   .mic-active {
@@ -329,6 +331,92 @@
   10% { opacity: 0.6; }
   90% { opacity: 0.6; }
   100% { transform: translate(var(--drift-x, 40px), var(--drift-y, -120px)) rotate(var(--drift-r, 45deg)); opacity: 0; }
+}
+
+/* Premium Romantic Effects */
+
+/* Light Mode - Petal Effect */
+.petal-container {
+  display: block;
+}
+
+.petal {
+  position: absolute;
+  pointer-events: none;
+  width: var(--petal-size, 8px);
+  height: var(--petal-size, 8px);
+  left: var(--petal-start-left, 50%);
+  top: var(--petal-start-top, 50%);
+  transform: translate(-50%, -50%);
+  border-radius: 50% 0;
+  background: radial-gradient(ellipse at 30% 30%, hsla(336, 90%, 75%, 0.4), hsla(334, 80%, 65%, 0.15));
+  opacity: 0.35;
+  filter: blur(0.5px);
+  animation: petal-float var(--petal-duration, 10s) ease-in-out infinite;
+  animation-delay: var(--petal-delay, 0s);
+  will-change: transform, opacity;
+  transition: transform 0.15s ease-out;
+}
+
+@keyframes petal-float {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) translateY(0px);
+    opacity: 0.25;
+  }
+  25% {
+    transform: translate(-50%, -50%) rotate(45deg) translateY(-30px);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(90deg) translateY(-60px);
+    opacity: 0.3;
+  }
+  75% {
+    transform: translate(-50%, -50%) rotate(180deg) translateY(-30px);
+    opacity: 0.35;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg) translateY(0px);
+    opacity: 0.25;
+  }
+}
+
+/* Dark Mode - Heart Effect */
+.heart-container {
+  display: block;
+}
+
+.heart-element {
+  position: absolute;
+  pointer-events: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: calc(max(0, 1 - var(--heart-progress, 0)));
+  transform: translate(-50%, -50%) translateY(calc(var(--heart-progress, 0) * -40px)) scale(calc(1 - var(--heart-progress, 0) * 0.3));
+  will-change: transform, opacity;
+  filter: drop-shadow(0 2px 4px rgba(240, 100, 150, 0.2));
+  animation: heart-float 1.2s ease-out forwards;
+}
+
+@keyframes heart-float {
+  0% {
+    transform: translate(-50%, -50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) translateY(-40px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* Ensure light mode petals stay visible and responsive */
+:not(.dark) .petal {
+  background: radial-gradient(ellipse at 30% 30%, hsla(336, 90%, 75%, 0.4), hsla(334, 80%, 65%, 0.15));
+}
+
+/* Ensure dark mode hearts render properly */
+.dark .heart-element {
+  opacity: calc(max(0, 1 - var(--heart-progress, 0)) * 0.95);
 }
 
 @media (prefers-reduced-motion: reduce) {

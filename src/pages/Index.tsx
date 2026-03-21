@@ -17,6 +17,8 @@ import {
 import ReactMarkdown from "react-markdown";
 import { sendChat, speakText, type ChatMsg } from "@/lib/saheli-api";
 import FloatingElements from "@/components/FloatingElements";
+import PetalEffect from "@/components/PetalEffect";
+import HeartEffect from "@/components/HeartEffect";
 
 interface UIMessage {
   id: string;
@@ -42,6 +44,7 @@ const Index = () => {
   const [isListening, setIsListening] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -58,9 +61,26 @@ const Index = () => {
     
     if (isDark) {
       htmlElement.classList.add("dark");
+      setIsDarkMode(true);
     } else {
       htmlElement.classList.remove("dark");
+      setIsDarkMode(false);
     }
+
+    // Listen for theme changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleThemeChange = (e: MediaQueryListEvent) => {
+      if (e.matches) {
+        htmlElement.classList.add("dark");
+        setIsDarkMode(true);
+      } else {
+        htmlElement.classList.remove("dark");
+        setIsDarkMode(false);
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleThemeChange);
+    return () => mediaQuery.removeEventListener("change", handleThemeChange);
   }, []);
 
   useEffect(() => {
@@ -252,6 +272,7 @@ const Index = () => {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
         <FloatingElements />
+        {!isDarkMode && <PetalEffect />}
         <motion.div
           initial={{ opacity: 0, y: 24, filter: "blur(6px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -297,6 +318,8 @@ const Index = () => {
   return (
     <div className="h-screen flex bg-background overflow-hidden romance-surface">
       <FloatingElements />
+      {!isDarkMode && <PetalEffect />}
+      {isDarkMode && <HeartEffect />}
       {/* Sidebar */}
       <AnimatePresence>
         {sidebarOpen && (
@@ -322,7 +345,7 @@ const Index = () => {
             </div>
 
             {/* New chat button */}
-            <div className="p-3">
+            <div className="p-4">
               <button
                 onClick={createNewConversation}
                 className="saheli-btn w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
@@ -333,7 +356,7 @@ const Index = () => {
             </div>
 
             {/* Conversation list */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1">
+            <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1.5">
               {conversations.map((conv) => (
                 <button
                   key={conv.id}
@@ -362,7 +385,7 @@ const Index = () => {
             </div>
 
             {/* Sidebar footer */}
-            <div className="p-3 border-t border-border">
+            <div className="p-4 border-t border-border space-y-3">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setAudioOn(!audioOn); if (audioOn) speechSynthesis.cancel(); }}
@@ -389,7 +412,7 @@ const Index = () => {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Chat header */}
-        <header className="glass-strong px-4 py-3 flex items-center gap-3 border-b border-border z-10">
+        <header className="glass-strong px-4 py-4 flex items-center gap-3 border-b border-border z-10">
           {!sidebarOpen && (
             <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-muted/50 active:scale-95 transition-transform">
               <MessageSquare size={18} className="text-foreground" />
@@ -445,7 +468,7 @@ const Index = () => {
               </motion.div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
+            <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
               <AnimatePresence>
                 {messages.map((msg) => (
                   <motion.div
@@ -461,7 +484,7 @@ const Index = () => {
                       </div>
                     )}
                     <div
-                      className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      className={`max-w-sm rounded-2xl text-sm leading-relaxed ${
                         msg.sender === "user"
                           ? "chat-bubble chat-bubble-user rounded-br-md"
                           : "chat-bubble chat-bubble-ai rounded-bl-md"
@@ -509,9 +532,9 @@ const Index = () => {
         </div>
 
         {/* Input area — ChatGPT style */}
-        <div className="border-t border-border p-4">
-          <div className="max-w-3xl mx-auto">
-            <div className="chat-input-shell rounded-2xl border flex items-end gap-2 p-2 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+        <div className="border-t border-border px-4 py-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="chat-input-shell rounded-full border flex items-end gap-2 p-2.5 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
               <button
                 onClick={toggleListening}
                 className={`interactive-btn p-2.5 rounded-xl flex-shrink-0 transition-colors active:scale-95 ${
@@ -533,7 +556,7 @@ const Index = () => {
                 }}
                 placeholder={isListening ? "Sun rahi hoon... bolo! 🎤" : "Saheli se baat karo..."}
                 rows={1}
-                className="chat-input-field flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none resize-none py-2 px-1 min-h-[36px] max-h-[150px]"
+                className="chat-input-field flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none resize-none py-2 px-2 min-h-[36px] max-h-[150px]"
               />
               <motion.button
                 onClick={() => handleSend()}
