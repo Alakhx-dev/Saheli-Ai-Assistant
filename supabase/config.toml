@@ -1,0 +1,4 @@
+project_id = "hzpdermfwnhbnyvyjgis"
+
+[functions.saheli-chat]
+verify_jwt = false

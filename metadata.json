@@ -1,8 +1,0 @@
-{
-  "name": "Saheli",
-  "description": "Your Personal Best Friend - A cute, soft, and emotionally supportive assistant for managing your day, capturing moments, and staying organized with love.",
-  "requestFramePermissions": [
-    "camera",
-    "microphone"
-  ]
-}
