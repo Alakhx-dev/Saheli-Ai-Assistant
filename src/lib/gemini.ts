@@ -1,11 +1,45 @@
 import { GoogleGenAI, Type, ThinkingLevel, Modality } from "@google/genai";
 import { UserMemory, Task } from "../types";
 
-export const getAI = () => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured. Please check your environment variables.");
+const getGeminiApiKey = () => {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey || !apiKey.trim()) {
+    const error = new Error("Missing VITE_GEMINI_API_KEY. Add VITE_GEMINI_API_KEY=your_api_key_here to your .env file.");
+    console.error("Gemini configuration error:", {
+      message: error.message,
+      envVar: "VITE_GEMINI_API_KEY",
+      hasKey: Boolean(apiKey),
+    });
+    throw error;
   }
+
+  return apiKey;
+};
+
+const logGeminiError = (scope: string, error: unknown) => {
+  const typedError = error as {
+    message?: string;
+    stack?: string;
+    status?: number;
+    code?: string;
+    cause?: unknown;
+  };
+
+  console.error(`[${scope}] Gemini API call failed`, {
+    message: typedError?.message,
+    status: typedError?.status,
+    code: typedError?.code,
+    cause: typedError?.cause,
+    hasApiKey: Boolean(import.meta.env.VITE_GEMINI_API_KEY),
+  });
+
+  if (typedError?.stack) {
+    console.error(`[${scope}] stack`, typedError.stack);
+  }
+};
+
+export const getAI = () => {
+  const apiKey = getGeminiApiKey();
   return new GoogleGenAI({ apiKey });
 };
 
@@ -78,7 +112,7 @@ export const analyzeStyle = async (base64Image: string, memory?: UserMemory) => 
 
     return JSON.parse(response.text || '{}');
   } catch (e: any) {
-    console.error("Gemini Vision Error:", e);
+    logGeminiError("analyzeStyle", e);
     throw e;
   }
 };
@@ -150,7 +184,7 @@ export const chatWithSaheliStream = async (message: string, memory?: UserMemory,
 
     return { text: fullText.replace(/^\[.*?\]\s*/, ""), emotion: detectedEmotion };
   } catch (e: any) {
-    console.error("Gemini Chat Stream Error:", e);
+    logGeminiError("chatWithSaheliStream", e);
     throw e;
   }
 };
@@ -205,7 +239,7 @@ export const generateSaheliAudio = async (text: string, emotion: string = 'carin
       mimeType: inlineData?.mimeType || 'audio/mp3'
     };
   } catch (e: any) {
-    console.error("Gemini TTS Error:", e);
+    logGeminiError("generateSaheliAudio", e);
     return null;
   }
 };
@@ -251,7 +285,7 @@ export const generateSaheliAudioStream = async (text: string, emotion: string = 
       onAudioChunk(part.inlineData.data, part.inlineData.mimeType || 'audio/mp3');
     }
   } catch (e: any) {
-    console.error("Gemini TTS Error:", e);
+    logGeminiError("generateSaheliAudioStream", e);
   }
 };
 
@@ -322,7 +356,7 @@ export const generateDailyPlan = async (goals: string[], completedTasks: string[
 
     return JSON.parse(response.text || '{}');
   } catch (e: any) {
-    console.error("Gemini Daily Plan Error:", e);
+    logGeminiError("generateDailyPlan", e);
     throw e;
   }
 };
@@ -389,7 +423,7 @@ export const generateRoadmap = async (topic: string, memory?: UserMemory) => {
 
     return JSON.parse(response.text || '{}');
   } catch (e: any) {
-    console.error("Gemini Roadmap Error:", e);
+    logGeminiError("generateRoadmap", e);
     throw e;
   }
 };
@@ -447,7 +481,7 @@ export const generateNightReviewFeedback = async (completions: string, mood: str
 
     return JSON.parse(response.text || '{}');
   } catch (e: any) {
-    console.error("Gemini Night Review Error:", e);
+    logGeminiError("generateNightReviewFeedback", e);
     throw e;
   }
 };

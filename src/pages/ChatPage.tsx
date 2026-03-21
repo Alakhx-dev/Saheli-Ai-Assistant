@@ -38,6 +38,8 @@ export const ChatPage = () => {
   const [isTTSEnabled, setIsTTSEnabled] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const earlyTTSTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -138,10 +140,19 @@ export const ChatPage = () => {
     
     return new Promise<void>(async (resolve) => {
       try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        // Reuse pre-warmed AudioContext or create one
+        let audioContext = audioContextRef.current;
+        if (!audioContext || audioContext.state === 'closed') {
+          audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioContextRef.current = audioContext;
+        }
         
         // Stop any currently playing speech synthesis
         window.speechSynthesis.cancel();
+
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
 
         await generateSaheliAudioStream(text, emotion, async (data, mimeType) => {
           // Convert base64 to ArrayBuffer
@@ -153,7 +164,7 @@ export const ChatPage = () => {
 
           try {
             let bufferToDecode: ArrayBuffer;
-            if (mimeType.includes('pcm')) {
+            if (mimeType.includes('pcm') || mimeType.includes('L16')) {
               const rateMatch = mimeType.match(/rate=(\d+)/);
               const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
               const wavBlob = addWavHeader(bytes, sampleRate);
@@ -162,17 +173,12 @@ export const ChatPage = () => {
               bufferToDecode = bytes.buffer;
             }
             
-            const audioBuffer = await audioContext.decodeAudioData(bufferToDecode);
-            const source = audioContext.createBufferSource();
+            const audioBuffer = await audioContext!.decodeAudioData(bufferToDecode);
+            const source = audioContext!.createBufferSource();
             source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            
-            if (audioContext.state === 'suspended') {
-              await audioContext.resume();
-            }
+            source.connect(audioContext!.destination);
             
             source.onended = () => {
-              audioContext.close();
               resolve();
             };
             
@@ -238,9 +244,13 @@ export const ChatPage = () => {
     if (isTTSEnabled && audioQueue.current.length > 0) {
       processAudioQueue();
     } else if (!isTTSEnabled) {
-      // Clear queue if muted
+      // Clear queue and stop all audio if muted
       audioQueue.current = [];
       window.speechSynthesis.cancel();
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
     }
   }, [isTTSEnabled, processAudioQueue]);
 
@@ -262,11 +272,26 @@ export const ChatPage = () => {
     // Reset audio queue for new message
     audioQueue.current = [];
     isSpeaking.current = false;
+    if (earlyTTSTimerRef.current) {
+      clearTimeout(earlyTTSTimerRef.current);
+      earlyTTSTimerRef.current = null;
+    }
+
+    // Pre-warm AudioContext so it's ready when first audio arrives
+    try {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume();
+      }
+    } catch (_) { /* non-critical */ }
 
     try {
       let saheliText = "";
       let saheliEmotion = "caring";
       let currentSentence = "";
+      let firstChunkReceived = false;
 
       const result = await chatWithSaheliStream(text, memory, { tasks }, (chunk, emotion) => {
         saheliEmotion = emotion;
@@ -283,12 +308,34 @@ export const ChatPage = () => {
           }
         });
 
-        // Trigger speech for complete sentences during streaming
-        if (currentSentence.match(/[.!?\n]/) && currentSentence.trim().length > 5) {
+        // Start a timer on first chunk — if no sentence boundary found within 800ms, fire TTS anyway
+        if (!firstChunkReceived && currentSentence.trim().length > 0) {
+          firstChunkReceived = true;
+          earlyTTSTimerRef.current = setTimeout(() => {
+            if (currentSentence.trim().length > 3) {
+              queueSpeech(currentSentence);
+              currentSentence = "";
+            }
+          }, 800);
+        }
+
+        // Trigger speech on sentence boundaries and commas for faster first audio
+        if (currentSentence.match(/[.!?\n,]/) && currentSentence.trim().length > 3) {
+          // Clear the early timer since we found a natural break
+          if (earlyTTSTimerRef.current) {
+            clearTimeout(earlyTTSTimerRef.current);
+            earlyTTSTimerRef.current = null;
+          }
           queueSpeech(currentSentence);
           currentSentence = "";
         }
       });
+
+      // Clear any remaining timer
+      if (earlyTTSTimerRef.current) {
+        clearTimeout(earlyTTSTimerRef.current);
+        earlyTTSTimerRef.current = null;
+      }
 
       // Speak any remaining text after stream ends
       if (currentSentence.trim()) {
