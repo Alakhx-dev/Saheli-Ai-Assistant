@@ -6,23 +6,24 @@
 
 @layer base {
   :root {
-    --background: 334 58% 97%;
-    --foreground: 292 20% 20%;
+    /* LIGHT MODE - Default */
+    --background: 0 0% 98%;
+    --foreground: 0 0% 20%;
 
-    --card: 328 56% 98%;
-    --card-foreground: 292 20% 20%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 20%;
 
-    --popover: 328 56% 98%;
-    --popover-foreground: 292 20% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 20%;
 
     --primary: 334 67% 66%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 274 57% 86%;
-    --secondary-foreground: 282 32% 24%;
+    --secondary-foreground: 0 0% 20%;
 
-    --muted: 286 38% 93%;
-    --muted-foreground: 292 12% 48%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 60%;
 
     --accent: 20 66% 84%;
     --accent-foreground: 18 45% 24%;
@@ -30,54 +31,54 @@
     --destructive: 0 74% 62%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 326 45% 85%;
-    --input: 326 45% 85%;
+    --border: 0 0% 90%;
+    --input: 0 0% 100%;
     --ring: 334 67% 66%;
 
     --radius: 1.15rem;
 
-    /* Saheli custom tokens */
+    /* Saheli custom tokens - Light */
     --saheli-pink: 334 67% 66%;
-    --saheli-pink-light: 336 64% 90%;
+    --saheli-pink-light: 336 75% 92%;
     --saheli-lavender: 275 54% 77%;
     --saheli-lavender-light: 278 54% 92%;
     --saheli-mint: 164 35% 74%;
     --saheli-mint-light: 164 32% 90%;
     --saheli-peach: 24 78% 85%;
-    --saheli-glass: 0 0% 100%;
-    --saheli-glass-opacity: 0.42;
 
-    --romance-shadow: 334 62% 63%;
-    --romance-glow: 285 58% 72%;
+    --romance-shadow: 0 0% 0%;
+    --romance-glow: 334 67% 66%;
 
+    /* Sidebar - Light */
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-foreground: 0 0% 20%;
+    --sidebar-primary: 0 0% 20%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 95%;
+    --sidebar-accent-foreground: 0 0% 20%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 334 67% 66%;
   }
 
   .dark {
-    --background: 274 28% 11%;
-    --foreground: 322 25% 92%;
+    /* DARK MODE - All dark */
+    --background: 270 15% 8%;
+    --foreground: 0 0% 100%;
 
-    --card: 281 28% 14%;
-    --card-foreground: 322 25% 92%;
+    --card: 270 20% 15%;
+    --card-foreground: 0 0% 100%;
 
-    --popover: 281 28% 14%;
-    --popover-foreground: 322 25% 92%;
+    --popover: 270 20% 15%;
+    --popover-foreground: 0 0% 100%;
 
     --primary: 332 77% 72%;
-    --primary-foreground: 300 44% 10%;
+    --primary-foreground: 270 15% 8%;
 
-    --secondary: 278 25% 23%;
-    --secondary-foreground: 316 20% 90%;
+    --secondary: 270 20% 25%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 278 18% 22%;
-    --muted-foreground: 308 12% 73%;
+    --muted: 270 20% 22%;
+    --muted-foreground: 0 0% 70%;
 
     --accent: 22 48% 35%;
     --accent-foreground: 25 88% 92%;
@@ -85,22 +86,31 @@
     --destructive: 356 70% 54%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 282 20% 26%;
-    --input: 282 20% 26%;
+    --border: 270 20% 22%;
+    --input: 270 20% 18%;
     --ring: 332 77% 72%;
 
+    /* Saheli custom tokens - Dark */
     --saheli-pink: 332 77% 72%;
-    --saheli-pink-light: 328 38% 26%;
+    --saheli-pink-light: 270 20% 25%;
     --saheli-lavender: 278 62% 72%;
-    --saheli-lavender-light: 278 28% 21%;
+    --saheli-lavender-light: 270 20% 28%;
     --saheli-mint: 166 36% 60%;
-    --saheli-mint-light: 166 24% 25%;
+    --saheli-mint-light: 270 20% 25%;
     --saheli-peach: 24 74% 66%;
-    --saheli-glass: 282 34% 10%;
-    --saheli-glass-opacity: 0.52;
 
-    --romance-shadow: 334 78% 63%;
-    --romance-glow: 286 82% 69%;
+    --romance-shadow: 0 0% 0%;
+    --romance-glow: 332 77% 72%;
+
+    /* Sidebar - Dark */
+    --sidebar-background: 270 15% 12%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 270 15% 8%;
+    --sidebar-accent: 270 20% 20%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 270 20% 22%;
+    --sidebar-ring: 332 77% 72%;
   }
 }
 
@@ -112,11 +122,6 @@
   body {
     @apply bg-background text-foreground font-body antialiased;
     min-height: 100vh;
-    background:
-      radial-gradient(1200px 700px at 8% 8%, hsla(var(--saheli-pink), 0.2) 0%, transparent 65%),
-      radial-gradient(900px 600px at 85% 20%, hsla(var(--saheli-lavender), 0.22) 0%, transparent 65%),
-      radial-gradient(780px 540px at 50% 95%, hsla(var(--saheli-peach), 0.2) 0%, transparent 70%),
-      hsl(var(--background));
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -134,39 +139,27 @@
   .romance-surface {
     position: relative;
     isolation: isolate;
-    background:
-      linear-gradient(145deg, hsla(var(--saheli-pink-light), 0.28) 0%, hsla(var(--saheli-lavender-light), 0.2) 48%, hsla(var(--saheli-peach), 0.18) 100%),
-      hsl(var(--background));
+    background: hsl(var(--background));
   }
 
   .glass {
-    background: hsla(var(--saheli-glass), var(--saheli-glass-opacity));
-    backdrop-filter: blur(22px) saturate(135%);
-    -webkit-backdrop-filter: blur(22px) saturate(135%);
-    border: 1px solid hsla(var(--saheli-glass), 0.34);
-    box-shadow:
-      0 14px 38px hsla(var(--romance-shadow), 0.16),
-      0 0 0 1px hsla(var(--romance-glow), 0.08),
-      inset 0 1px 0 hsla(var(--saheli-glass), 0.44);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   }
 
   .glass-strong {
-    background: hsla(var(--saheli-glass), 0.52);
-    backdrop-filter: blur(28px) saturate(145%);
-    -webkit-backdrop-filter: blur(28px) saturate(145%);
-    border: 1px solid hsla(var(--saheli-glass), 0.48);
-    box-shadow:
-      0 22px 42px hsla(var(--romance-shadow), 0.17),
-      0 0 28px hsla(var(--romance-glow), 0.14),
-      inset 0 1px 0 hsla(var(--saheli-glass), 0.56);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
   .gradient-bg {
     background: linear-gradient(
       135deg,
-      hsla(var(--saheli-pink-light), 0.92) 0%,
-      hsla(var(--saheli-lavender-light), 0.9) 45%,
-      hsla(var(--saheli-peach), 0.86) 100%
+      hsl(336, 75%, 92%) 0%,
+      hsl(278, 54%, 92%) 45%,
+      hsl(24, 78%, 85%) 100%
     );
   }
 
@@ -192,18 +185,17 @@
     color: white;
     border: none;
     box-shadow:
-      0 10px 26px hsla(var(--saheli-pink), 0.34),
-      0 0 20px hsla(var(--saheli-lavender), 0.2);
-    transition: transform 300ms ease, box-shadow 300ms ease, filter 300ms ease;
+      0 8px 18px hsla(var(--saheli-pink), 0.25),
+      0 0 12px hsla(var(--saheli-lavender), 0.12);
+    transition: transform 250ms ease, box-shadow 250ms ease;
     will-change: transform;
   }
 
   .saheli-btn:hover {
     box-shadow:
-      0 16px 34px hsla(var(--saheli-pink), 0.42),
-      0 0 28px hsla(var(--saheli-lavender), 0.3);
-    filter: saturate(1.06);
-    transform: translateY(-1px) scale(1.02);
+      0 12px 24px hsla(var(--saheli-pink), 0.32),
+      0 0 16px hsla(var(--saheli-lavender), 0.18);
+    transform: translateY(-2px) scale(1.03);
   }
 
   .saheli-btn:active {
@@ -212,55 +204,73 @@
 
   .chat-bubble {
     border-radius: 1.35rem;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 8px 24px hsla(var(--romance-shadow), 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   }
 
   .chat-bubble-user {
-    background:
-      linear-gradient(138deg, hsla(var(--saheli-pink), 0.96) 0%, hsla(var(--saheli-lavender), 0.94) 62%, hsla(var(--saheli-peach), 0.92) 100%);
-    box-shadow:
-      0 14px 30px hsla(var(--saheli-pink), 0.32),
-      0 0 20px hsla(var(--saheli-lavender), 0.22);
+    background: hsl(340, 80%, 90%);
+    color: hsl(0, 0%, 20%);
+    border: none;
+  }
+
+  .dark .chat-bubble-user {
+    background: linear-gradient(135deg, hsl(335, 85%, 65%) 0%, hsl(330, 80%, 60%) 100%);
+    color: hsl(0, 0%, 100%);
+    border: none;
+    box-shadow: 0 4px 16px rgba(240, 100, 150, 0.2);
   }
 
   .chat-bubble-ai {
-    background: linear-gradient(145deg, hsla(var(--saheli-glass), 0.62), hsla(var(--saheli-glass), 0.38));
-    border: 1px solid hsla(var(--saheli-glass), 0.42);
-    box-shadow:
-      0 10px 24px hsla(var(--romance-shadow), 0.14),
-      inset 0 1px 0 hsla(var(--saheli-glass), 0.58);
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .dark .chat-bubble-ai {
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 4px 16px rgba(240, 100, 150, 0.1);
   }
 
   .chat-input-shell {
-    background: linear-gradient(145deg, hsla(var(--saheli-glass), 0.66), hsla(var(--saheli-glass), 0.5));
-    border: 1px solid hsla(var(--saheli-pink), 0.24);
-    box-shadow:
-      0 14px 34px hsla(var(--romance-shadow), 0.2),
-      0 0 0 2px hsla(var(--saheli-lavender), 0.08);
+    background: hsl(var(--input));
+    border: 2px solid hsl(var(--border));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: border-color 200ms ease, box-shadow 200ms ease;
   }
 
   .chat-input-shell:focus-within {
-    border-color: hsla(var(--saheli-pink), 0.42);
+    border-color: hsl(var(--saheli-pink));
     box-shadow:
-      0 16px 40px hsla(var(--romance-shadow), 0.26),
-      0 0 0 2px hsla(var(--saheli-pink), 0.18),
-      0 0 28px hsla(var(--romance-glow), 0.2);
+      0 4px 12px rgba(240, 100, 150, 0.15),
+      0 0 0 3px rgba(240, 100, 150, 0.1);
+  }
+
+  .dark .chat-input-shell:focus-within {
+    border-color: hsl(var(--saheli-pink));
+    box-shadow:
+      0 4px 12px rgba(240, 100, 150, 0.25),
+      0 0 0 3px rgba(240, 100, 150, 0.15);
+  }
+
+  .chat-input-field {
+    background: transparent;
+    color: inherit;
   }
 
   .chat-input-field::placeholder {
-    color: hsla(var(--muted-foreground), 0.75);
+    color: hsl(var(--muted-foreground));
   }
 
   .interactive-btn {
-    transition: transform 300ms ease, box-shadow 300ms ease, background-color 300ms ease, border-color 300ms ease, filter 300ms ease;
+    transition: transform 250ms ease, box-shadow 200ms ease, background-color 200ms ease, border-color 200ms ease;
     will-change: transform;
   }
 
   .interactive-btn:hover {
-    transform: translateY(-1px) scale(1.02);
-    box-shadow: 0 8px 20px hsla(var(--romance-glow), 0.24);
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 6px 16px hsla(var(--romance-glow), 0.18);
   }
 
   .interactive-btn:active {
@@ -268,8 +278,8 @@
   }
 
   .mic-active {
-    animation: pulse-soft 1.7s ease-in-out infinite;
-    box-shadow: 0 0 0 0 hsla(var(--destructive), 0.35);
+    animation: pulse-soft 1.4s ease-in-out infinite;
+    box-shadow: 0 0 0 0 hsla(var(--destructive), 0.3);
   }
 
   .floating-shapes {
@@ -283,8 +293,8 @@
   .floating-shape {
     position: absolute;
     border-radius: 999px;
-    filter: blur(14px);
-    opacity: 0.3;
+    filter: blur(12px);
+    opacity: 0.25;
     animation: drift-float var(--duration, 14s) ease-in-out infinite;
     animation-delay: var(--delay, 0s);
     transform: translate3d(0, 0, 0);
@@ -294,30 +304,30 @@
 /* Floating animation */
 @keyframes float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33% { transform: translateY(-12px) rotate(2deg); }
-  66% { transform: translateY(-6px) rotate(-1deg); }
+  33% { transform: translateY(-8px) rotate(1deg); }
+  66% { transform: translateY(-4px) rotate(-1deg); }
 }
 
 @keyframes float-slow {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50% { transform: translateY(-18px) rotate(3deg); }
+  50% { transform: translateY(-12px) rotate(2deg); }
 }
 
 @keyframes pulse-soft {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.04); }
 }
 
 @keyframes drift-float {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
-  33% { transform: translate3d(10px, -22px, 0) scale(1.04); }
-  66% { transform: translate3d(-12px, -12px, 0) scale(0.98); }
+  33% { transform: translate3d(8px, -16px, 0) scale(1.03); }
+  66% { transform: translate3d(-8px, -8px, 0) scale(0.99); }
 }
 
 @keyframes drift {
   0% { transform: translate(0, 0) rotate(0deg); opacity: 0; }
-  10% { opacity: 0.7; }
-  90% { opacity: 0.7; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
   100% { transform: translate(var(--drift-x, 40px), var(--drift-y, -120px)) rotate(var(--drift-r, 45deg)); opacity: 0; }
 }
 
@@ -332,24 +342,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: 274 28% 11%;
-    --foreground: 322 25% 92%;
-    --card: 281 28% 14%;
-    --card-foreground: 322 25% 92%;
-    --popover: 281 28% 14%;
-    --popover-foreground: 322 25% 92%;
+    --background: 270 15% 8%;
+    --foreground: 0 0% 100%;
+    --card: 270 20% 12%;
+    --card-foreground: 0 0% 100%;
+    --popover: 270 20% 12%;
+    --popover-foreground: 0 0% 100%;
     --primary: 332 77% 72%;
     --primary-foreground: 300 44% 10%;
     --secondary: 278 25% 23%;
     --secondary-foreground: 316 20% 90%;
     --muted: 278 18% 22%;
-    --muted-foreground: 308 12% 73%;
+    --muted-foreground: 0 0% 70%;
     --accent: 22 48% 35%;
     --accent-foreground: 25 88% 92%;
-    --border: 282 20% 26%;
-    --input: 282 20% 26%;
+    --border: 270 20% 20%;
+    --input: 270 20% 15%;
     --ring: 332 77% 72%;
-    --saheli-glass: 282 34% 10%;
-    --saheli-glass-opacity: 0.52;
+    --saheli-glass: 270 20% 15%;
+    --saheli-glass-opacity: 1;
   }
 }

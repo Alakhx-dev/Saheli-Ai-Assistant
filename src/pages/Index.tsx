@@ -51,6 +51,18 @@ const Index = () => {
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const messages = activeConv?.messages || [];
 
+  // Apply system theme preference
+  useEffect(() => {
+    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const htmlElement = document.documentElement;
+    
+    if (isDark) {
+      htmlElement.classList.add("dark");
+    } else {
+      htmlElement.classList.remove("dark");
+    }
+  }, []);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
@@ -451,8 +463,8 @@ const Index = () => {
                     <div
                       className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                         msg.sender === "user"
-                          ? "saheli-btn chat-bubble chat-bubble-user rounded-br-md"
-                          : "glass-strong text-foreground chat-bubble chat-bubble-ai rounded-bl-md"
+                          ? "chat-bubble chat-bubble-user rounded-br-md"
+                          : "chat-bubble chat-bubble-ai rounded-bl-md"
                       }`}
                     >
                       {msg.sender === "saheli" ? (
@@ -479,7 +491,7 @@ const Index = () => {
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center flex-shrink-0">
                     <span className="text-primary-foreground font-bold text-xs">S</span>
                   </div>
-                  <div className="glass-strong px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-1.5">
+                  <div className="chat-bubble chat-bubble-ai px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-1.5">
                     {[0, 1, 2].map((i) => (
                       <motion.span
                         key={i}
@@ -499,7 +511,7 @@ const Index = () => {
         {/* Input area — ChatGPT style */}
         <div className="border-t border-border p-4">
           <div className="max-w-3xl mx-auto">
-            <div className="glass-strong chat-input-shell rounded-2xl border border-border flex items-end gap-2 p-2 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+            <div className="chat-input-shell rounded-2xl border flex items-end gap-2 p-2 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
               <button
                 onClick={toggleListening}
                 className={`interactive-btn p-2.5 rounded-xl flex-shrink-0 transition-colors active:scale-95 ${
