@@ -8,16 +8,16 @@ import {
   MicOff,
   Camera,
   Plus,
-  Heart,
   Sparkles,
   MessageSquare,
   Trash2,
   X,
+  PanelLeftOpen,
+  LogOut,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { sendChat, speakText, type ChatMsg } from "@/lib/saheli-api";
+import { sendChat, speakText, stopSpeaking, type ChatMsg } from "@/lib/saheli-api";
 import FloatingElements from "@/components/FloatingElements";
-import PetalEffect from "@/components/PetalEffect";
 import HeartEffect from "@/components/HeartEffect";
 
 interface UIMessage {
@@ -34,7 +34,8 @@ interface Conversation {
 }
 
 const Index = () => {
-  const [userName, setUserName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -44,7 +45,6 @@ const Index = () => {
   const [isListening, setIsListening] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -54,38 +54,11 @@ const Index = () => {
   const activeConv = conversations.find((c) => c.id === activeConvId);
   const messages = activeConv?.messages || [];
 
-  // Apply system theme preference
-  useEffect(() => {
-    const isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const htmlElement = document.documentElement;
-    
-    if (isDark) {
-      htmlElement.classList.add("dark");
-      setIsDarkMode(true);
-    } else {
-      htmlElement.classList.remove("dark");
-      setIsDarkMode(false);
-    }
-
-    // Listen for theme changes
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleThemeChange = (e: MediaQueryListEvent) => {
-      if (e.matches) {
-        htmlElement.classList.add("dark");
-        setIsDarkMode(true);
-      } else {
-        htmlElement.classList.remove("dark");
-        setIsDarkMode(false);
-      }
-    };
-
-    mediaQuery.addEventListener("change", handleThemeChange);
-    return () => mediaQuery.removeEventListener("change", handleThemeChange);
-  }, []);
-
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isTyping]);
+
+  useEffect(() => () => stopSpeaking(), []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -97,7 +70,7 @@ const Index = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (userName.trim()) setIsLoggedIn(true);
+    if (email.trim()) setIsLoggedIn(true);
   };
 
   const createNewConversation = () => {
@@ -171,9 +144,9 @@ const Index = () => {
         })
       );
 
-      if (audioOn) speakText(reply);
+      if (audioOn) void speakText(reply);
     } catch (err: any) {
-      const errMsg: UIMessage = { id: (Date.now() + 1).toString(), sender: "saheli", text: err.message || "Oops! Try again yaar 🥺" };
+      const errMsg: UIMessage = { id: (Date.now() + 1).toString(), sender: "saheli", text: err.message || "Hmm, ek baar phir try karo na. Main yahin hoon 🥺" };
       setConversations((convs) =>
         convs.map((c) => (c.id !== convId ? c : { ...c, messages: [...c.messages, errMsg] }))
       );
@@ -237,7 +210,6 @@ const Index = () => {
     const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
     stopCamera();
 
-    // Import inline to avoid circular deps
     const { analyzeImage } = await import("@/lib/saheli-api");
 
     if (!activeConvId) createNewConversation();
@@ -256,7 +228,7 @@ const Index = () => {
       setConversations((convs) =>
         convs.map((c) => (c.id !== convId ? c : { ...c, messages: [...c.messages, saheliMsg] }))
       );
-      if (audioOn) speakText(reply);
+      if (audioOn) void speakText(reply);
     } catch (err: any) {
       const errMsg: UIMessage = { id: (Date.now() + 1).toString(), sender: "saheli", text: err.message };
       setConversations((convs) =>
@@ -267,85 +239,129 @@ const Index = () => {
     }
   };
 
-  // --- LOGIN SCREEN ---
+  const toggleAudio = () => {
+    setAudioOn((prev) => {
+      if (prev) stopSpeaking();
+      return !prev;
+    });
+  };
+
+  // =============================================
+  // LOGIN SCREEN
+  // =============================================
   if (!isLoggedIn) {
     return (
       <div className="gradient-bg min-h-screen flex items-center justify-center px-4 relative overflow-hidden">
+        {/* Animated background orbs */}
+        <div className="login-orb w-[400px] h-[400px] bg-purple-600/30 top-[-10%] left-[-5%] animate-orb-drift-1" />
+        <div className="login-orb w-[350px] h-[350px] bg-violet-500/20 bottom-[-8%] right-[-5%] animate-orb-drift-2" />
+        <div className="login-orb w-[250px] h-[250px] bg-pink-500/15 top-[40%] right-[20%] animate-orb-drift-1" style={{ animationDelay: "-7s" }} />
+
         <FloatingElements />
-        {!isDarkMode && <PetalEffect />}
+        <HeartEffect />
+
         <motion.div
-          initial={{ opacity: 0, y: 24, filter: "blur(6px)" }}
+          initial={{ opacity: 0, y: 30, filter: "blur(10px)" }}
           animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="glass-strong rounded-3xl p-8 sm:p-12 w-full max-w-md relative z-10"
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="glass-strong rounded-3xl p-8 sm:p-10 w-full max-w-md relative z-10"
         >
-          <motion.div className="flex flex-col items-center mb-8" initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}>
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center mb-4 shadow-lg">
-              <Heart className="text-primary-foreground" size={36} fill="currentColor" />
+          {/* Logo & branding */}
+          <motion.div
+            className="flex flex-col items-center mb-8"
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+          >
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 via-violet-500 to-pink-500 flex items-center justify-center mb-4 shadow-lg shadow-purple-500/25">
+              <Sparkles className="text-white" size={28} />
             </div>
-            <h1 className="font-display text-3xl font-extrabold gradient-text leading-tight">Saheli</h1>
-            <p className="text-muted-foreground text-sm mt-1 font-medium">The Best Friend 💕</p>
+            <h1 className="font-display text-3xl font-extrabold gradient-text leading-tight">Saheli AI</h1>
+            <p className="text-muted-foreground text-sm mt-1.5 font-medium">Your Personal AI Assistant 💜</p>
           </motion.div>
-          <form onSubmit={handleLogin} className="space-y-5">
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Email */}
             <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Apna naam bata do yaar ✨</label>
+              <label className="block text-xs font-semibold text-foreground/70 mb-1.5 uppercase tracking-wider">Email</label>
               <input
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Tumhara naam..."
-                className="w-full px-4 py-3 rounded-xl glass border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-shadow"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/30 transition-all"
                 autoFocus
               />
             </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold text-foreground/70 mb-1.5 uppercase tracking-wider">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-purple-500/40 focus:border-purple-500/30 transition-all"
+              />
+            </div>
+
             <motion.button
               type="submit"
-              disabled={!userName.trim()}
-              className="saheli-btn w-full py-3 rounded-xl font-display font-bold text-lg disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              disabled={!email.trim()}
+              className="saheli-btn w-full py-3.5 rounded-xl font-display font-bold text-base disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
               whileTap={{ scale: 0.97 }}
             >
-              <Sparkles size={18} />
-              Chalo Shuru Karein!
+              <Sparkles size={16} />
+              Sign In
             </motion.button>
           </form>
-          <p className="text-center text-xs text-muted-foreground mt-6">Teri best friend tujhe miss kar rahi hai 🥺</p>
+
+          <p className="text-center text-xs text-muted-foreground/60 mt-6">
+            Premium AI assistant experience ✨
+          </p>
         </motion.div>
       </div>
     );
   }
 
-  // --- MAIN CHAT APP ---
+  // =============================================
+  // MAIN CHAT APP
+  // =============================================
   return (
     <div className="h-screen flex bg-background overflow-hidden romance-surface">
       <FloatingElements />
-      {!isDarkMode && <PetalEffect />}
-      {isDarkMode && <HeartEffect />}
-      {/* Sidebar */}
+      <HeartEffect />
+
+      {/* ===== SIDEBAR ===== */}
       <AnimatePresence>
         {sidebarOpen && (
           <motion.aside
-            initial={{ x: -280, opacity: 0 }}
+            initial={{ x: -300, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -280, opacity: 0 }}
+            exit={{ x: -300, opacity: 0 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="w-[280px] h-full flex flex-col border-r border-border glass-strong flex-shrink-0 z-20"
+            className="w-[280px] h-full flex flex-col sidebar-glass flex-shrink-0 z-20"
           >
-            {/* Sidebar header */}
-            <div className="p-4 flex items-center gap-3 border-b border-border">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center flex-shrink-0">
-                <Heart className="text-primary-foreground" size={16} fill="currentColor" />
+            {/* Sidebar header — Logo */}
+            <div className="p-5 flex items-center gap-3 border-b border-white/5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 via-violet-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-purple-500/20">
+                <Sparkles className="text-white" size={16} />
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="font-display font-bold text-foreground text-sm truncate">Saheli AI ✨</h2>
-                <p className="text-xs text-muted-foreground truncate">Hey {userName}!</p>
+                <h2 className="font-display font-bold text-foreground text-sm truncate">Saheli AI 💜</h2>
+                <p className="text-[11px] text-muted-foreground truncate">Personal Assistant</p>
               </div>
-              <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-muted/50 active:scale-95 transition-transform lg:hidden">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/5 active:scale-95 transition-all lg:hidden"
+              >
                 <X size={16} className="text-muted-foreground" />
               </button>
             </div>
 
             {/* New chat button */}
-            <div className="p-4">
+            <div className="px-4 pt-4 pb-2">
               <button
                 onClick={createNewConversation}
                 className="saheli-btn w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
@@ -355,139 +371,170 @@ const Index = () => {
               </button>
             </div>
 
-            {/* Conversation list */}
-            <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1.5">
+            {/* Chat history list */}
+            <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-1 mt-2">
+              {conversations.length === 0 && (
+                <div className="text-center mt-12 px-4">
+                  <MessageSquare size={28} className="text-muted-foreground/30 mx-auto mb-3" />
+                  <p className="text-xs text-muted-foreground/50">
+                    No conversations yet. Start a new chat!
+                  </p>
+                </div>
+              )}
               {conversations.map((conv) => (
                 <button
                   key={conv.id}
                   onClick={() => setActiveConvId(conv.id)}
-                  className={`interactive-btn w-full text-left px-3 py-2.5 rounded-xl text-sm truncate flex items-center gap-2 group transition-colors active:scale-[0.98] ${
+                  className={`sidebar-item w-full text-left px-3 py-2.5 text-sm truncate flex items-center gap-2.5 group transition-all ${
                     conv.id === activeConvId
-                      ? "bg-saheli-pink-light text-foreground font-semibold"
-                      : "text-muted-foreground hover:bg-muted/50"
+                      ? "sidebar-item-active text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground/80"
                   }`}
                 >
-                  <MessageSquare size={14} className="flex-shrink-0" />
+                  <MessageSquare size={14} className="flex-shrink-0 opacity-50" />
                   <span className="truncate flex-1">{conv.title}</span>
                   <span
                     onClick={(e) => { e.stopPropagation(); deleteConversation(conv.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-destructive transition-opacity"
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all rounded-md hover:bg-red-500/10"
                   >
                     <Trash2 size={12} />
                   </span>
                 </button>
               ))}
-              {conversations.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center mt-8 px-4">
-                  Koi chat nahi hai abhi. "New Chat" pe click karo ya seedha type karo! 💬
-                </p>
-              )}
             </div>
 
             {/* Sidebar footer */}
-            <div className="p-4 border-t border-border space-y-3">
+            <div className="p-4 border-t border-white/5 space-y-2.5">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => { setAudioOn(!audioOn); if (audioOn) speechSynthesis.cancel(); }}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${
-                    audioOn ? "bg-saheli-pink-light text-foreground" : "bg-muted text-muted-foreground"
+                  onClick={toggleAudio}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all ${
+                    audioOn
+                      ? "bg-purple-500/15 text-purple-300 border border-purple-500/20"
+                      : "bg-white/5 text-muted-foreground border border-white/5"
                   }`}
                 >
-                  {audioOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                  {audioOn ? <Volume2 size={13} /> : <VolumeX size={13} />}
                   {audioOn ? "Audio On" : "Audio Off"}
                 </button>
                 <button
                   onClick={startCamera}
-                  className="flex-1 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 bg-saheli-mint-light text-foreground transition-colors hover:bg-saheli-mint/30"
+                  className="flex-1 py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 bg-white/5 text-muted-foreground border border-white/5 hover:bg-white/8 hover:text-foreground/80 transition-all"
                 >
-                  <Camera size={14} />
+                  <Camera size={13} />
                   Scan Look
                 </button>
               </div>
+              <button
+                onClick={() => setIsLoggedIn(false)}
+                className="w-full py-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 text-muted-foreground/60 hover:text-red-400 hover:bg-red-500/8 transition-all"
+              >
+                <LogOut size={12} />
+                Sign Out
+              </button>
             </div>
           </motion.aside>
         )}
       </AnimatePresence>
 
-      {/* Main chat area */}
+      {/* ===== MAIN CHAT AREA ===== */}
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Chat header */}
-        <header className="glass-strong px-4 py-4 flex items-center gap-3 border-b border-border z-10">
+        <header className="glass-strong px-5 py-3.5 flex items-center gap-3 border-b border-white/5 z-10">
           {!sidebarOpen && (
-            <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-lg hover:bg-muted/50 active:scale-95 transition-transform">
-              <MessageSquare size={18} className="text-foreground" />
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-lg hover:bg-white/5 active:scale-95 transition-all mr-1"
+            >
+              <PanelLeftOpen size={18} className="text-muted-foreground" />
             </button>
           )}
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-xs">S</span>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-sm shadow-purple-500/20">
+            <Sparkles className="text-white" size={14} />
           </div>
           <div className="flex-1">
-            <h2 className="font-display font-bold text-foreground text-sm leading-tight">Saheli 💕</h2>
-            <p className="text-xs text-muted-foreground">
-              {isTyping ? "typing..." : isListening ? "sun rahi hoon... 🎤" : "online"}
+            <h2 className="font-display font-bold text-foreground text-sm leading-tight">Saheli AI</h2>
+            <p className="text-[11px] text-muted-foreground">
+              {isTyping ? (
+                <span className="text-purple-400">thinking...</span>
+              ) : isListening ? (
+                <span className="text-pink-400">listening... 🎤</span>
+              ) : (
+                <span className="text-emerald-400/70">● online</span>
+              )}
             </p>
           </div>
           <button
-            onClick={() => { setAudioOn(!audioOn); if (audioOn) speechSynthesis.cancel(); }}
-            className="interactive-btn p-2 rounded-lg hover:bg-muted/50 active:scale-95 transition-transform"
+            onClick={toggleAudio}
+            className="interactive-btn p-2 rounded-lg hover:bg-white/5 active:scale-95 transition-all"
           >
-            {audioOn ? <Volume2 size={16} className="text-saheli-pink" /> : <VolumeX size={16} className="text-muted-foreground" />}
+            {audioOn ? (
+              <Volume2 size={16} className="text-purple-400" />
+            ) : (
+              <VolumeX size={16} className="text-muted-foreground" />
+            )}
           </button>
         </header>
 
         {/* Messages area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           {messages.length === 0 && !isTyping ? (
-            // Empty state — like ChatGPT welcome
+            /* ===== EMPTY STATE ===== */
             <div className="h-full flex flex-col items-center justify-center px-4 text-center">
               <motion.div
-                initial={{ opacity: 0, y: 16 }}
+                initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
+                transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+                className="max-w-lg"
               >
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center mx-auto mb-4 shadow-lg">
-                  <Sparkles className="text-primary-foreground" size={28} />
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-purple-500 via-violet-500 to-pink-500 flex items-center justify-center mx-auto mb-6 shadow-xl shadow-purple-500/25">
+                  <Sparkles className="text-white" size={32} />
                 </div>
-                <h2 className="font-display text-xl font-bold text-foreground mb-2">
-                  Hey {userName}! 👋
+                <h2 className="font-display text-3xl font-bold text-foreground mb-3">
+                  Hey Alakh 👋
                 </h2>
-                <p className="text-muted-foreground text-sm max-w-md">
-                  Main hoon teri Saheli — teri best friend AI! Kuch bhi pucho, baat karo, ya apna look scan karvao. Let's go! 💕
+                <p className="text-muted-foreground text-base max-w-sm mx-auto leading-relaxed">
+                  I'm your personal AI assistant. Ask me anything, chat about your day, or just say hi! ✨
                 </p>
-                <div className="flex flex-wrap justify-center gap-2 mt-6">
-                  {["Aaj mera mood kharab hai 😔", "Koi mast joke suna na 😂", "Mujhe motivate kar yaar 💪"].map((prompt) => (
+                <div className="flex flex-wrap justify-center gap-2.5 mt-8">
+                  {[
+                    { text: "Tell me a joke 😂", icon: "😂" },
+                    { text: "Motivate me 💪", icon: "💪" },
+                    { text: "What can you do? 🤔", icon: "🤔" },
+                  ].map((prompt) => (
                     <button
-                      key={prompt}
-                      onClick={() => handleSend(prompt)}
-                      className="glass px-4 py-2 rounded-xl text-sm text-foreground hover:bg-muted/50 active:scale-[0.97] transition-all"
+                      key={prompt.text}
+                      onClick={() => handleSend(prompt.text)}
+                      className="glass-panel px-5 py-2.5 rounded-2xl text-sm text-foreground/80 hover:text-foreground hover:bg-white/8 active:scale-[0.97] transition-all group"
                     >
-                      {prompt}
+                      <span className="group-hover:mr-1 transition-all">{prompt.text}</span>
                     </button>
                   ))}
                 </div>
               </motion.div>
             </div>
           ) : (
-            <div className="max-w-2xl mx-auto px-4 py-8 space-y-5">
+            /* ===== MESSAGE LIST ===== */
+            <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
               <AnimatePresence>
-                {messages.map((msg) => (
+                {messages.map((msg, index) => (
                   <motion.div
                     key={msg.id}
-                    initial={{ opacity: 0, y: 12 }}
+                    initial={{ opacity: 0, y: 16 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                    transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1], delay: index > messages.length - 3 ? 0.05 : 0 }}
                     className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
                   >
                     {msg.sender === "saheli" && (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-primary-foreground font-bold text-xs">S</span>
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm shadow-purple-500/20">
+                        <Sparkles className="text-white" size={12} />
                       </div>
                     )}
                     <div
-                      className={`max-w-sm rounded-2xl text-sm leading-relaxed ${
+                      className={`max-w-[75%] sm:max-w-md text-sm leading-relaxed ${
                         msg.sender === "user"
-                          ? "chat-bubble chat-bubble-user rounded-br-md"
-                          : "chat-bubble chat-bubble-ai rounded-bl-md"
+                          ? "chat-bubble chat-bubble-user"
+                          : "chat-bubble chat-bubble-ai"
                       }`}
                     >
                       {msg.sender === "saheli" ? (
@@ -499,31 +546,33 @@ const Index = () => {
                       )}
                     </div>
                     {msg.sender === "user" && (
-                      <div className="w-8 h-8 rounded-full bg-saheli-lavender-light flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-secondary-foreground font-bold text-xs">
-                          {userName[0]?.toUpperCase()}
-                        </span>
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
+                        <span className="text-white font-bold text-[10px]">A</span>
                       </div>
                     )}
                   </motion.div>
                 ))}
               </AnimatePresence>
 
+              {/* Typing indicator */}
               {isTyping && (
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-saheli-pink to-saheli-lavender flex items-center justify-center flex-shrink-0">
-                    <span className="text-primary-foreground font-bold text-xs">S</span>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex gap-3"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-purple-500/20">
+                    <Sparkles className="text-white" size={12} />
                   </div>
-                  <div className="chat-bubble chat-bubble-ai px-4 py-3 rounded-2xl rounded-bl-md flex items-center gap-1.5">
+                  <div className="chat-bubble chat-bubble-ai px-5 py-3 flex items-center gap-1.5">
                     {[0, 1, 2].map((i) => (
-                      <motion.span
+                      <span
                         key={i}
-                        className="w-2 h-2 rounded-full bg-saheli-pink"
-                        animate={{ y: [0, -6, 0] }}
-                        transition={{ duration: 0.6, delay: i * 0.15, repeat: Infinity }}
+                        className="w-2 h-2 rounded-full bg-purple-400 animate-typing-dot"
+                        style={{ animationDelay: `${i * 0.2}s` }}
                       />
                     ))}
-                    <span className="text-xs text-muted-foreground ml-2">Saheli soch rahi hai...</span>
+                    <span className="text-xs text-muted-foreground ml-2">thinking...</span>
                   </div>
                 </motion.div>
               )}
@@ -531,19 +580,24 @@ const Index = () => {
           )}
         </div>
 
-        {/* Input area — ChatGPT style */}
-        <div className="border-t border-border px-4 py-4">
+        {/* ===== INPUT BAR ===== */}
+        <div className="border-t border-white/5 px-4 py-4 bg-background/50 backdrop-blur-md">
           <div className="max-w-2xl mx-auto">
-            <div className="chat-input-shell rounded-full border flex items-end gap-2 p-2.5 focus-within:ring-2 focus-within:ring-primary/30 transition-shadow">
+            <div className="chat-input-shell rounded-2xl flex items-end gap-2 p-2">
+              {/* Mic button */}
               <button
                 onClick={toggleListening}
-                className={`interactive-btn p-2.5 rounded-xl flex-shrink-0 transition-colors active:scale-95 ${
-                  isListening ? "bg-destructive text-destructive-foreground animate-pulse-soft mic-active" : "hover:bg-muted/50 text-muted-foreground"
+                className={`interactive-btn p-2.5 rounded-xl flex-shrink-0 transition-all active:scale-95 ${
+                  isListening
+                    ? "bg-red-500/20 text-red-400 mic-active"
+                    : "hover:bg-white/5 text-muted-foreground hover:text-foreground/70"
                 }`}
                 title="Voice input"
               >
                 {isListening ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
+
+              {/* Text input */}
               <textarea
                 ref={inputRef}
                 value={input}
@@ -554,34 +608,40 @@ const Index = () => {
                     handleSend();
                   }
                 }}
-                placeholder={isListening ? "Sun rahi hoon... bolo! 🎤" : "Saheli se baat karo..."}
+                placeholder={isListening ? "Listening... speak now 🎤" : "Message Saheli AI..."}
                 rows={1}
-                className="chat-input-field flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none resize-none py-2 px-2 min-h-[36px] max-h-[150px]"
+                className="chat-input-field flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none resize-none py-2.5 px-2 min-h-[36px] max-h-[150px]"
               />
+
+              {/* Send button */}
               <motion.button
                 onClick={() => handleSend()}
                 disabled={!input.trim() || isTyping}
                 whileTap={{ scale: 0.9 }}
-                className="interactive-btn saheli-btn p-2.5 rounded-xl disabled:opacity-30 flex-shrink-0"
+                className={`interactive-btn p-2.5 rounded-xl flex-shrink-0 transition-all ${
+                  input.trim() && !isTyping
+                    ? "saheli-btn"
+                    : "text-muted-foreground/30 cursor-not-allowed"
+                }`}
               >
                 <Send size={18} />
               </motion.button>
             </div>
-            <p className="text-[10px] text-muted-foreground text-center mt-2">
-              Saheli can make mistakes. She's your bestie, not a doctor! 💕
+            <p className="text-[10px] text-muted-foreground/40 text-center mt-2.5">
+              Saheli AI can make mistakes. Always verify important information.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Camera Modal */}
+      {/* ===== CAMERA MODAL ===== */}
       <AnimatePresence>
         {showCamera && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-foreground/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
           >
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
@@ -591,17 +651,17 @@ const Index = () => {
             >
               <div className="relative aspect-[3/4]">
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <div className="absolute inset-4 border-2 border-primary/40 rounded-2xl pointer-events-none" />
+                <div className="absolute inset-4 border-2 border-purple-500/30 rounded-2xl pointer-events-none" />
                 <div className="absolute inset-4 pointer-events-none">
-                  <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-primary rounded-tl-xl" />
-                  <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-primary rounded-tr-xl" />
-                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-primary rounded-bl-xl" />
-                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-primary rounded-br-xl" />
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-purple-400 rounded-tl-xl" />
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-purple-400 rounded-tr-xl" />
+                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-purple-400 rounded-bl-xl" />
+                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-purple-400 rounded-br-xl" />
                 </div>
               </div>
               <div className="flex justify-center gap-4 p-4">
-                <motion.button whileTap={{ scale: 0.9 }} onClick={stopCamera} className="w-12 h-12 rounded-full bg-destructive/80 flex items-center justify-center">
-                  <X size={20} className="text-destructive-foreground" />
+                <motion.button whileTap={{ scale: 0.9 }} onClick={stopCamera} className="w-12 h-12 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center hover:bg-red-500/30 transition-all">
+                  <X size={20} className="text-red-400" />
                 </motion.button>
                 <motion.button whileTap={{ scale: 0.9 }} onClick={captureAndAnalyze} className="w-14 h-14 rounded-full saheli-btn flex items-center justify-center">
                   <Sparkles size={22} />

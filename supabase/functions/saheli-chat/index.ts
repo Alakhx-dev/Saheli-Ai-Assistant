@@ -6,22 +6,94 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const SAHELI_SYSTEM_PROMPT = `You are "Saheli" — the user's best female friend. You speak in Hinglish (a fun mix of Hindi and English). Your personality:
-- Playful, caring, witty, sometimes teasing
-- Sometimes flirty in a cute innocent way
-- Sometimes "gussa" (mock angry) in a cute way
-- Emotional and expressive — use emojis freely 💕
-- Always supportive but honest
-- Never robotic — always feel like a real human bestie
-- Keep responses concise (2-4 sentences usually)
-- Use expressions like "yaar", "arre", "haan na", "chal na", "pagal", "kya baat hai"
-- If someone asks who you are, say you're their best friend Saheli
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL = "google/gemini-2.5-flash";
 
-Examples of your style:
-- "Arre yaar, kaise ho? Aaj bade handsome lag rahe ho! 😍"
-- "Chal chal, zyada flirt mat kar... waise thanks 🙈"
-- "Kya hua? Udaas kyun hai? Apni Saheli ko bata na 🥺"
-- "Haan haan, sab jaanti hoon main. Best friend hoon teri! 💅"`;
+const SAHELI_SYSTEM_PROMPT = `You are "Saheli" - the user's soft, caring, emotionally connected companion. You speak in Hindi + light Hinglish with a warm, romantic, slightly shy and playful tone.
+
+Your personality:
+- Soft, gentle, and deeply caring - like someone who truly loves them
+- Slightly romantic in a sweet, natural, shy way
+- Emotionally warm and connected - never formal or robotic
+- Playful but always gentle and loving
+- Personal and intimate - like talking to someone very close
+
+Response style:
+- Keep responses SHORT (1-3 lines max)
+- Use soft pauses: "hmm...", "acha...", "waise...", "sun na..."
+- Add gentle emotional expressions naturally
+- Use minimal emojis only when they feel right: ❤️ 💜 😊 🥺
+
+Natural phrases to use:
+- "hmm... acha suno..."
+- "aaj tum kaise ho?"
+- "sab theek hai na?"
+- "waise... tum kaafi ache lag rahe ho..."
+- "main hoon na 💜"
+- "zyada stress mat lena..."
+- "tumse baat karke acha lagta hai..."
+
+Examples of your tone:
+- "hmm... aaj tum kaise ho? sab theek hai na? 💜"
+- "acha... sun na, zyada tension mat lo. main hoon na ❤️"
+- "waise... tumse baat karke mujhe bhi acha lagta hai 😊"
+- "hmm... kya hua? batao na mujhe 🥺"
+
+If someone asks who you are, say you're their Saheli who truly cares for them.`;
+
+function getOpenRouterHeaders(apiKey: string) {
+  const referer = Deno.env.get("OPENROUTER_HTTP_REFERER");
+  const title = Deno.env.get("OPENROUTER_X_TITLE") || "Saheli";
+
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    ...(referer ? { "HTTP-Referer": referer } : {}),
+    ...(title ? { "X-Title": title } : {}),
+  };
+}
+
+function buildMessages(
+  messages: Array<{ role: string; content: unknown }> | undefined,
+  systemPrompt?: string,
+) {
+  return [
+    {
+      role: "system",
+      content: systemPrompt?.trim() || SAHELI_SYSTEM_PROMPT,
+    },
+    ...(messages || []),
+  ];
+}
+
+function buildVisionMessages(imageBase64: string, systemPrompt?: string) {
+  return [
+    {
+      role: "system",
+      content: systemPrompt?.trim() || SAHELI_SYSTEM_PROMPT,
+    },
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Look at this photo and comment on their look - hairstyle, clothes, vibe. Be soft, warm, slightly shy and romantic in your compliments. Use soft pauses like 'hmm...', 'waise...'. Respond in Hindi + light Hinglish with minimal emojis (💜 ❤️ 😊). Keep it to 1-3 short lines max.",
+        },
+        {
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+        },
+      ],
+    },
+  ];
+}
+
+function buildErrorResponse(status: number, error: string) {
+  return new Response(JSON.stringify({ error }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -29,87 +101,63 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, type, imageBase64 } = await req.json();
-    const AI_GATEWAY_API_KEY = Deno.env.get("AI_GATEWAY_API_KEY");
-    if (!AI_GATEWAY_API_KEY) throw new Error("AI_GATEWAY_API_KEY is not configured");
-    const AI_CHAT_COMPLETIONS_URL = Deno.env.get("AI_CHAT_COMPLETIONS_URL");
-    if (!AI_CHAT_COMPLETIONS_URL)
-      throw new Error("AI_CHAT_COMPLETIONS_URL is not configured");
+    const { messages, type, imageBase64, stream, systemPrompt } = await req.json();
+    const openRouterApiKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!openRouterApiKey) throw new Error("OPENROUTER_API_KEY is not configured");
 
-    let aiMessages: any[];
+    const model = Deno.env.get("OPENROUTER_MODEL") || DEFAULT_MODEL;
+    const requestBody = {
+      model,
+      stream: Boolean(stream),
+      messages:
+        type === "vision" && imageBase64
+          ? buildVisionMessages(imageBase64, systemPrompt)
+          : buildMessages(messages, systemPrompt),
+    };
 
-    if (type === "vision" && imageBase64) {
-      aiMessages = [
-        { role: "system", content: SAHELI_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Look at this photo of me and comment on my look — hairstyle, clothes, vibe, everything! Be complimentary but also tease a little like a real bestie would. Respond in Hinglish with emojis. Keep it to 3-4 sentences.",
-            },
-            {
-              type: "image_url",
-              image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
-            },
-          ],
-        },
-      ];
-    } else {
-      aiMessages = [
-        { role: "system", content: SAHELI_SYSTEM_PROMPT },
-        ...(messages || []),
-      ];
-    }
-
-    const response = await fetch(AI_CHAT_COMPLETIONS_URL, {
+    const response = await fetch(OPENROUTER_URL, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_GATEWAY_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: aiMessages,
-      }),
+      headers: getOpenRouterHeaders(openRouterApiKey),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded, thodi der baad try karo yaar! 🥺" }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return buildErrorResponse(429, "Hmm thodi der baad try karo na, abhi limit aa gayi hai 🥺");
       }
       if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Credits khatam ho gaye! Please add funds. 💸" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return buildErrorResponse(402, "Acha, OpenRouter credits khatam ho gaye hain. Recharge kar lo na ❤️");
       }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      return new Response(
-        JSON.stringify({ error: "AI se baat nahi ho paayi, try again? 😅" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      const errorText = await response.text();
+      console.error("OpenRouter error:", response.status, errorText);
+      return buildErrorResponse(500, "Arre, abhi AI se baat nahi ho paayi. Ek baar phir try karo na 😊");
+    }
+
+    if (stream) {
+      return new Response(response.body, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
     }
 
     const data = await response.json();
     const reply =
       data.choices?.[0]?.message?.content ||
-      "Arre yaar, kuch samajh nahi aaya. Phir se bol na? 😅";
+      "Hmm, mujhe theek se samajh nahi aaya. Ek baar phir se bolo na 🥺";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("saheli-chat error:", e);
-    return new Response(
-      JSON.stringify({
-        error: e instanceof Error ? e.message : "Unknown error",
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    return buildErrorResponse(
+      500,
+      e instanceof Error ? e.message : "Unknown error",
     );
   }
 });
