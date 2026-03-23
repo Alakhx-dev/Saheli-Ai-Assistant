@@ -1,131 +1,91 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { MessageSquare, CheckSquare, Camera, Mic } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { loadProfile } from "@/lib/auth";
-import { UserProfile } from "@/types/auth";
-import FloatingElements from "@/components/FloatingElements";
-import PremiumHeader from "@/components/PremiumHeader";
+import { MessageCircle, Camera, CheckSquare, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
+import DashboardLayout from "@/components/DashboardLayout";
 
-interface DashboardProps {
-  onLogout: () => void;
-}
+const quickActions = [
+  {
+    title: "Chat with Saheli",
+    desc: "Talk to your AI companion",
+    icon: MessageCircle,
+    to: "/chat",
+    gradient: "from-saheli-pink to-saheli-rose",
+    delay: "0ms",
+  },
+  {
+    title: "Fit-Check",
+    desc: "Get outfit & wellness feedback",
+    icon: Camera,
+    to: "/fit-check",
+    gradient: "from-saheli-lavender to-saheli-pink",
+    delay: "80ms",
+  },
+  {
+    title: "My Tasks",
+    desc: "Stay organized and productive",
+    icon: CheckSquare,
+    to: "/tasks",
+    gradient: "from-saheli-teal to-saheli-lavender",
+    delay: "160ms",
+  },
+];
 
-export default function Dashboard({ onLogout }: DashboardProps) {
-  const navigate = useNavigate();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-
-  const refreshProfile = () => {
-    const p = loadProfile();
-    if (!p.isLoggedIn) {
-      navigate("/login");
-    } else {
-      setProfile(p);
-    }
-  };
-
-  useEffect(() => {
-    refreshProfile();
-  }, [navigate]);
-
-  const features = [
-    {
-      id: "chat",
-      icon: MessageSquare,
-      title: "Chat Assistant",
-      description: "Chat with Saheli, your personal AI assistant",
-      gradient: "from-purple-500 via-purple-600 to-pink-500",
-      action: () => navigate("/chat"),
-    },
-    {
-      id: "todo",
-      icon: CheckSquare,
-      title: "To-Do Tasks",
-      description: "Manage your daily tasks and reminders",
-      gradient: "from-blue-500 via-blue-600 to-cyan-500",
-      action: () => navigate("/todo"),
-    },
-    {
-      id: "fitcheck",
-      icon: Camera,
-      title: "Fit Check",
-      description: "Get AI feedback on your outfit",
-      gradient: "from-orange-500 via-orange-600 to-red-500",
-      action: () => navigate("/fit-check"),
-    },
-    {
-      id: "voiceassistant",
-      icon: Mic,
-      title: "Live Talk",
-      description: "Voice conversations with AI assistant",
-      gradient: "from-green-500 via-green-600 to-emerald-500",
-      action: () => navigate("/voice-assistant"),
-    },
-  ];
-
-  if (!profile) return null;
+const Dashboard = () => {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
 
   return (
-    <div className="min-h-screen gradient-bg overflow-hidden relative">
-      <FloatingElements />
-      
-      <PremiumHeader profile={profile} onProfileUpdate={refreshProfile} />
+    <DashboardLayout>
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Greeting */}
+        <div className="animate-fade-in">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles className="h-5 w-5 text-saheli-pink animate-pulse-glow" />
+            <span className="text-sm text-muted-foreground uppercase tracking-wider font-medium">
+              {greeting}
+            </span>
+          </div>
+          <h1 className="font-display text-4xl font-bold leading-tight" style={{ lineHeight: "1.1" }}>
+            Welcome to{" "}
+            <span className="saheli-gradient-text">Saheli</span>
+          </h1>
+          <p className="mt-3 text-muted-foreground text-base max-w-lg">
+            Your caring AI companion — here to chat, analyze your style, and keep you on track. ✨
+          </p>
+        </div>
 
-      <div className="pt-24 pb-12 px-4">
-        <div className="max-w-6xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-12 text-center"
-          >
-            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
-              Welcome back, <span className="gradient-text">{profile.name}</span>
-            </h1>
-            <p className="text-purple-200/80 text-lg">What would you like to do today?</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-6"
-          >
-            {features.map((feature, i) => (
-              <motion.div
-                key={feature.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 * i }}
-                whileHover={{ y: -8, scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={feature.action}
-                className="cursor-pointer group"
+        {/* Quick Actions */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {quickActions.map((a) => (
+            <Link
+              key={a.title}
+              to={a.to}
+              className="group glass rounded-xl p-5 transition-all duration-300 hover:saheli-glow active:scale-[0.97] animate-fade-in"
+              style={{ animationDelay: a.delay }}
+            >
+              <div
+                className={`inline-flex items-center justify-center rounded-lg p-2.5 mb-4 bg-gradient-to-br ${a.gradient} transition-transform duration-300 group-hover:scale-105`}
               >
-                <Card className="glass-panel overflow-hidden h-full transition-all duration-300 hover:border-purple-400/30">
-                  <div className="p-8">
-                    <motion.div
-                      whileHover={{ scale: 1.1, rotate: 5 }}
-                      className={`inline-flex p-4 rounded-2xl bg-gradient-to-br ${feature.gradient} mb-6 shadow-lg`}
-                    >
-                      <feature.icon className="w-8 h-8 text-white" strokeWidth={2} />
-                    </motion.div>
-                    <h3 className="text-2xl font-bold text-white mb-3">{feature.title}</h3>
-                    <p className="text-purple-200/70 text-sm leading-relaxed mb-4">{feature.description}</p>
-                    <motion.div
-                      className="inline-flex items-center gap-2 text-purple-300 text-sm font-semibold group-hover:text-purple-200 transition-colors"
-                      whileHover={{ x: 5 }}
-                    >
-                      <span>Get started</span>
-                      <span>→</span>
-                    </motion.div>
-                  </div>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
+                <a.icon className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <h3 className="font-display font-semibold text-foreground mb-1">{a.title}</h3>
+              <p className="text-sm text-muted-foreground">{a.desc}</p>
+            </Link>
+          ))}
+        </div>
+
+        {/* Status card */}
+        <div
+          className="glass rounded-xl p-6 animate-fade-in"
+          style={{ animationDelay: "240ms" }}
+        >
+          <h2 className="font-display font-semibold text-lg mb-3">✨ Saheli says…</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            "Aaj ka din kuch khaas hone wala hai! Mujhse baat karo ya apna fit-check karwao — main hamesha yahan hoon tumhare liye. 💕"
+          </p>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
-}
+};
+
+export default Dashboard;
