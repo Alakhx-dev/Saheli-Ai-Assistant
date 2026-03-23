@@ -1,241 +1,285 @@
-import { useState, useRef, useEffect, useCallback } from "react";
-import DashboardLayout from "@/components/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Volume2, VolumeX, Sparkles } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import React, { useState, useEffect, useRef } from "react";
+import { LogOut, Menu, Send, Sparkles, Heart, Camera } from "lucide-react";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { aiService, ChatMessage } from "@/services/ai-service";
+import { useVoiceQueue } from "@/hooks/useVoiceQueue";
 
-type Msg = { role: "user" | "assistant"; content: string };
+const VISION_TRIGGERS = ["kaise lag raha hoon", "dekho", "face", "look", "ye kya hai"];
 
-const SUGGESTIONS = [
-  "Mujhe motivate karo 💪",
-  "Aaj ka mood kya hai? 🌸",
-  "Koi acchi advice do ✨",
-  "Tell me a joke 😄",
-];
-
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-
-const Chat = () => {
-  const [messages, setMessages] = useState<Msg[]>([]);
+export default function Chat() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const { queueVoice } = useVoiceQueue();
+  
+  // Hidden Camera Refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Auto-scroll
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const speak = useCallback((text: string) => {
-    if (!voiceEnabled || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const clean = text.replace(/[*#_~`>]/g, "").replace(/\[.*?\]\(.*?\)/g, "");
-    const utter = new SpeechSynthesisUtterance(clean);
-    const voices = window.speechSynthesis.getVoices();
-    const hindiVoice = voices.find(
-      (v) => v.lang.startsWith("hi") && v.name.toLowerCase().includes("female")
-    ) || voices.find((v) => v.lang.startsWith("hi")) || voices[0];
-    if (hindiVoice) utter.voice = hindiVoice;
-    utter.rate = 0.95;
-    utter.pitch = 1.1;
-    window.speechSynthesis.speak(utter);
-  }, [voiceEnabled]);
+  useEffect(() => {
+    // Initialize silent camera stream
+    const initCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.warn("Camera permission denied or unavailable", err);
+      }
+    };
+    initCamera();
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim() || isLoading) return;
+    return () => {
+      // Cleanup camera on unmount
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
-    if (!audioUnlocked) {
-      const u = new SpeechSynthesisUtterance("");
-      u.volume = 0;
-      window.speechSynthesis?.speak(u);
-      setAudioUnlocked(true);
-    }
+  const handleLogout = async () => {
+    await signOut(auth);
+    sessionStorage.removeItem("devMode");
+    navigate("/");
+  };
 
-    const userMsg: Msg = { role: "user", content: text.trim() };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+  const captureFrame = (): string | undefined => {
+    if (!videoRef.current || !canvasRef.current) return undefined;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return undefined;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Return base64 without prefix
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    return dataUrl.split(",")[1];
+  };
+
+  const containsVisionTrigger = (text: string) => {
+    const lower = text.toLowerCase();
+    return VISION_TRIGGERS.some(trigger => lower.includes(trigger));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isLoading) return;
+
+    const userText = input.trim();
     setInput("");
+    
+    // Add user message to UI
+    const newMessages: ChatMessage[] = [...messages, { role: "user", content: userText }];
+    setMessages(newMessages);
     setIsLoading(true);
 
-    let assistantText = "";
-
     try {
-      const resp = await fetch(CHAT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: "Request failed" }));
-        throw new Error(err.error || `Error ${resp.status}`);
+      let base64Image: string | undefined;
+      
+      if (containsVisionTrigger(userText)) {
+        base64Image = captureFrame();
       }
 
-      if (!resp.body) throw new Error("No response body");
+      // Send to AI
+      const aiResponse = await aiService.sendMessage(messages, userText, base64Image);
+      
+      // Add Assistant response to UI
+      setMessages(prev => [...prev, { role: "assistant", content: aiResponse }]);
+      
+      // Trigger voice
+      queueVoice(aiResponse);
 
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let idx: number;
-        while ((idx = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta?.content;
-            if (delta) {
-              assistantText += delta;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === "assistant") {
-                  return prev.map((m, i) =>
-                    i === prev.length - 1 ? { ...m, content: assistantText } : m
-                  );
-                }
-                return [...prev, { role: "assistant", content: assistantText }];
-              });
-            }
-          } catch {
-            buffer = line + "\n" + buffer;
-            break;
-          }
-        }
-      }
-
-      if (assistantText) speak(assistantText);
-    } catch (e: any) {
-      console.error("Chat error:", e);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Oops! ${e.message || "Kuch gadbad ho gayi."} 😔` },
-      ]);
+    } catch (err) {
+      console.error(err);
+      const fallbackMsg = "Sorry bae, I ran into a little glitch! Let's try that again?";
+      setMessages(prev => [...prev, { role: "assistant", content: fallbackMsg }]);
+      queueVoice(fallbackMsg);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-7rem)] glass-panel p-6 rounded-3xl mx-4 shadow-2xl saheli-glow-sm">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3 glass-subtle rounded-full px-4 py-2 backdrop-blur-sm">
-            <Sparkles className="h-5 w-5 text-primary animate-[pulse-glow_2s_infinite]" />
-            <h1 className="font-display text-xl font-bold saheli-gradient-text drop-shadow-lg">Saheli Chat</h1>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className="glass-btn h-12 w-12 p-3 backdrop-blur-sm hover:scale-110 hover:saheli-glow-sm transition-all duration-300 text-muted-foreground hover:text-foreground shadow-lg"
+    <div className="flex h-screen bg-[#0d0d12] text-white overflow-hidden selection:bg-pink-500/30">
+      
+      {/* Hidden Vision Elements */}
+      <video ref={videoRef} autoPlay playsInline muted className="hidden w-[1px] h-[1px]" />
+      <canvas ref={canvasRef} className="hidden" />
+
+      {/* Sidebar */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 260, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="h-full bg-black/50 border-r border-white/5 flex flex-col hidden md:flex backdrop-blur-md z-20"
           >
-            {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </Button>
+            <div className="p-4 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-2 text-pink-400">
+                <Heart className="w-5 h-5 fill-current" />
+                <span className="font-semibold tracking-wide">Saheli AI</span>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="text-xs text-white/40 font-medium uppercase tracking-wider mb-2">Recent Chats</div>
+              {/* Dummy chat history */}
+              <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
+                New Relationship Advice
+              </button>
+              <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
+                Outfit Check
+              </button>
+            </div>
+
+            <div className="p-4 border-t border-white/5">
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-white/60 hover:text-pink-400 w-full p-2 rounded-lg hover:bg-white/5 transition-all text-sm"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full relative z-10">
+        
+        {/* Header (Mobile & Sidebar Toggle) */}
+        <header className="h-14 flex items-center justify-between px-4 border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-20">
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            aria-label="Toggle Sidebar"
+            className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          
+          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide">
+            <Heart className="w-5 h-5 fill-current" />
+            Saheli AI
+          </div>
+
+          <button 
+            onClick={handleLogout}
+            aria-label="Sign Out"
+            className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors md:hidden"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </header>
+
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
+              <motion.div 
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.8, type: "spring" }}
+                className="w-20 h-20 bg-gradient-to-tr from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center mb-6 border border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.15)]"
+              >
+                <Sparkles className="w-10 h-10 text-pink-400" />
+              </motion.div>
+              <h2 className="text-2xl font-light mb-2">Hey gorgeous!</h2>
+              <p className="text-white/50 text-base font-light">I'm Saheli. Let's talk about anything — your day, your fit, or just vibe.</p>
+              <div className="flex gap-2 mt-6 flex-wrap justify-center">
+                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/70">"Kaise lag raha hoon?"</span>
+                <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/70">"What do you see?"</span>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-3xl mx-auto space-y-6">
+              {messages.map((msg, idx) => (
+                <motion.div 
+                  key={idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div className={`
+                    max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-[15px] leading-relaxed
+                    ${msg.role === "user" 
+                      ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)] rounded-tr-sm" 
+                      : "bg-white/5 border border-white/10 text-white/90 rounded-tl-sm"
+                    }
+                  `}>
+                    {msg.content}
+                  </div>
+                </motion.div>
+              ))}
+              
+              {isLoading && (
+                <motion.div 
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="flex justify-start"
+                >
+                  <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-sm flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce"></div>
+                  </div>
+                </motion.div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
         </div>
 
-        {/* Messages */}
-        <ScrollArea className="flex-1 glass-strong rounded-3xl p-6 mb-6 glass-scroll shadow-xl">
-          <div className="space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center py-12 space-y-4">
-                <p className="text-muted-foreground text-sm">
-                  Saheli se baat karo! Main tumhari dost hoon 💕
-                </p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => sendMessage(s)}
-                      className="glass-btn rounded-full px-5 py-2.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:scale-105 active:scale-95 transition-all duration-200 shadow-lg hover:shadow-none"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+        {/* Input Area */}
+        <div className="p-4 md:p-6 bg-gradient-to-t from-[#0d0d12] to-transparent z-10">
+          <div className="max-w-3xl mx-auto relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <form 
+              onSubmit={handleSubmit}
+              className="relative flex items-center bg-[#1a1a24] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+            >
+              <input 
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Message Saheli..."
+                className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/40 focus:outline-none"
+              />
+              <button 
+                type="submit"
+                aria-label="Send Message"
+                disabled={!input.trim() || isLoading}
+                className="p-4 text-white/50 hover:text-pink-400 disabled:opacity-50 disabled:hover:text-white/50 transition-colors"
               >
-                <div
-                  className={`max-w-[85%] rounded-3xl px-6 py-4 text-sm leading-relaxed font-medium shadow-xl transform-gpu ${
-                    m.role === "user"
-                      ? "bg-gradient-to-r from-[hsl(var(--saheli-pink)/0.3)] to-[hsl(var(--saheli-rose)/0.3)] text-foreground rounded-br-none backdrop-blur-xl border-r-4 border-[hsl(var(--saheli-pink))]"
-                      : "glass-strong text-foreground rounded-bl-none backdrop-blur-2xl animate-[pulse-glow_4s_ease-in-out_infinite] border-l-4 border-[hsl(var(--saheli-lavender))]"
-                  }`}
-                >
-                  {m.role === "assistant" ? (
-                    <div className="prose prose-sm prose-invert max-w-none [&>p]:mb-1 [&>p:last-child]:mb-0">
-                      <ReactMarkdown>{m.content}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    m.content
-                  )}
+                <div className="bg-white/5 p-2 rounded-xl">
+                  <Send className="w-5 h-5" />
                 </div>
-              </div>
-            ))}
-
-            {isLoading && messages[messages.length - 1]?.role === "user" && (
-              <div className="flex justify-start">
-            <div className="glass-strong rounded-3xl rounded-bl-none px-6 py-4 backdrop-blur-2xl animate-[pulse-glow_2s_ease-in-out_infinite] border-l-4 border-[hsl(var(--saheli-lavender))]">
-                  <span className="inline-flex gap-2">
-                    <span className="h-3 w-3 rounded-full bg-gradient-to-r from-[hsl(var(--saheli-pink))] to-[hsl(var(--saheli-lavender))] animate-[pulse-glow_1.5s_infinite] shadow-lg" style={{ animationDelay: "0ms" }} />
-                    <span className="h-3 w-3 rounded-full bg-gradient-to-r from-[hsl(var(--saheli-pink))] to-[hsl(var(--saheli-lavender))] animate-[pulse-glow_1.5s_infinite] shadow-lg" style={{ animationDelay: "200ms" }} />
-                    <span className="h-3 w-3 rounded-full bg-gradient-to-r from-[hsl(var(--saheli-pink))] to-[hsl(var(--saheli-lavender))] animate-[pulse-glow_1.5s_infinite] shadow-lg" style={{ animationDelay: "400ms" }} />
-                  </span>
-                </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
+              </button>
+            </form>
+            <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
+              Gemini 2.0 Flash • Saheli AI
+            </div>
           </div>
-        </ScrollArea>
-
-        {/* Input */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            sendMessage(input);
-          }}
-          className="flex gap-2"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message…"
-            disabled={isLoading}
-            className="flex-1 glass-subtle h-14 text-lg placeholder:text-muted-foreground/80 backdrop-blur-sm border-white/20 focus:border-saheli-pink/50 focus:ring-2 focus:ring-saheli-pink/30 transition-all"
-          />
-          <Button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            size="icon"
-            className="glass-btn h-14 w-14 shrink-0 shadow-2xl hover:scale-110 active:scale-[0.97]"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
-        </form>
+        </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
-};
-
-export default Chat;
+}
