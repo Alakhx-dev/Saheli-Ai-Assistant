@@ -41,7 +41,10 @@ const Index = () => {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [audioOn, setAudioOn] = useState(true);
+  const [audioOn, setAudioOn] = useState(() => {
+    const saved = localStorage.getItem("saheli_audio");
+    return saved !== null ? saved === "true" : true;
+  });
   const [isListening, setIsListening] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showCamera, setShowCamera] = useState(false);
@@ -241,8 +244,10 @@ const Index = () => {
 
   const toggleAudio = () => {
     setAudioOn((prev) => {
-      if (prev) stopSpeaking();
-      return !prev;
+      const next = !prev;
+      if (!next) stopSpeaking();
+      localStorage.setItem("saheli_audio", next.toString());
+      return next;
     });
   };
 

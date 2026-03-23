@@ -6,7 +6,9 @@ export interface ChatMsg {
   content: string;
 }
 
-let activeUtterance: SpeechSynthesisUtterance | null = null;
+import { speak as edgeSpeak, stopSpeaking as edgeStopSpeaking } from "@/utils/voice";
+
+let isSpeaking = false;
 
 function getAuthHeaders() {
   return {
@@ -18,36 +20,16 @@ function getAuthHeaders() {
 
 function sanitizeTextForSpeech(text: string) {
   return text
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/[`*_>#]/g, "")
-    .replace(/[\u{1F600}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F000}-\u{1FFFF}]/gu, "")
-    .replace(/\n{3,}/g, "\n\n")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")  // Remove markdown images
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")  // Remove markdown links
+    .replace(/[`*_>#]/g, "")  // Remove markdown formatting
+    .replace(/[\u{1F600}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F000}-\u{1FFFF}]/gu, "")  // Remove emojis
+    .replace(/\.{2,}/g, ".")  // Remove multiple dots (...)
+    .replace(/[!?]+/g, ".")  // Convert ! and ? to normal sentence end
+    .replace(/[,;:]+/g, " ")  // Remove commas and other punctuation (avoid weird pauses)
+    .replace(/\s+/g, " ")  // Fix spacing
+    .replace(/\n+/g, " ")  // Replace newlines with space
     .trim();
-}
-
-function getSoftFemaleVoice(): SpeechSynthesisVoice | null {
-  const voices = speechSynthesis.getVoices();
-  const preferred = [
-    "Google Hindi Female",
-    "Google हिन्दी",
-    "Microsoft Swara",
-    "Lekha",
-    "Google UK English Female",
-    "Google US English Female",
-    "Samantha",
-    "Karen",
-    "Victoria",
-  ];
-
-  for (const name of preferred) {
-    const voice = voices.find((item) => item.name.includes(name));
-    if (voice) return voice;
-  }
-
-  const femaleVoice = voices.find((item) => item.name.toLowerCase().includes("female"));
-  if (femaleVoice) return femaleVoice;
-  return voices[0] || null;
 }
 
 function extractDeltaContent(payload: any) {
@@ -170,32 +152,32 @@ export async function analyzeImage(imageBase64: string, systemPrompt?: string): 
   return data.reply;
 }
 
+/**
+ * Immediately stop all speech — cancels current and clears queue.
+ */
 export function stopSpeaking() {
-  speechSynthesis.cancel();
-  activeUtterance = null;
+  edgeStopSpeaking();
+  isSpeaking = false;
 }
 
-export async function speakText(text: string) {
+/**
+ * Speak text using Edge TTS with natural voice:
+ * - Clean text (no punctuation sounds)
+ * - Humanized delivery via our voice utility
+ */
+export async function speakText(text: string, voiceType: "male" | "female" = "female") {
   const cleanText = sanitizeTextForSpeech(text);
   if (!cleanText) return;
 
-  stopSpeaking();
-
-  const utterance = new SpeechSynthesisUtterance(cleanText);
-  const voice = getSoftFemaleVoice();
-  if (voice) utterance.voice = voice;
-  utterance.rate = 0.95;
-  utterance.pitch = 1.15;
-  activeUtterance = utterance;
-
-  utterance.onend = () => {
-    if (activeUtterance === utterance) activeUtterance = null;
-  };
-
-  speechSynthesis.speak(utterance);
-}
-
-if (typeof window !== "undefined") {
-  speechSynthesis.getVoices();
-  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+  // Wait, Edge TTS utility takes care of stopSpeaking and humanizing inside itself,
+  // but we can call edgeSpeak.
+  
+  console.log("🎤 Sending to Edge TTS:", cleanText.substring(0, 100) + (cleanText.length > 100 ? "..." : ""));
+  
+  isSpeaking = true;
+  try {
+    await edgeSpeak(cleanText);
+  } finally {
+    isSpeaking = false;
+  }
 }
