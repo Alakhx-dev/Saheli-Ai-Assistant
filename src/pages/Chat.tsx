@@ -7,50 +7,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { sendMessage, type ChatMessage } from "@/lib/ai-service";
 
 const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
-const SPEECH_CLEANUP_REGEX = /[^\p{L}\p{N}\p{P}\p{Z}\n]|[*#]/gu;
-const SENTENCE_SPLIT_REGEX = /(?<=[.!?])\s+/;
+const EXTRA_SPACE_REGEX = /\s+/g;
 
 function useVoice(isMuted: boolean) {
-  const [isReady, setIsReady] = useState(false);
-  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const queueRef = useRef<string[]>([]);
-  const speakingRef = useRef(false);
-
-  useEffect(() => {
-    const loadVoices = () => {
-      voicesRef.current = window.speechSynthesis.getVoices();
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-
-    return () => {
-      if (window.speechSynthesis.onvoiceschanged === loadVoices) {
-        window.speechSynthesis.onvoiceschanged = null;
-      }
-      window.speechSynthesis.cancel();
-      queueRef.current = [];
-      speakingRef.current = false;
-    };
-  }, []);
-
-  const getHindiVoice = () => {
-    const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
-    const hindiVoices = voices.filter((voice) => voice.lang.startsWith("hi"));
-    voicesRef.current = voices;
-
-    return (
-      hindiVoices.find((voice) => voice.name.includes("Microsoft Swara Online (Natural)")) ||
-      hindiVoices.find((voice) => voice.name.includes("Google हिन्दी")) ||
-      hindiVoices.find((voice) => voice.name.includes("Microsoft Kalpana")) ||
-      hindiVoices.find((voice) => voice.lang.startsWith("hi")) ||
-      null
-    );
-  };
+  const unlockedRef = useRef(false);
 
   const unlock = async () => {
-    if (isReady) {
+    if (unlockedRef.current) {
       return;
     }
 
@@ -68,81 +32,49 @@ function useVoice(isMuted: boolean) {
         }
       }
 
-      window.speechSynthesis.cancel();
-      queueRef.current = [];
-      speakingRef.current = false;
-      setIsReady(true);
+      // Silent prime to satisfy browser user-interaction requirements.
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+      unlockedRef.current = true;
     } catch (error) {
       console.warn("Voice unlock failed", error);
     }
   };
 
-  const playNext = () => {
-    if (isMuted || !isReady || speakingRef.current) {
-      return;
-    }
-
-    const nextSentence = queueRef.current.shift();
-    if (!nextSentence) {
-      return;
-    }
-
-    const utterance = new SpeechSynthesisUtterance(nextSentence);
-    utterance.lang = "hi-IN";
-    utterance.pitch = 1.15;
-    utterance.rate = 0.9;
-    utterance.volume = 1.0;
-
-    const hindiVoice = getHindiVoice();
-    if (hindiVoice) {
-      utterance.voice = hindiVoice;
-    }
-
-    speakingRef.current = true;
-    utterance.onend = () => {
-      speakingRef.current = false;
-      playNext();
-    };
-    utterance.onerror = () => {
-      speakingRef.current = false;
-      playNext();
-    };
-
-    window.speechSynthesis.speak(utterance);
-  };
-
   const speak = (text: string) => {
-    if (isMuted || !isReady) {
+    if (isMuted || !unlockedRef.current) {
       return;
     }
 
-    const cleanText = text.replace(SPEECH_CLEANUP_REGEX, "").trim();
+    const cleanText = text.replace(/[#*]/g, "").replace(EXTRA_SPACE_REGEX, " ").trim();
     if (!cleanText) {
       return;
     }
 
-    const sentences = cleanText
-      .split(SENTENCE_SPLIT_REGEX)
-      .map((sentence) => sentence.trim())
-      .filter(Boolean);
+    window.speechSynthesis.cancel();
 
-    if (sentences.length === 0) {
-      return;
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "hi-IN";
+    utterance.pitch = 1.2;
+    utterance.rate = 0.95;
+    utterance.volume = 1.0;
+
+    const voices = window.speechSynthesis.getVoices();
+    const hindiVoice =
+      voices.find((voice) => voice.lang === "hi-IN" && (voice.name.includes("Swara") || voice.name.includes("Google"))) ||
+      voices.find((voice) => voice.lang === "hi-IN");
+
+    if (hindiVoice) {
+      utterance.voice = hindiVoice;
     }
 
-    window.speechSynthesis.cancel();
-    queueRef.current = sentences;
-    speakingRef.current = false;
-    playNext();
+    window.speechSynthesis.speak(utterance);
   };
 
   const stop = () => {
     window.speechSynthesis.cancel();
-    queueRef.current = [];
-    speakingRef.current = false;
   };
 
-  return { isReady, unlock, speak, stop };
+  return { unlock, speak, stop };
 }
 
 export default function Chat() {
@@ -153,12 +85,27 @@ export default function Chat() {
   const [isMuted, setIsMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submitLockRef = useRef(false);
+  const lastSpokenReplyRef = useRef<string | null>(null);
   const navigate = useNavigate();
-  const { isReady, unlock, speak, stop } = useVoice(isMuted);
+  const { unlock, speak, stop } = useVoice(isMuted);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || lastMessage.role !== "model") {
+      return;
+    }
+
+    if (lastSpokenReplyRef.current === lastMessage.content) {
+      return;
+    }
+
+    lastSpokenReplyRef.current = lastMessage.content;
+    speak(lastMessage.content);
+  }, [messages, speak]);
 
   const handleLogout = async () => {
     stop();
@@ -210,6 +157,9 @@ export default function Chat() {
       return;
     }
 
+    await unlock();
+    stop();
+
     submitLockRef.current = true;
     setInput("");
 
@@ -225,7 +175,6 @@ export default function Chat() {
     try {
       const responseText = await sendMessage(nextHistory, base64Image);
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
-      speak(responseText);
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
@@ -234,18 +183,6 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-[#0d0d12] text-white overflow-hidden selection:bg-pink-500/30">
-      {!isReady && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 backdrop-blur-sm">
-          <button
-            type="button"
-            onClick={unlock}
-            className="px-6 py-3 rounded-full bg-white/10 border border-white/15 text-white/90 hover:bg-white/15 transition-colors"
-          >
-            Tap to start Saheli&apos;s Voice
-          </button>
-        </div>
-      )}
-
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
