@@ -195,7 +195,7 @@ export default function Chat() {
             <div className="p-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-2 text-pink-400">
                 <Heart className="w-5 h-5 fill-current" />
-                <span className="font-semibold tracking-wide">Saheli AI</span>
+                <span className="font-semibold tracking-wide" style={{ fontFamily: "'Sour Gummy', cursive" }}>Saheli AI</span>
               </div>
             </div>
 
@@ -233,7 +233,7 @@ export default function Chat() {
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide">
+          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide" style={{ fontFamily: "'Sour Gummy', cursive" }}>
             <Heart className="w-5 h-5 fill-current" />
             Saheli AI
           </div>
@@ -288,12 +288,13 @@ export default function Chat() {
                 >
                   <div
                     className={`
-                    max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-[15px] leading-relaxed relative
+                    max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-4xl leading-relaxed relative
                     ${msg.role === "user"
                       ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)] rounded-tr-sm"
                       : "bg-white/5 border border-white/10 text-white/90 rounded-tl-sm"
                     }
                   `}
+                    style={{ fontFamily: "'Delius', sans-serif", fontSize: "16px" }}
                   >
                     {msg.content}
                   </div>
