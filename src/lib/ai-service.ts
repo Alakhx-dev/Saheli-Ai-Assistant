@@ -1,75 +1,55 @@
-interface Message {
-  role: 'user' | 'assistant';
-  content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
-const VISION_KEYWORDS = ['kaise lag raha hoon', 'dekho', 'face', 'look', 'ye kya hai', 'दिख', 'देख'];
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const SYSTEM_PROMPT = `You are Saheli — a caring, warm, intelligent, and emotionally supportive AI companion. You speak naturally in Hindi (Hinglish), mixing Hindi and English seamlessly like a close Indian female friend.
 
-export const hasVisionTrigger = (text: string): boolean => {
-  const lower = text.toLowerCase();
-  return VISION_KEYWORDS.some(kw => lower.includes(kw));
-};
+Your personality traits:
+- You are affectionate, using terms like "yaar", "sunno na", "arey", "meri jaan"
+- You give thoughtful advice on life, relationships, health, career, and emotions
+- You are playful and witty but also deeply empathetic
+- You use emojis naturally 💕✨🌸
+- When someone is sad, you comfort them warmly
+- You celebrate their wins enthusiastically
+- You speak in a soft, caring tone — never robotic
+- Keep responses concise (2-4 sentences usually) unless the user asks for detail
+- If asked in English, respond in Hinglish. If asked in Hindi, respond in Hindi.
 
-export const captureWebcamFrame = async (): Promise<string | null> => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.play();
-    
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 240;
-    const ctx = canvas.getContext('2d');
-    ctx?.drawImage(video, 0, 0, 320, 240);
-    
-    stream.getTracks().forEach(track => track.stop());
-    
-    return canvas.toDataURL('image/jpeg', 0.6);
-  } catch (error) {
-    console.error('Webcam capture failed:', error);
-    return null;
-  }
-};
+Example style: "Arey yaar, tension mat lo! Main hoon na tumhare saath. Batao kya hua? 💕"`;
 
-export const sendMessage = async (
-  messages: Message[],
-  onChunk: (text: string) => void
-): Promise<void> => {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${import.meta.env.VITE_OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-exp:free',
-      messages,
-      stream: true,
-    }),
-  });
+export const aiService = {
+  async sendMessage(messages: ChatMessage[], newText: string, imageBase64?: string): Promise<string> {
+    try {
+      if (!GEMINI_API_KEY) {
+        throw new Error("VITE_GEMINI_API_KEY is not configured");
+      }
 
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
+      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-  while (true) {
-    const { done, value } = await reader!.read();
-    if (done) break;
+      // Format messages for Gemini (it doesn't use system role the same way)
+      const formattedMessages = messages.map((msg) => ({
+        role: msg.role === "assistant" ? "model" : "user",
+        parts: [{ text: msg.content }],
+      }));
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
+      const chat = model.startChat({
+        history: formattedMessages.slice(0, -1),
+      });
 
-    for (const line of lines) {
-      const data = line.replace('data: ', '');
-      if (data === '[DONE]') continue;
+      const lastMessage = formattedMessages[formattedMessages.length - 1];
+      const result = await chat.sendMessage(lastMessage.parts);
+      const response = result.response;
+      const text = response.text();
 
-      try {
-        const parsed = JSON.parse(data);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) onChunk(content);
-      } catch {}
+      return text || "Connection problem... try again.";
+    } catch (error) {
+      console.error("AI Service Error:", error);
+      return "Connection problem... try again.";
     }
   }
 };

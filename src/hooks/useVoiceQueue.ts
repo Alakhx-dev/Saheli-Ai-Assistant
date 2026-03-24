@@ -4,9 +4,9 @@ export function useVoiceQueue() {
   const [isPlaying, setIsPlaying] = useState(false);
   const queue = useRef<string[]>([]);
   
-  // Clean emojis from text
-  const stripEmojis = (str: string) => {
-    return str.replace(/[\u1000-\uFFFF]+/g, '').replace(/[^\x00-\x7F\u0900-\u097F\s.,!?']/g, '');
+  // Clean emojis using the explicitly requested regex
+  const stripEmojis = (text: string) => {
+    return text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}]/gu, "");
   };
 
   const playNext = useCallback(() => {
@@ -45,12 +45,11 @@ export function useVoiceQueue() {
 
     setVoice();
     
-    // Fallback if voices are loaded async
     if (window.speechSynthesis.onvoiceschanged !== undefined) {
       window.speechSynthesis.onvoiceschanged = setVoice;
     }
 
-    // Settings for Female, Soft, Romantic
+    // Explicit Voice Settings
     utterance.pitch = 1.15;
     utterance.rate = 0.85;
     utterance.volume = 1;
