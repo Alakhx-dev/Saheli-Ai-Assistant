@@ -29,27 +29,29 @@ export const aiService = {
       }
 
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-      // Format messages for Gemini (it doesn't use system role the same way)
-      const formattedMessages = messages.map((msg) => ({
-        role: msg.role === "assistant" ? "model" : "user",
-        parts: [{ text: msg.content }],
-      }));
-
-      const chat = model.startChat({
-        history: formattedMessages.slice(0, -1),
+      const model = genAI.getGenerativeModel({
+        model: "gemini-1.5-flash"
       });
 
-      const lastMessage = formattedMessages[formattedMessages.length - 1];
-      const result = await chat.sendMessage(lastMessage.parts);
-      const response = result.response;
-      const text = response.text();
+      const lastMessage = messages?.[messages.length - 1];
 
-      return text || "Connection problem... try again.";
+      if (!lastMessage || !lastMessage.content) {
+        return "No message provided";
+      }
+
+      const chat = model.startChat({
+        history: messages.slice(0, -1).map((msg) => ({
+          role: msg.role === "assistant" ? "model" : "user",
+          parts: [{ text: msg.content }]
+        }))
+      });
+
+      const result = await chat.sendMessage(lastMessage.content);
+      const response = await result.response;
+      return response.text();
     } catch (error) {
-      console.error("AI Service Error:", error);
-      return "Connection problem... try again.";
+      console.error("Gemini Error:", error);
+      return "Connection problem... try again 💔";
     }
   }
 };

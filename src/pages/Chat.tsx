@@ -208,10 +208,13 @@ export default function Chat() {
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                   className="flex justify-start"
                 >
-                  <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-sm flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                    <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                    <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce"></div>
+                  <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                      <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce"></div>
+                    </div>
+                    <p className="text-white/60 text-sm">Saheli typing...</p>
                   </div>
                 </motion.div>
               )}
@@ -247,7 +250,7 @@ export default function Chat() {
               </button>
             </form>
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
-              Llama 3 8B Instruct • Saheli AI
+              Saheli perfect nahi hai... par tumse seekh rahi hai 💖
             </div>
           </div>
         </div>
