@@ -7,24 +7,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import { sendMessage, type ChatMessage } from "@/lib/ai-service";
 
 const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
-const EMOJI_SAFE_REGEX = /[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu;
+const SPEECH_CLEANUP_REGEX = /[^\p{L}\p{N}\p{P}\p{Z}\n]|[*#]/gu;
+const SENTENCE_SPLIT_REGEX = /(?<=[.!?])\s+/;
 
-export default function Chat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const submitLockRef = useRef(false);
+function useVoice(isMuted: boolean) {
+  const [isReady, setIsReady] = useState(false);
   const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const queueRef = useRef<string[]>([]);
+  const speakingRef = useRef(false);
 
   useEffect(() => {
     const loadVoices = () => {
@@ -39,30 +30,27 @@ export default function Chat() {
         window.speechSynthesis.onvoiceschanged = null;
       }
       window.speechSynthesis.cancel();
+      queueRef.current = [];
+      speakingRef.current = false;
     };
   }, []);
 
-  const handleLogout = async () => {
-    window.speechSynthesis.cancel();
-    await signOut(auth);
-    sessionStorage.removeItem("devMode");
-    navigate("/");
-  };
-
   const getHindiVoice = () => {
     const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+    const hindiVoices = voices.filter((voice) => voice.lang.startsWith("hi"));
     voicesRef.current = voices;
 
     return (
-      voices.find((voice) => voice.name.includes("Microsoft Swara Online (Natural)")) ||
-      voices.find((voice) => voice.name.includes("Google हिन्दी")) ||
-      voices.find((voice) => voice.lang === "hi-IN") ||
+      hindiVoices.find((voice) => voice.name.includes("Microsoft Swara Online (Natural)")) ||
+      hindiVoices.find((voice) => voice.name.includes("Google हिन्दी")) ||
+      hindiVoices.find((voice) => voice.name.includes("Microsoft Kalpana")) ||
+      hindiVoices.find((voice) => voice.lang.startsWith("hi")) ||
       null
     );
   };
 
-  const unlockAudio = async () => {
-    if (audioUnlocked) {
+  const unlock = async () => {
+    if (isReady) {
       return;
     }
 
@@ -81,28 +69,28 @@ export default function Chat() {
       }
 
       window.speechSynthesis.cancel();
-      setAudioUnlocked(true);
+      queueRef.current = [];
+      speakingRef.current = false;
+      setIsReady(true);
     } catch (error) {
-      console.warn("Audio unlock failed", error);
+      console.warn("Voice unlock failed", error);
     }
   };
 
-  const speak = (text: string) => {
-    if (isMuted || !audioUnlocked) {
+  const playNext = () => {
+    if (isMuted || !isReady || speakingRef.current) {
       return;
     }
 
-    const cleanText = text.replace(EMOJI_SAFE_REGEX, "").trim();
-    if (!cleanText) {
+    const nextSentence = queueRef.current.shift();
+    if (!nextSentence) {
       return;
     }
 
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const utterance = new SpeechSynthesisUtterance(nextSentence);
     utterance.lang = "hi-IN";
     utterance.pitch = 1.15;
-    utterance.rate = 0.85;
+    utterance.rate = 0.9;
     utterance.volume = 1.0;
 
     const hindiVoice = getHindiVoice();
@@ -110,7 +98,73 @@ export default function Chat() {
       utterance.voice = hindiVoice;
     }
 
+    speakingRef.current = true;
+    utterance.onend = () => {
+      speakingRef.current = false;
+      playNext();
+    };
+    utterance.onerror = () => {
+      speakingRef.current = false;
+      playNext();
+    };
+
     window.speechSynthesis.speak(utterance);
+  };
+
+  const speak = (text: string) => {
+    if (isMuted || !isReady) {
+      return;
+    }
+
+    const cleanText = text.replace(SPEECH_CLEANUP_REGEX, "").trim();
+    if (!cleanText) {
+      return;
+    }
+
+    const sentences = cleanText
+      .split(SENTENCE_SPLIT_REGEX)
+      .map((sentence) => sentence.trim())
+      .filter(Boolean);
+
+    if (sentences.length === 0) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    queueRef.current = sentences;
+    speakingRef.current = false;
+    playNext();
+  };
+
+  const stop = () => {
+    window.speechSynthesis.cancel();
+    queueRef.current = [];
+    speakingRef.current = false;
+  };
+
+  return { isReady, unlock, speak, stop };
+}
+
+export default function Chat() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const submitLockRef = useRef(false);
+  const navigate = useNavigate();
+  const { isReady, unlock, speak, stop } = useVoice(isMuted);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleLogout = async () => {
+    stop();
+    await signOut(auth);
+    sessionStorage.removeItem("devMode");
+    navigate("/");
   };
 
   const captureVisionFrame = async (): Promise<string | undefined> => {
@@ -156,8 +210,6 @@ export default function Chat() {
       return;
     }
 
-    await unlockAudio();
-
     submitLockRef.current = true;
     setInput("");
 
@@ -182,6 +234,18 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-[#0d0d12] text-white overflow-hidden selection:bg-pink-500/30">
+      {!isReady && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/55 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={unlock}
+            className="px-6 py-3 rounded-full bg-white/10 border border-white/15 text-white/90 hover:bg-white/15 transition-colors"
+          >
+            Tap to start Saheli&apos;s Voice
+          </button>
+        </div>
+      )}
+
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
@@ -243,7 +307,7 @@ export default function Chat() {
                 const nextMuted = !isMuted;
                 setIsMuted(nextMuted);
                 if (nextMuted) {
-                  window.speechSynthesis.cancel();
+                  stop();
                 }
               }}
               aria-label={isMuted ? "Unmute Voice" : "Mute Voice"}
@@ -275,15 +339,6 @@ export default function Chat() {
               </motion.div>
               <h2 className="text-2xl font-light mb-2">Hey Alakh!</h2>
               <p className="text-white/50 text-base font-light">I'm Saheli. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
-              {!audioUnlocked && (
-                <button
-                  type="button"
-                  onClick={unlockAudio}
-                  className="mt-4 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                >
-                  Start Chat
-                </button>
-              )}
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-6">
@@ -352,7 +407,7 @@ export default function Chat() {
               </button>
             </form>
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
-              Saheli har din tumse thoda aur seekh rahi hai 💖
+              Saheli har din tumse thoda aur seekh rahi hai {"<3"}
             </div>
           </div>
         </div>
