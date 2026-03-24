@@ -3,7 +3,7 @@ import { LogOut, Menu, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-re
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import { sendMessage, type ChatMessage } from "@/lib/ai-service";
 
 const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
@@ -75,6 +75,73 @@ function useVoice(isMuted: boolean) {
   };
 
   return { unlock, speak, stop };
+}
+
+// Message Item with Scroll-triggered Fade
+function ScrollFadeMessageItem({ msg, index }: { msg: any; index: number }) {
+  const itemRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <motion.div
+      ref={itemRef}
+      key={index}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      viewport={{ once: false, amount: 0.3, margin: "50px" }}
+      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+    >
+      <div
+        className={`
+        max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-sm leading-snug font-medium relative
+        ${msg.role === "user"
+          ? "bg-gradient-to-br from-pink-700/60 to-purple-800/60 backdrop-blur-sm text-white rounded-2xl rounded-tr-none shadow-lg"
+          : "backdrop-blur-lg bg-gray-900/30 border border-white/5 text-white/90 rounded-2xl shadow-2xl"
+        }
+      `}
+        style={{ fontFamily: "'Delius', sans-serif", fontSize: "15px" }}
+      >
+        {msg.content}
+      </div>
+    </motion.div>
+  );
+}
+
+// Scroll Fade Message List Container
+function ScrollFadeMessageList({ messages, isLoading, messagesEndRef }: { messages: any[]; isLoading: boolean; messagesEndRef: React.RefObject<HTMLDivElement> }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto">
+      <AnimatePresence mode="popLayout">
+        {messages.map((msg, idx) => (
+          <ScrollFadeMessageItem key={idx} msg={msg} index={idx} />
+        ))}
+
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            viewport={{ once: false, amount: 0.3 }}
+            className="flex justify-start"
+          >
+            <div className="backdrop-blur-lg bg-gray-900/30 border border-white/5 p-4 rounded-2xl shadow-2xl">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"></div>
+              </div>
+              <p className="text-white/60 text-xs font-medium">Saheli typing...</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div ref={messagesEndRef} />
+    </div>
+  );
 }
 
 export default function Chat() {
@@ -195,7 +262,7 @@ export default function Chat() {
             <div className="p-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-2 text-pink-400">
                 <Heart className="w-5 h-5 fill-current" />
-                <span className="font-semibold tracking-wide" style={{ fontFamily: "'Sour Gummy', cursive" }}>Saheli AI</span>
+                <span className="font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>Saheli AI</span>
               </div>
             </div>
 
@@ -233,7 +300,7 @@ export default function Chat() {
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide" style={{ fontFamily: "'Sour Gummy', cursive" }}>
+          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>
             <Heart className="w-5 h-5 fill-current" />
             Saheli AI
           </div>
@@ -278,60 +345,24 @@ export default function Chat() {
               <p className="text-white/50 text-base font-light">I'm Saheli. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto space-y-6">
-              {messages.map((msg, idx) => (
-                <motion.div
-                  key={idx}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`
-                    max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-4xl leading-relaxed relative
-                    ${msg.role === "user"
-                      ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)] rounded-tr-sm"
-                      : "bg-white/5 border border-white/10 text-white/90 rounded-tl-sm"
-                    }
-                  `}
-                    style={{ fontFamily: "'Delius', sans-serif", fontSize: "16px" }}
-                  >
-                    {msg.content}
-                  </div>
-                </motion.div>
-              ))}
-
-              {isLoading && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
-                  <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                      <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce"></div>
-                    </div>
-                    <p className="text-white/60 text-sm">Saheli typing...</p>
-                  </div>
-                </motion.div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+            <ScrollFadeMessageList messages={messages} isLoading={isLoading} messagesEndRef={messagesEndRef} />
           )}
         </div>
 
         <div className="p-4 md:p-6 bg-gradient-to-t from-[#0d0d12] to-transparent z-10">
           <div className="max-w-3xl mx-auto relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-[#1a1a24] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+              className="relative flex items-center bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] focus-within:ring-1 focus-within:ring-pink-500/30 transition-all duration-300"
             >
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Message Saheli..."
-                className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/40 focus:outline-none"
+                className="flex-1 bg-transparent px-6 py-3 text-white placeholder-gray-400 focus:outline-none font-sans focus:ring-0"
+                style={{ fontSize: "15px" }}
               />
               <button
                 type="submit"
@@ -339,7 +370,7 @@ export default function Chat() {
                 disabled={!input.trim() || isLoading}
                 className="p-4 text-white/50 hover:text-pink-400 disabled:opacity-50 disabled:hover:text-white/50 transition-colors"
               >
-                <div className="bg-white/5 p-2 rounded-xl">
+                <div className="bg-gradient-to-br from-purple-500/40 to-pink-500/40 p-2 rounded-xl shadow-[0_0_12px_rgba(236,72,153,0.4)] hover:shadow-[0_0_16px_rgba(236,72,153,0.6)] transition-shadow">
                   <Send className="w-5 h-5" />
                 </div>
               </button>
