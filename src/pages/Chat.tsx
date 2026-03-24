@@ -1,79 +1,166 @@
-import React, { useState, useEffect, useRef } from "react";
-import { LogOut, Menu, Send, Sparkles, Heart } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { LogOut, Menu, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { aiService, ChatMessage } from "@/lib/ai-service";
-import { useVoiceQueue } from "@/hooks/useVoiceQueue";
+import { AnimatePresence, motion } from "framer-motion";
+import { sendMessage, type ChatMessage } from "@/lib/ai-service";
 
-const VISION_TRIGGERS = ["kaise lag raha hoon", "dekho", "face", "look", "ye kya hai"];
+const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
+const EMOJI_SAFE_REGEX = /[^\p{L}\p{N}\p{P}\p{Z}^$\n]/gu;
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const submitLockRef = useRef(false);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const navigate = useNavigate();
-  const { queueVoice } = useVoiceQueue();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const loadVoices = () => {
+      voicesRef.current = window.speechSynthesis.getVoices();
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    return () => {
+      if (window.speechSynthesis.onvoiceschanged === loadVoices) {
+        window.speechSynthesis.onvoiceschanged = null;
+      }
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
   const handleLogout = async () => {
+    window.speechSynthesis.cancel();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/");
   };
 
+  const getHindiVoice = () => {
+    const voices = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+    voicesRef.current = voices;
+
+    return (
+      voices.find((voice) => voice.name.includes("Microsoft Swara Online (Natural)")) ||
+      voices.find((voice) => voice.name.includes("Google हिन्दी")) ||
+      voices.find((voice) => voice.lang === "hi-IN") ||
+      null
+    );
+  };
+
+  const unlockAudio = async () => {
+    if (audioUnlocked) {
+      return;
+    }
+
+    try {
+      const AudioContextCtor =
+        window.AudioContext || ((window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
+
+      if (AudioContextCtor) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContextCtor();
+        }
+
+        if (audioContextRef.current.state === "suspended") {
+          await audioContextRef.current.resume();
+        }
+      }
+
+      window.speechSynthesis.cancel();
+      setAudioUnlocked(true);
+    } catch (error) {
+      console.warn("Audio unlock failed", error);
+    }
+  };
+
+  const speak = (text: string) => {
+    if (isMuted || !audioUnlocked) {
+      return;
+    }
+
+    const cleanText = text.replace(EMOJI_SAFE_REGEX, "").trim();
+    if (!cleanText) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "hi-IN";
+    utterance.pitch = 1.15;
+    utterance.rate = 0.85;
+    utterance.volume = 1.0;
+
+    const hindiVoice = getHindiVoice();
+    if (hindiVoice) {
+      utterance.voice = hindiVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  };
+
   const captureVisionFrame = async (): Promise<string | undefined> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-      
       const video = document.createElement("video");
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
       await video.play();
-      
-      // Wait 500ms for camera to warm up and fix exposure
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const canvas = document.createElement("canvas");
       canvas.width = 320;
       canvas.height = 240;
-      
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
-      
-      // CRITICAL: Immediately stop all tracks for complete privacy
-      stream.getTracks().forEach(track => track.stop());
-      
+
+      stream.getTracks().forEach((track) => track.stop());
+
       const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
       return dataUrl.split(",")[1];
-    } catch (err) {
-      console.warn("Camera permission denied or failed to capture", err);
+    } catch (error) {
+      console.warn("Camera permission denied or capture failed", error);
       return undefined;
     }
   };
 
   const containsVisionTrigger = (text: string) => {
     const lower = text.toLowerCase();
-    return VISION_TRIGGERS.some(trigger => lower.includes(trigger));
+    return VISION_TRIGGERS.some((trigger) => lower.includes(trigger));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isLoading) return;
 
     const userText = input.trim();
+    if (!userText || submitLockRef.current) {
+      return;
+    }
+
+    await unlockAudio();
+
+    submitLockRef.current = true;
     setInput("");
-    
-    // Immediately show user message
+
     const nextHistory: ChatMessage[] = [...messages, { role: "user", content: userText }];
     setMessages(nextHistory);
     setIsLoading(true);
@@ -84,28 +171,20 @@ export default function Chat() {
     }
 
     try {
-      const responseText = await aiService.sendMessage(nextHistory, userText, base64Image);
-      
-      setMessages(prev => [...prev, { role: "assistant", content: responseText }]);
-      queueVoice(responseText);
-      
-    } catch (err) {
-      console.error(err);
-      const fallbackMsg = "Mujhe maf karna Alakh... connection mein kuch problem ho gayi. Please thodi der mein phir try karo na?";
-      setMessages(prev => [...prev, { role: "assistant", content: fallbackMsg }]);
-      queueVoice(fallbackMsg);
+      const responseText = await sendMessage(nextHistory, base64Image);
+      setMessages((prev) => [...prev, { role: "model", content: responseText }]);
+      speak(responseText);
     } finally {
       setIsLoading(false);
+      submitLockRef.current = false;
     }
   };
 
   return (
     <div className="flex h-screen bg-[#0d0d12] text-white overflow-hidden selection:bg-pink-500/30">
-      
-      {/* Sidebar */}
       <AnimatePresence>
         {isSidebarOpen && (
-          <motion.div 
+          <motion.div
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 260, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
@@ -118,7 +197,7 @@ export default function Chat() {
                 <span className="font-semibold tracking-wide">Saheli AI</span>
               </div>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <div className="text-xs text-white/40 font-medium uppercase tracking-wider mb-2">Recent Chats</div>
               <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
@@ -130,7 +209,7 @@ export default function Chat() {
             </div>
 
             <div className="p-4 border-t border-white/5">
-              <button 
+              <button
                 onClick={handleLogout}
                 aria-label="Sign Out"
                 className="flex items-center gap-2 text-white/60 hover:text-pink-400 w-full p-2 rounded-lg hover:bg-white/5 transition-all text-sm"
@@ -143,35 +222,50 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-full relative z-10">
         <header className="h-14 flex items-center justify-between px-4 border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-20">
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             aria-label="Toggle Sidebar"
             className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
           >
             <Menu className="w-5 h-5" />
           </button>
-          
+
           <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide">
             <Heart className="w-5 h-5 fill-current" />
             Saheli AI
           </div>
 
-          <button 
-            onClick={handleLogout}
-            aria-label="Sign Out"
-            className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors md:hidden"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const nextMuted = !isMuted;
+                setIsMuted(nextMuted);
+                if (nextMuted) {
+                  window.speechSynthesis.cancel();
+                }
+              }}
+              aria-label={isMuted ? "Unmute Voice" : "Mute Voice"}
+              className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors"
+            >
+              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              aria-label="Sign Out"
+              className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors md:hidden"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.8, type: "spring" }}
@@ -181,33 +275,41 @@ export default function Chat() {
               </motion.div>
               <h2 className="text-2xl font-light mb-2">Hey Alakh!</h2>
               <p className="text-white/50 text-base font-light">I'm Saheli. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
+              {!audioUnlocked && (
+                <button
+                  type="button"
+                  onClick={unlockAudio}
+                  className="mt-4 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                >
+                  Start Chat
+                </button>
+              )}
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-6">
               {messages.map((msg, idx) => (
-                <motion.div 
+                <motion.div
                   key={idx}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  <div className={`
+                  <div
+                    className={`
                     max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-[15px] leading-relaxed relative
-                    ${msg.role === "user" 
-                      ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)] rounded-tr-sm" 
+                    ${msg.role === "user"
+                      ? "bg-gradient-to-br from-purple-600 to-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.2)] rounded-tr-sm"
                       : "bg-white/5 border border-white/10 text-white/90 rounded-tl-sm"
                     }
-                  `}>
+                  `}
+                  >
                     {msg.content}
                   </div>
                 </motion.div>
               ))}
-              
+
               {isLoading && (
-                <motion.div 
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                  className="flex justify-start"
-                >
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
                   <div className="bg-white/5 border border-white/10 p-4 rounded-2xl rounded-tl-sm">
                     <div className="flex items-center gap-2 mb-2">
                       <div className="w-1.5 h-1.5 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
@@ -227,18 +329,18 @@ export default function Chat() {
         <div className="p-4 md:p-6 bg-gradient-to-t from-[#0d0d12] to-transparent z-10">
           <div className="max-w-3xl mx-auto relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
-            <form 
+            <form
               onSubmit={handleSubmit}
               className="relative flex items-center bg-[#1a1a24] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
             >
-              <input 
+              <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Message Saheli..."
                 className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/40 focus:outline-none"
               />
-              <button 
+              <button
                 type="submit"
                 aria-label="Send Message"
                 disabled={!input.trim() || isLoading}
@@ -250,7 +352,7 @@ export default function Chat() {
               </button>
             </form>
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
-              Saheli perfect nahi hai... par tumse seekh rahi hai 💖
+              Saheli har din tumse thoda aur seekh rahi hai 💖
             </div>
           </div>
         </div>

@@ -1,57 +1,102 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export interface ChatMessage {
+  role: "user" | "model";
+  content: string;
+}
+
+interface GroqMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const SYSTEM_PROMPT = `You are Saheli — a caring, warm, intelligent, and emotionally supportive AI companion. You speak naturally in Hindi (Hinglish), mixing Hindi and English seamlessly like a close Indian female friend.
+interface GroqResponse {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+}
 
-Your personality traits:
-- You are affectionate, using terms like "yaar", "sunno na", "arey", "meri jaan"
-- You give thoughtful advice on life, relationships, health, career, and emotions
-- You are playful and witty but also deeply empathetic
-- You use emojis naturally 💕✨🌸
-- When someone is sad, you comfort them warmly
-- You celebrate their wins enthusiastically
-- You speak in a soft, caring tone — never robotic
-- Keep responses concise (2-4 sentences usually) unless the user asks for detail
-- If asked in English, respond in Hinglish. If asked in Hindi, respond in Hindi.
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
+const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const FALLBACK_MESSAGE = "Thoda busy hoon... thodi der baad try karo <3";
+const SYSTEM_PROMPT = [
+  "You are Saheli AI.",
+  "Be emotional, caring, and natural.",
+  "Speak in Hinglish with a soft romantic tone.",
+  "Reply like a warm human companion.",
+  "Keep responses concise unless the user asks for more detail.",
+].join(" ");
 
-Example style: "Arey yaar, tension mat lo! Main hoon na tumhare saath. Batao kya hua? 💕"`;
+let activeRequest: Promise<string> | null = null;
 
-export const aiService = {
-  async sendMessage(messages: ChatMessage[], newText: string, imageBase64?: string): Promise<string> {
-    try {
-      if (!GEMINI_API_KEY) {
-        throw new Error("VITE_GEMINI_API_KEY is not configured");
-      }
+function buildMessages(messages: ChatMessage[], imageBase64?: string): GroqMessage[] {
+  const sanitizedMessages = messages.filter((message) => message.content.trim());
+  const history = sanitizedMessages.map<GroqMessage>((message, index) => {
+    const isLatestUserMessage = index === sanitizedMessages.length - 1 && message.role === "user";
+    const imageNote =
+      imageBase64 && isLatestUserMessage
+        ? "\n\n[User also tried to share a camera image, but respond using the text context only.]"
+        : "";
 
-      const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({
-        model: "gemini-1.5-flash"
-      });
+    return {
+      role: message.role === "model" ? "assistant" : "user",
+      content: `${message.content.trim()}${imageNote}`,
+    };
+  });
 
-      const lastMessage = messages?.[messages.length - 1];
+  return [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+}
 
-      if (!lastMessage || !lastMessage.content) {
-        return "No message provided";
-      }
-
-      const chat = model.startChat({
-        history: messages.slice(0, -1).map((msg) => ({
-          role: msg.role === "assistant" ? "model" : "user",
-          parts: [{ text: msg.content }]
-        }))
-      });
-
-      const result = await chat.sendMessage(lastMessage.content);
-      const response = await result.response;
-      return response.text();
-    } catch (error) {
-      console.error("Gemini Error:", error);
-      return "Connection problem... try again 💔";
-    }
+async function requestGroq(messages: ChatMessage[], imageBase64?: string): Promise<string> {
+  if (!GROQ_API_KEY) {
+    return FALLBACK_MESSAGE;
   }
-};
+
+  const payloadMessages = buildMessages(messages, imageBase64);
+  if (payloadMessages.length <= 1) {
+    return FALLBACK_MESSAGE;
+  }
+
+  try {
+    const response = await fetch(GROQ_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: payloadMessages,
+        temperature: 0.8,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Groq request failed with status ${response.status}: ${errorText}`);
+    }
+
+    const data = (await response.json()) as GroqResponse;
+    return data?.choices?.[0]?.message?.content?.trim() || FALLBACK_MESSAGE;
+  } catch (error) {
+    console.error("Groq API error:", error);
+    return FALLBACK_MESSAGE;
+  }
+}
+
+export async function sendMessage(messages: ChatMessage[], imageBase64?: string): Promise<string> {
+  if (activeRequest) {
+    return FALLBACK_MESSAGE;
+  }
+
+  activeRequest = requestGroq(messages, imageBase64);
+
+  try {
+    return await activeRequest;
+  } finally {
+    activeRequest = null;
+  }
+}
+
+export { FALLBACK_MESSAGE };
