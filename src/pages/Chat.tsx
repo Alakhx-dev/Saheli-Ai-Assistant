@@ -68,6 +68,32 @@ function normalizeTextForTts(text: string) {
 function useVoice(isMuted: boolean) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const unlockedRef = useRef(false);
+  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
+  const primePreferredVoice = () => {
+    const voices = window.speechSynthesis.getVoices();
+    preferredVoiceRef.current =
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi") && voice.name.toLowerCase().includes("female")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("swara")) ||
+      voices.find((voice) => voice.lang === "hi-IN") ||
+      null;
+  };
+
+  useEffect(() => {
+    primePreferredVoice();
+
+    const handleVoicesChanged = () => {
+      primePreferredVoice();
+    };
+
+    window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
+
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
+    };
+  }, []);
 
   const unlock = async () => {
     if (unlockedRef.current) {
@@ -87,6 +113,8 @@ function useVoice(isMuted: boolean) {
           await audioContextRef.current.resume();
         }
       }
+
+      primePreferredVoice();
 
       // Silent prime to satisfy browser user-interaction requirements.
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
@@ -109,22 +137,18 @@ function useVoice(isMuted: boolean) {
 
     window.speechSynthesis.cancel();
 
-    const voices = window.speechSynthesis.getVoices();
-    const preferredHindiVoice =
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi") && voice.name.toLowerCase().includes("female")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("swara")) ||
-      voices.find((voice) => voice.lang === "hi-IN");
-
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = "hi-IN";
     utterance.pitch = 1.2;
     utterance.rate = 1.1;
     utterance.volume = 1.0;
 
-    if (preferredHindiVoice) {
-      utterance.voice = preferredHindiVoice;
+    if (!preferredVoiceRef.current) {
+      primePreferredVoice();
+    }
+
+    if (preferredVoiceRef.current) {
+      utterance.voice = preferredVoiceRef.current;
     }
 
     window.speechSynthesis.speak(utterance);
@@ -617,14 +641,18 @@ export default function Chat() {
 
       lastMsgCountRef.current = request.history.length;
       const responseText = await sendMessage(request.history, imageBase64, detectedEmotion);
-      await persistChatMessage(request.chatId, {
+      speak(responseText);
+      const nextMood = detectMood(responseText);
+      const aiMessage = { role: "model" as const, content: responseText };
+      setMood(nextMood);
+      setMessages((prev) => [...prev, aiMessage]);
+      void persistChatMessage(request.chatId, {
         role: "model",
         content: responseText,
         createdAt: Date.now(),
+      }).catch((error) => {
+        console.warn("Failed to persist model reply", error);
       });
-      speak(responseText);
-      setMood(detectMood(responseText));
-      setMessages((prev) => [...prev, { role: "model", content: responseText }]);
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
@@ -736,14 +764,18 @@ export default function Chat() {
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
       const responseText = await sendMessage(nextHistory, base64Image, detectedEmotion);
-      await persistChatMessage(chatId, {
+      speak(responseText);
+      const nextMood = detectMood(responseText);
+      const aiMessage = { role: "model" as const, content: responseText };
+      setMood(nextMood);
+      setMessages((prev) => [...prev, aiMessage]);
+      void persistChatMessage(chatId, {
         role: "model",
         content: responseText,
         createdAt: Date.now(),
+      }).catch((error) => {
+        console.warn("Failed to persist model reply", error);
       });
-      speak(responseText);
-      setMood(detectMood(responseText));
-      setMessages((prev) => [...prev, { role: "model", content: responseText }]);
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
