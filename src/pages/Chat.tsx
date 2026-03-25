@@ -1,10 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LogOut, Menu, Mic, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-react";
 import { auth } from "@/lib/firebase";
+import type { User } from "firebase/auth";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { sendMessage, type ChatMessage, type EmotionLabel } from "@/lib/ai-service";
+import {
+  createChatSession,
+  loadChatMessages,
+  loadChatSessions,
+  saveChatMessage,
+  updateChatSessionTitle,
+  type ChatSessionSummary,
+  type StoredChatMessage,
+} from "@/lib/chat-history";
 import { detectEmotionFromImage } from "@/lib/emotion-service";
 
 const VISION_TRIGGER_PATTERNS = [
@@ -170,6 +180,7 @@ type SpeechRecognitionWindow = Window & typeof globalThis & {
 
 interface PendingMobileVisionRequest {
   id: number;
+  chatId: string;
   history: ChatMessage[];
 }
 
@@ -363,12 +374,16 @@ function ScrollFadeMessageList({
 }
 
 export default function Chat() {
+  const user = auth.currentUser;
+  const isGuest = !user;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [mood, setMood] = useState("neutral");
+  const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
+  const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submitLockRef = useRef(false);
@@ -389,6 +404,40 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapChatHistory = async () => {
+      const sessions = await loadChatSessions(user);
+      if (cancelled) {
+        return;
+      }
+
+      setChatSessions(sessions);
+
+      if (sessions.length === 0) {
+        setCurrentChatId(null);
+        setMessages([]);
+        return;
+      }
+
+      const initialChatId = sessions[0].id;
+      const storedMessages = await loadChatMessages(initialChatId, user);
+      if (cancelled) {
+        return;
+      }
+
+      setCurrentChatId(initialChatId);
+      setMessages(storedMessages.map(({ role, content }) => ({ role, content })));
+    };
+
+    void bootstrapChatHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     return () => {
@@ -490,6 +539,61 @@ export default function Chat() {
     });
   };
 
+  const refreshChatSessions = useCallback(async (nextChatId?: string | null) => {
+    const sessions = await loadChatSessions(user);
+    setChatSessions(sessions);
+
+    if (nextChatId !== undefined) {
+      setCurrentChatId(nextChatId);
+    }
+  }, [user]);
+
+  const handleSelectChat = async (chatId: string) => {
+    if (submitLockRef.current && currentChatId === chatId) {
+      return;
+    }
+
+    const storedMessages = await loadChatMessages(chatId, user);
+    setCurrentChatId(chatId);
+    setMessages(storedMessages.map(({ role, content }) => ({ role, content })));
+    setPendingMobileVisionRequest(null);
+    pendingMobileVisionRequestRef.current = null;
+  };
+
+  const handleCreateChat = async () => {
+    if (submitLockRef.current) {
+      return;
+    }
+
+    const chatId = await createChatSession(user);
+    setCurrentChatId(chatId);
+    setMessages([]);
+    setPendingMobileVisionRequest(null);
+    pendingMobileVisionRequestRef.current = null;
+    await refreshChatSessions(chatId);
+  };
+
+  const ensureActiveChat = useCallback(async (firstMessageText: string) => {
+    let chatId = currentChatId;
+    const isFirstMessageInChat = messages.length === 0;
+
+    if (!chatId) {
+      chatId = await createChatSession(user);
+      setCurrentChatId(chatId);
+    }
+
+    if (isFirstMessageInChat) {
+      await updateChatSessionTitle(chatId, firstMessageText, user);
+    }
+
+    return { chatId, isFirstMessageInChat };
+  }, [currentChatId, messages.length, user]);
+
+  const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
+    await saveChatMessage(chatId, message, user);
+    await refreshChatSessions(chatId);
+  }, [refreshChatSessions, user]);
+
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
       return;
@@ -513,6 +617,11 @@ export default function Chat() {
 
       lastMsgCountRef.current = request.history.length;
       const responseText = await sendMessage(request.history, imageBase64, detectedEmotion);
+      await persistChatMessage(request.chatId, {
+        role: "model",
+        content: responseText,
+        createdAt: Date.now(),
+      });
       speak(responseText);
       setMood(detectMood(responseText));
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
@@ -598,12 +707,21 @@ export default function Chat() {
     submitLockRef.current = true;
     setInput("");
 
-    const nextHistory: ChatMessage[] = [...messages, { role: "user", content: userText }];
+    const { chatId } = await ensureActiveChat(userText);
+    const userMessage: StoredChatMessage = {
+      role: "user",
+      content: userText,
+      createdAt: Date.now(),
+    };
+    await persistChatMessage(chatId, userMessage);
+
+    const nextHistory: ChatMessage[] = [...messages, { role: userMessage.role, content: userMessage.content }];
     setMessages(nextHistory);
 
     if (mobile && shouldUseVision) {
       const pendingRequest = {
         id: ++mobileVisionRequestIdRef.current,
+        chatId,
         history: nextHistory,
       };
       pendingMobileVisionRequestRef.current = pendingRequest;
@@ -618,6 +736,11 @@ export default function Chat() {
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
       const responseText = await sendMessage(nextHistory, base64Image, detectedEmotion);
+      await persistChatMessage(chatId, {
+        role: "model",
+        content: responseText,
+        createdAt: Date.now(),
+      });
       speak(responseText);
       setMood(detectMood(responseText));
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
@@ -658,13 +781,35 @@ export default function Chat() {
                 <Heart className="w-5 h-5 fill-current" />
                 <span className="font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>Saheli AI</span>
               </div>
+              <button
+                type="button"
+                onClick={() => void handleCreateChat()}
+                className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60 transition hover:border-pink-400/40 hover:text-pink-200"
+              >
+                New
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               <div className="text-xs text-white/80 font-semibold uppercase tracking-wider mb-2">Recent Chats</div>
-              <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
-                New Relationship Advice
-              </button>
+              {chatSessions.length === 0 ? (
+                <p className="p-2 text-sm text-white/40">No chats yet {isGuest ? "in guest mode" : "for this account"}.</p>
+              ) : (
+                chatSessions.map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    onClick={() => void handleSelectChat(chat.id)}
+                    className={`w-full text-left truncate p-2 rounded-lg transition-colors text-sm ${
+                      currentChatId === chat.id
+                        ? "bg-white/10 text-white"
+                        : "text-white/70 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    {chat.title}
+                  </button>
+                ))
+              )}
             </div>
 
             <div className="p-4 border-t border-white/5">
