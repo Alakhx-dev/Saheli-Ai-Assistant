@@ -26,6 +26,7 @@ const VISION_TRIGGER_PATTERNS = [
   /\bfit\s*check\b/i,
   /\bcamera\b/i,
 ];
+const VOICE_NAME = "Swara";
 
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
@@ -386,7 +387,7 @@ function ScrollFadeMessageList({
                 <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"></div>
               </div>
-              <p className="text-white/60 text-xs font-medium">Saheli typing...</p>
+              <p className="text-white/60 text-xs font-medium">{VOICE_NAME} typing...</p>
             </div>
           </motion.div>
         )}
@@ -910,7 +911,7 @@ export default function Chat() {
                 <Sparkles className="w-10 h-10 text-pink-400" />
               </motion.div>
               <h2 className="text-2xl font-light mb-2">Hey Alakh!</h2>
-              <p className="text-white/50 text-base font-light">I'm Saheli. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
+              <p className="text-white/50 text-base font-light">Main Swara hoon... Saheli AI ki voice. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
             </div>
           ) : (
             <ScrollFadeMessageList messages={messages} isLoading={isLoading} messagesEndRef={messagesEndRef} lastMsgCount={lastMsgCountRef.current} />
@@ -928,7 +929,7 @@ export default function Chat() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Message Saheli..."
+                placeholder="Swara se baat karo..."
                 className="flex-1 bg-transparent px-6 py-3.5 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 neon-border-input border-none"
                 style={{ fontSize: "15px" }}
               />
@@ -975,7 +976,7 @@ export default function Chat() {
               </div>
             )}
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
-              Saheli har din tumse thoda aur seekh rahi hai {"<3"}
+              Swara har din tumhe aur samajh rahi hai {"<3"}
             </div>
           </div>
         </div>
