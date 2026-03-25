@@ -7,7 +7,6 @@ import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion"
 import { sendMessage, type ChatMessage } from "@/lib/ai-service";
 
 const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
-const EXTRA_SPACE_REGEX = /\s+/g;
 
 function useVoice(isMuted: boolean) {
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -45,26 +44,35 @@ function useVoice(isMuted: boolean) {
       return;
     }
 
-    const cleanText = text.replace(/[#*]/g, "").replace(EXTRA_SPACE_REGEX, " ").trim();
+    const cleanText = text
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, "")
+      .replace(/\*\*/g, "")
+      .replace(/[.!?]+/g, ",")
+      .replace(/\s+/g, " ")
+      .trim();
+
     if (!cleanText) {
       return;
     }
 
     window.speechSynthesis.cancel();
 
+    const voices = window.speechSynthesis.getVoices();
+    const preferredHindiVoice =
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi") && voice.name.toLowerCase().includes("female")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google")) ||
+      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("swara")) ||
+      voices.find((voice) => voice.lang === "hi-IN");
+
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = "hi-IN";
     utterance.pitch = 1.2;
-    utterance.rate = 0.95;
+    utterance.rate = 1.1;
     utterance.volume = 1.0;
 
-    const voices = window.speechSynthesis.getVoices();
-    const hindiVoice =
-      voices.find((voice) => voice.lang === "hi-IN" && (voice.name.includes("Swara") || voice.name.includes("Google"))) ||
-      voices.find((voice) => voice.lang === "hi-IN");
-
-    if (hindiVoice) {
-      utterance.voice = hindiVoice;
+    if (preferredHindiVoice) {
+      utterance.voice = preferredHindiVoice;
     }
 
     window.speechSynthesis.speak(utterance);
@@ -152,27 +160,12 @@ export default function Chat() {
   const [isMuted, setIsMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submitLockRef = useRef(false);
-  const lastSpokenReplyRef = useRef<string | null>(null);
   const navigate = useNavigate();
   const { unlock, speak, stop } = useVoice(isMuted);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.role !== "model") {
-      return;
-    }
-
-    if (lastSpokenReplyRef.current === lastMessage.content) {
-      return;
-    }
-
-    lastSpokenReplyRef.current = lastMessage.content;
-    speak(lastMessage.content);
-  }, [messages, speak]);
 
   const handleLogout = async () => {
     stop();
@@ -241,6 +234,7 @@ export default function Chat() {
 
     try {
       const responseText = await sendMessage(nextHistory, base64Image);
+      speak(responseText);
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
     } finally {
       setIsLoading(false);
