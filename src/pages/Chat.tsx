@@ -1,11 +1,28 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { LogOut, Menu, Mic, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-react";
-import { auth } from "@/lib/firebase";
-import type { User } from "firebase/auth";
-import { signOut } from "firebase/auth";
+import {
+  Globe,
+  Brain,
+  LogOut,
+  Menu,
+  Mic,
+  Send,
+  Sparkles,
+  Heart,
+  UserCircle2,
+  Volume2,
+  VolumeX,
+  KeyRound,
+  Camera,
+  Check,
+  ImageIcon,
+  X,
+} from "lucide-react";
+import { auth, storage } from "@/lib/firebase";
+import { sendPasswordResetEmail, signOut, updateProfile } from "firebase/auth";
+import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { sendMessage, type ChatMessage, type EmotionLabel } from "@/lib/ai-service";
+import { sendMessage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   loadChatMessages,
@@ -16,6 +33,24 @@ import {
   type StoredChatMessage,
 } from "@/lib/chat-history";
 import { detectEmotionFromImage } from "@/lib/emotion-service";
+import {
+  CREATOR_NAME,
+  deleteMemoryEntry,
+  deleteMemoryMoment,
+  deriveNextMemoryProfile,
+  isMemoryEnabled,
+  loadMemoryProfile,
+  loadMemoryMoments,
+  persistMemoryProfile,
+  saveMemoryMoment,
+  setMemoryEnabled,
+  type MemoryFieldKey,
+  type MemoryMoment,
+  type MemoryProfile,
+} from "@/lib/memory";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
 
 const VISION_TRIGGER_PATTERNS = [
   /\bdekho\b/i,
@@ -27,8 +62,140 @@ const VISION_TRIGGER_PATTERNS = [
   /\bcamera\b/i,
 ];
 const VOICE_NAME = "Swara";
+const LANGUAGE_STORAGE_KEY = "language";
+const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
+const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
+const PROFILE_CROP_OUTPUT_SIZE = 512;
+const PROFILE_PREVIEW_SIZE = 208;
 
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
+
+type LanguageOption = "hindi" | "english";
+type MemoryEntryDescriptor =
+  | { id: "name"; label: "Name"; value: string; field: MemoryFieldKey }
+  | { id: "tone"; label: "Tone"; value: string; field: MemoryFieldKey }
+  | { id: "style"; label: "Style"; value: string; field: MemoryFieldKey }
+  | { id: "moodPattern"; label: "Mood"; value: string; field: MemoryFieldKey }
+  | { id: `preference-${string}`; label: "Likes"; value: string; field: MemoryFieldKey; preferenceValue: string };
+
+interface ProfileImageMeta {
+  width: number;
+  height: number;
+}
+
+function buildMemoryEntries(profile: MemoryProfile | null): MemoryEntryDescriptor[] {
+  if (!profile) {
+    return [];
+  }
+
+  const entries: MemoryEntryDescriptor[] = [];
+
+  if (profile.name) {
+    entries.push({ id: "name", label: "Name", value: profile.name, field: "name" });
+  }
+
+  if (profile.tone) {
+    entries.push({ id: "tone", label: "Tone", value: profile.tone, field: "tone" });
+  }
+
+  if (profile.style) {
+    entries.push({ id: "style", label: "Style", value: profile.style, field: "style" });
+  }
+
+  if (profile.moodPattern) {
+    entries.push({ id: "moodPattern", label: "Mood", value: profile.moodPattern, field: "moodPattern" });
+  }
+
+  for (const preference of profile.preferences ?? []) {
+    entries.push({
+      id: `preference-${preference}`,
+      label: "Likes",
+      value: preference,
+      field: "preference",
+      preferenceValue: preference,
+    });
+  }
+
+  return entries;
+}
+
+function readLanguagePreference(): LanguageOption {
+  const value = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return value === "english" ? "english" : "hindi";
+}
+
+function readGuestProfileName() {
+  return localStorage.getItem(GUEST_PROFILE_NAME_KEY)?.trim() || CREATOR_NAME;
+}
+
+function readGuestProfilePhoto() {
+  return localStorage.getItem(GUEST_PROFILE_PHOTO_KEY) || "";
+}
+
+function hasExplicitMemoryInstruction(text: string) {
+  return /yaad\s+rakhna|mera\s+naam|my\s+name\s+is|mujhe\s+pasand\s+hai|i\s+like|mai\s+aise\s+hu|main\s+aisa\s+hu|main\s+aisi\s+hu/i.test(text);
+}
+
+function hasVisibleMemoryChange(previousProfile: MemoryProfile | null, nextProfile: MemoryProfile | null) {
+  const normalizeList = (values?: string[]) => (values ?? []).slice().sort().join("|");
+
+  return (
+    previousProfile?.name !== nextProfile?.name ||
+    previousProfile?.tone !== nextProfile?.tone ||
+    previousProfile?.style !== nextProfile?.style ||
+    previousProfile?.moodPattern !== nextProfile?.moodPattern ||
+    normalizeList(previousProfile?.preferences) !== normalizeList(nextProfile?.preferences)
+  );
+}
+
+async function loadImageMeta(dataUrl: string): Promise<ProfileImageMeta> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("Unable to load profile image"));
+    image.src = dataUrl;
+  });
+}
+
+async function buildCroppedProfileImage(
+  source: string,
+  meta: ProfileImageMeta,
+  zoom: number,
+  offsetXPct: number,
+  offsetYPct: number,
+): Promise<string> {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error("Unable to crop profile image"));
+    element.src = source;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = PROFILE_CROP_OUTPUT_SIZE;
+  canvas.height = PROFILE_CROP_OUTPUT_SIZE;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Canvas unavailable");
+  }
+
+  const baseScale = Math.max(PROFILE_CROP_OUTPUT_SIZE / meta.width, PROFILE_CROP_OUTPUT_SIZE / meta.height);
+  const drawWidth = meta.width * baseScale * zoom;
+  const drawHeight = meta.height * baseScale * zoom;
+  const maxOffsetX = Math.max(0, (drawWidth - PROFILE_CROP_OUTPUT_SIZE) / 2);
+  const maxOffsetY = Math.max(0, (drawHeight - PROFILE_CROP_OUTPUT_SIZE) / 2);
+  const offsetX = (offsetXPct / 100) * maxOffsetX;
+  const offsetY = (offsetYPct / 100) * maxOffsetY;
+  const drawX = (PROFILE_CROP_OUTPUT_SIZE - drawWidth) / 2 + offsetX;
+  const drawY = (PROFILE_CROP_OUTPUT_SIZE - drawHeight) / 2 + offsetY;
+
+  context.fillStyle = "#12091f";
+  context.fillRect(0, 0, PROFILE_CROP_OUTPUT_SIZE, PROFILE_CROP_OUTPUT_SIZE);
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
 
 function normalizeTextForTts(text: string) {
   let normalized = text
@@ -207,6 +374,8 @@ interface PendingMobileVisionRequest {
   id: number;
   chatId: string;
   history: ChatMessage[];
+  memoryProfile: MemoryProfile | null;
+  identity: UserIdentityContext;
 }
 
 function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
@@ -401,7 +570,36 @@ function ScrollFadeMessageList({
 export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
+  const [language, setLanguage] = useState<LanguageOption>(() => readLanguagePreference());
+  const [profileName, setProfileName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState(() => user?.photoURL || (isGuest ? readGuestProfilePhoto() : ""));
+  const [profileDraftName, setProfileDraftName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
+  const [profileDraftPhotoUrl, setProfileDraftPhotoUrl] = useState(() => user?.photoURL || (isGuest ? readGuestProfilePhoto() : ""));
+  const [profileImageSource, setProfileImageSource] = useState<string | null>(null);
+  const [profileImageMeta, setProfileImageMeta] = useState<ProfileImageMeta | null>(null);
+  const [profileCropZoom, setProfileCropZoom] = useState(1);
+  const [profileCropX, setProfileCropX] = useState(0);
+  const [profileCropY, setProfileCropY] = useState(0);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [memoryMenuOpen, setMemoryMenuOpen] = useState(false);
+  const [profileStatus, setProfileStatus] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [memoryEnabled, setMemoryEnabledState] = useState(() => isMemoryEnabled());
+  const [memoryMoments, setMemoryMoments] = useState<MemoryMoment[]>([]);
+  const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
+  const effectiveUserName = profileName.trim() || (isGuest ? CREATOR_NAME : "User");
+  const identityContext: UserIdentityContext = {
+    userId: user?.uid ?? "guest",
+    userName: effectiveUserName,
+    isGuest,
+    isCreatorSession: isGuest || effectiveUserName.toLowerCase() === CREATOR_NAME.toLowerCase(),
+    language,
+  };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(null);
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -429,6 +627,31 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  }, [language]);
+
+  useEffect(() => {
+    setMemoryEnabled(memoryEnabled);
+  }, [memoryEnabled]);
+
+  useEffect(() => {
+    const nextName = user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User");
+    const nextPhotoUrl = user?.photoURL || (isGuest ? readGuestProfilePhoto() : "");
+
+    setProfileName(nextName);
+    setProfilePhotoUrl(nextPhotoUrl);
+    setProfileDraftName(nextName);
+    setProfileDraftPhotoUrl(nextPhotoUrl);
+    setProfileImageSource(null);
+    setProfileImageMeta(null);
+    setProfileCropZoom(1);
+    setProfileCropX(0);
+    setProfileCropY(0);
+    setProfileStatus(null);
+    setMemoryStatus(null);
+  }, [isGuest, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -465,6 +688,54 @@ export default function Chat() {
   }, [user]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapMemoryMoments = async () => {
+      try {
+        const moments = await loadMemoryMoments(user);
+        if (!cancelled) {
+          setMemoryMoments(moments);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to load memory moments", error);
+          setMemoryMoments([]);
+        }
+      }
+    };
+
+    void bootstrapMemoryMoments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const bootstrapMemory = async () => {
+      try {
+        const profile = await loadMemoryProfile(user);
+        if (!cancelled) {
+          setMemoryProfile(profile);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to load memory profile", error);
+          setMemoryProfile(null);
+        }
+      }
+    };
+
+    void bootstrapMemory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
     return () => {
       if (mobileCameraCancelTimeoutRef.current) {
         window.clearTimeout(mobileCameraCancelTimeoutRef.current);
@@ -477,6 +748,164 @@ export default function Chat() {
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/");
+  };
+
+  const handleLanguageChange = (nextLanguage: LanguageOption) => {
+    setLanguage(nextLanguage);
+    setLanguageMenuOpen(false);
+  };
+
+  const handleMemoryToggle = (enabled: boolean) => {
+    setMemoryEnabledState(enabled);
+    setMemoryStatus(enabled ? "Memory wapas on hai." : "Memory off hai. Ab Swara nayi memory save nahi karegi.");
+  };
+
+  const handleDeleteMemoryEntry = async (entry: MemoryEntryDescriptor) => {
+    const nextProfile = deleteMemoryEntry(memoryProfile, entry.field, "preferenceValue" in entry ? entry.preferenceValue : undefined);
+    setMemoryProfile(nextProfile);
+
+    try {
+      await persistMemoryProfile(user, nextProfile);
+      setMemoryStatus(`${entry.label} memory se hata diya.`);
+    } catch (error) {
+      console.warn("Failed to delete memory entry", error);
+      setMemoryStatus("Memory item delete nahi hua. Dobara try karo.");
+    }
+  };
+
+  const handleDeleteMemoryMoment = async (momentId: string) => {
+    try {
+      const deletedMoment = memoryMoments.find((moment) => moment.id === momentId);
+      await deleteMemoryMoment(user, momentId);
+      setMemoryMoments((prev) => prev.filter((moment) => moment.id !== momentId));
+      if (selectedMemoryImage && deletedMoment?.imageDataUrl === selectedMemoryImage) {
+        setSelectedMemoryImage(null);
+      }
+      setMemoryStatus("Saved moment delete kar diya.");
+    } catch (error) {
+      console.warn("Failed to delete memory moment", error);
+      setMemoryStatus("Saved moment delete nahi hua.");
+    }
+  };
+
+  const handleProfileImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const source = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+            return;
+          }
+
+          reject(new Error("Unable to load image"));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error("Unable to load image"));
+        reader.readAsDataURL(file);
+      });
+
+      const meta = await loadImageMeta(source);
+      setProfileImageSource(source);
+      setProfileImageMeta(meta);
+      setProfileDraftPhotoUrl(source);
+      setProfileCropZoom(1);
+      setProfileCropX(0);
+      setProfileCropY(0);
+      setProfileStatus("Image ready. Adjust the square crop and save.");
+    } catch (error) {
+      console.warn("Profile image selection failed", error);
+      setProfileStatus("Image load nahi ho payi. Ek aur photo try karo.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) {
+      setProfileStatus("Password reset ke liye email account chahiye.");
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      setProfileStatus(`Reset link ${user.email} par bhej diya.`);
+    } catch (error) {
+      console.warn("Password reset failed", error);
+      setProfileStatus("Reset email bhejne me thodi problem hui.");
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    const trimmedName = profileDraftName.trim() || (isGuest ? CREATOR_NAME : "User");
+
+    setIsSavingProfile(true);
+    setProfileStatus("Saving profile...");
+
+    try {
+      let nextPhotoUrl = profilePhotoUrl;
+
+      if (profileImageSource && profileImageMeta) {
+        const croppedDataUrl = await buildCroppedProfileImage(
+          profileImageSource,
+          profileImageMeta,
+          profileCropZoom,
+          profileCropX,
+          profileCropY,
+        );
+
+        if (user) {
+          const avatarRef = storageRef(storage, `profile-pictures/${user.uid}.jpg`);
+          await uploadString(avatarRef, croppedDataUrl, "data_url");
+          nextPhotoUrl = await getDownloadURL(avatarRef);
+        } else {
+          nextPhotoUrl = croppedDataUrl;
+          localStorage.setItem(GUEST_PROFILE_PHOTO_KEY, nextPhotoUrl);
+        }
+      }
+
+      if (user) {
+        await updateProfile(user, {
+          displayName: trimmedName,
+          photoURL: nextPhotoUrl || null,
+        });
+      } else {
+        localStorage.setItem(GUEST_PROFILE_NAME_KEY, trimmedName);
+      }
+
+      setProfileName(trimmedName);
+      setProfilePhotoUrl(nextPhotoUrl);
+      setProfileDraftName(trimmedName);
+      setProfileDraftPhotoUrl(nextPhotoUrl);
+      setProfileImageSource(null);
+      setProfileImageMeta(null);
+      setProfileCropZoom(1);
+      setProfileCropX(0);
+      setProfileCropY(0);
+
+      const nextMemoryProfile = {
+        ...(memoryProfile ?? {}),
+        name: trimmedName,
+      };
+      setMemoryProfile(nextMemoryProfile);
+      if (memoryEnabled) {
+        void persistMemoryProfile(user, nextMemoryProfile).catch((error) => {
+          console.warn("Failed to sync memory name with profile", error);
+        });
+      }
+
+      setProfileStatus("Profile saved.");
+    } catch (error) {
+      console.warn("Profile save failed", error);
+      setProfileStatus("Profile save nahi hua. Dobara try karo.");
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const captureVisionFrame = async (): Promise<string | undefined> => {
@@ -638,10 +1067,26 @@ export default function Chat() {
     try {
       if (imageBase64) {
         detectedEmotion = await detectEmotionFromImage(imageBase64);
+        if (memoryEnabled) {
+          void saveMemoryMoment(user, imageBase64)
+            .then(async () => {
+              const nextMoments = await loadMemoryMoments(user);
+              setMemoryMoments(nextMoments);
+            })
+            .catch((error) => {
+              console.warn("Failed to save memory moment", error);
+            });
+        }
       }
 
       lastMsgCountRef.current = request.history.length;
-      const responseText = await sendMessage(request.history, imageBase64, detectedEmotion);
+      const responseText = await sendMessage(
+        request.history,
+        imageBase64,
+        detectedEmotion,
+        memoryEnabled ? request.memoryProfile : null,
+        request.identity,
+      );
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -747,11 +1192,33 @@ export default function Chat() {
     const nextHistory: ChatMessage[] = [...messages, { role: userMessage.role, content: userMessage.content }];
     setMessages(nextHistory);
 
+    let nextMemoryProfile = memoryProfile;
+    if (memoryEnabled) {
+      nextMemoryProfile = deriveNextMemoryProfile(memoryProfile, userText);
+      if (!nextMemoryProfile?.name) {
+        nextMemoryProfile = {
+          ...(nextMemoryProfile ?? {}),
+          name: effectiveUserName,
+        };
+      }
+
+      const shouldPersistMemory = hasExplicitMemoryInstruction(userText) || hasVisibleMemoryChange(memoryProfile, nextMemoryProfile);
+      setMemoryProfile(nextMemoryProfile);
+
+      if (shouldPersistMemory) {
+        void persistMemoryProfile(user, nextMemoryProfile).catch((error) => {
+          console.warn("Failed to persist memory profile", error);
+        });
+      }
+    }
+
     if (mobile && shouldUseVision) {
       const pendingRequest = {
         id: ++mobileVisionRequestIdRef.current,
         chatId,
         history: nextHistory,
+        memoryProfile: memoryEnabled ? nextMemoryProfile : null,
+        identity: identityContext,
       };
       pendingMobileVisionRequestRef.current = pendingRequest;
       setPendingMobileVisionRequest(pendingRequest);
@@ -764,7 +1231,23 @@ export default function Chat() {
       lastMsgCountRef.current = nextHistory.length;
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
-      const responseText = await sendMessage(nextHistory, base64Image, detectedEmotion);
+      if (base64Image && memoryEnabled) {
+        void saveMemoryMoment(user, base64Image)
+          .then(async () => {
+            const nextMoments = await loadMemoryMoments(user);
+            setMemoryMoments(nextMoments);
+          })
+          .catch((error) => {
+            console.warn("Failed to save memory moment", error);
+          });
+      }
+      const responseText = await sendMessage(
+        nextHistory,
+        base64Image,
+        detectedEmotion,
+        memoryEnabled ? nextMemoryProfile : null,
+        identityContext,
+      );
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -782,6 +1265,26 @@ export default function Chat() {
       submitLockRef.current = false;
     }
   };
+
+  const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
+  const previewBaseScale = profileImageMeta
+    ? Math.max(PROFILE_PREVIEW_SIZE / profileImageMeta.width, PROFILE_PREVIEW_SIZE / profileImageMeta.height)
+    : 1;
+  const previewWidth = profileImageMeta ? profileImageMeta.width * previewBaseScale * profileCropZoom : PROFILE_PREVIEW_SIZE;
+  const previewHeight = profileImageMeta ? profileImageMeta.height * previewBaseScale * profileCropZoom : PROFILE_PREVIEW_SIZE;
+  const previewMaxOffsetX = Math.max(0, (previewWidth - PROFILE_PREVIEW_SIZE) / 2);
+  const previewMaxOffsetY = Math.max(0, (previewHeight - PROFILE_PREVIEW_SIZE) / 2);
+  const previewOffsetX = (profileCropX / 100) * previewMaxOffsetX;
+  const previewOffsetY = (profileCropY / 100) * previewMaxOffsetY;
+  const headerControlButtonClass =
+    "group flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.06] text-white/70 backdrop-blur-2xl shadow-[0_10px_24px_rgba(12,4,24,0.28)] transition-all duration-300 hover:scale-105 hover:border-pink-400/35 hover:bg-white/[0.09] hover:text-pink-100";
+  const memoryButtonClass = `${headerControlButtonClass} ${
+    memoryEnabled
+      ? "border-pink-400/30 bg-pink-500/12 text-pink-100 shadow-[0_0_30px_rgba(236,72,153,0.18)]"
+      : ""
+  }`;
+  const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
+  const memoryEntries = buildMemoryEntries(memoryProfile);
 
   return (
     <div className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" data-mood={mood}>
@@ -876,6 +1379,7 @@ export default function Chat() {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => {
                 const nextMuted = !isMuted;
                 setIsMuted(nextMuted);
@@ -884,18 +1388,388 @@ export default function Chat() {
                 }
               }}
               aria-label={isMuted ? "Unmute Voice" : "Mute Voice"}
-              className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors"
+              className={headerControlButtonClass}
+              title={isMuted ? "Voice Off" : "Voice On"}
             >
-              {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+              {isMuted ? <VolumeX className="h-4.5 w-4.5" /> : <Volume2 className="h-4.5 w-4.5" />}
             </button>
 
-            <button
-              onClick={handleLogout}
-              aria-label="Sign Out"
-              className="p-2 text-white/60 hover:text-pink-400 rounded-lg hover:bg-white/5 transition-colors md:hidden"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            <DropdownMenu open={memoryMenuOpen} onOpenChange={setMemoryMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Memory"
+                  className={memoryButtonClass}
+                  title={memoryEnabled ? "Memory On" : "Memory Off"}
+                >
+                  <Brain className="h-4.5 w-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={10}
+                className="w-[min(26rem,calc(100vw-1rem))] rounded-[28px] border border-white/12 bg-[#140c27]/90 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.5)] backdrop-blur-3xl"
+                onCloseAutoFocus={(event) => event.preventDefault()}
+              >
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.28em] text-white/35">Memory</p>
+                      <h3 className="mt-1 text-sm font-semibold text-white">What Swara remembers</h3>
+                    </div>
+                    <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/45">
+                      {memoryEnabled ? "On" : "Off"}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">🧠 Memory</p>
+                        <p className="mt-1 text-xs text-white/45">
+                          {memoryEnabled
+                            ? "Important info aur repeated patterns save honge."
+                            : "Memory off hai. Nayi memory ya saved moments add nahi honge."}
+                        </p>
+                      </div>
+                      <Switch checked={memoryEnabled} onCheckedChange={handleMemoryToggle} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">What I Remember</p>
+                        <p className="mt-1 text-xs text-white/45">Visible memory only. Tap × to forget one item.</p>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
+                        {memoryEntries.length}
+                      </div>
+                    </div>
+
+                    {memoryEntries.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-center text-xs text-white/40">
+                        Abhi koi visible memory save nahi hai.
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {memoryEntries.map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-white/85"
+                          >
+                            <span className="truncate">
+                              <span className="text-white/45">{entry.label}:</span> {entry.value}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteMemoryEntry(entry)}
+                              className="rounded-full p-0.5 text-white/45 transition hover:bg-white/10 hover:text-pink-200"
+                              aria-label={`Delete ${entry.label}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Saved Moments</p>
+                        <p className="mt-1 text-xs text-white/45">Recent camera snapshots saved for memory.</p>
+                      </div>
+                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
+                        {memoryMoments.length}
+                      </div>
+                    </div>
+
+                    {memoryMoments.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-white/40">
+                        <ImageIcon className="mb-2 h-5 w-5" />
+                        Saved moments abhi empty hain.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {memoryMoments.map((moment) => (
+                          <div key={moment.id} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMemoryImage(moment.imageDataUrl)}
+                              className="block aspect-square w-full"
+                            >
+                              <img
+                                src={moment.imageDataUrl}
+                                alt="Saved moment"
+                                className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteMemoryMoment(moment.id)}
+                              className="absolute right-2 top-2 rounded-full bg-black/45 p-1 text-white/80 opacity-0 transition group-hover:opacity-100 hover:bg-pink-500/70"
+                              aria-label="Delete saved moment"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {memoryStatus ? (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65">
+                      {memoryStatus}
+                    </div>
+                  ) : null}
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu open={languageMenuOpen} onOpenChange={setLanguageMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Language"
+                  className={headerControlButtonClass}
+                  title={`Language: ${language === "english" ? "English" : "Hindi"}`}
+                >
+                  <Globe className="h-4.5 w-4.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={10}
+                className="w-[min(18rem,calc(100vw-1.5rem))] rounded-3xl border border-white/12 bg-[#1b1131]/85 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.45)] backdrop-blur-3xl"
+              >
+                <div className="mb-3">
+                  <p className="text-xs uppercase tracking-[0.28em] text-white/35">Language</p>
+                  <p className="mt-1 text-sm text-white/75">Swara kis language me reply kare, yahan choose karo.</p>
+                </div>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleLanguageChange("hindi")}
+                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                      language === "hindi"
+                        ? "border-pink-400/40 bg-pink-500/14 text-white"
+                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-medium">Hindi</div>
+                      <div className="text-xs text-white/45">Natural Hinglish + Hindi vibes</div>
+                    </div>
+                    {language === "hindi" ? <Check className="h-4 w-4 text-pink-200" /> : null}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLanguageChange("english")}
+                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                      language === "english"
+                        ? "border-purple-400/40 bg-purple-500/14 text-white"
+                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-medium">English</div>
+                      <div className="text-xs text-white/45">Clear English replies with the same personality</div>
+                    </div>
+                    {language === "english" ? <Check className="h-4 w-4 text-purple-200" /> : null}
+                  </button>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Profile"
+                  className={headerControlButtonClass}
+                  title="Profile"
+                >
+                  <UserCircle2 className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={10}
+                className="w-[min(24rem,calc(100vw-1rem))] rounded-[28px] border border-white/12 bg-[#140c27]/90 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.5)] backdrop-blur-3xl"
+                onCloseAutoFocus={(event) => event.preventDefault()}
+              >
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-14 w-14 border border-white/10 shadow-[0_10px_28px_rgba(236,72,153,0.18)]">
+                      <AvatarImage src={profileDraftPhotoUrl || undefined} alt={effectiveUserName} className="object-cover" />
+                      <AvatarFallback className="bg-gradient-to-br from-purple-500/30 to-pink-500/30 text-base font-semibold text-white">
+                        {profileInitial}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white">{effectiveUserName}</p>
+                      <p className="truncate text-xs text-white/45">{user?.email || "Guest mode"}</p>
+                      <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-pink-200/75">
+                        {isGuest ? "Local profile" : "Cloud synced profile"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <label className="mb-1.5 block text-[11px] uppercase tracking-[0.22em] text-white/40">Change Name</label>
+                      <input
+                        type="text"
+                        value={profileDraftName}
+                        onChange={(event) => setProfileDraftName(event.target.value)}
+                        placeholder="Enter your name"
+                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-pink-400/35 focus:bg-white/[0.08]"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <label className="block text-[11px] uppercase tracking-[0.22em] text-white/40">Profile Pic</label>
+                        <button
+                          type="button"
+                          onClick={() => profileImageInputRef.current?.click()}
+                          className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/80 transition hover:border-pink-400/35 hover:text-white"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          Upload
+                        </button>
+                      </div>
+                      <input
+                        ref={profileImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleProfileImageSelect}
+                      />
+
+                      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
+                        <div className="mx-auto h-[208px] w-[208px] overflow-hidden rounded-[28px] border border-white/10 bg-[#12091f] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                          {profilePreviewSource && profileImageMeta ? (
+                            <div className="relative h-full w-full overflow-hidden">
+                              <img
+                                src={profilePreviewSource}
+                                alt="Profile crop preview"
+                                className="absolute max-w-none select-none"
+                                style={{
+                                  width: `${previewWidth}px`,
+                                  height: `${previewHeight}px`,
+                                  left: `${(PROFILE_PREVIEW_SIZE - previewWidth) / 2 + previewOffsetX}px`,
+                                  top: `${(PROFILE_PREVIEW_SIZE - previewHeight) / 2 + previewOffsetY}px`,
+                                }}
+                              />
+                            </div>
+                          ) : profilePreviewSource ? (
+                            <img
+                              src={profilePreviewSource}
+                              alt="Profile preview"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/12 to-pink-500/12 text-white/40">
+                              <UserCircle2 className="h-16 w-16" />
+                            </div>
+                          )}
+                        </div>
+
+                        {profileImageSource ? (
+                          <div className="mt-3 space-y-3">
+                            <div>
+                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
+                                <span>Zoom</span>
+                                <span>{profileCropZoom.toFixed(1)}x</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="1"
+                                max="3"
+                                step="0.1"
+                                value={profileCropZoom}
+                                onChange={(event) => setProfileCropZoom(Number(event.target.value))}
+                                className="w-full accent-pink-400"
+                              />
+                            </div>
+                            <div>
+                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
+                                <span>Horizontal</span>
+                                <span>{profileCropX}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-100"
+                                max="100"
+                                step="1"
+                                value={profileCropX}
+                                onChange={(event) => setProfileCropX(Number(event.target.value))}
+                                className="w-full accent-pink-400"
+                              />
+                            </div>
+                            <div>
+                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
+                                <span>Vertical</span>
+                                <span>{profileCropY}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="-100"
+                                max="100"
+                                step="1"
+                                value={profileCropY}
+                                onChange={(event) => setProfileCropY(Number(event.target.value))}
+                                className="w-full accent-pink-400"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {profileStatus ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65">
+                        {profileStatus}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveProfile()}
+                      disabled={isSavingProfile}
+                      className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(192,38,211,0.25)] transition hover:scale-[1.01] hover:from-purple-500 hover:to-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingProfile ? "Saving..." : "Save Profile"}
+                    </button>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => void handlePasswordReset()}
+                        disabled={!user?.email}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-purple-400/30 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                        Change Password
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void handleLogout()}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-pink-400/30 hover:bg-white/[0.08] hover:text-white"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 
@@ -910,7 +1784,7 @@ export default function Chat() {
               >
                 <Sparkles className="w-10 h-10 text-pink-400" />
               </motion.div>
-              <h2 className="text-2xl font-light mb-2">Hey Alakh!</h2>
+              <h2 className="text-2xl font-light mb-2">Hey {effectiveUserName}!</h2>
               <p className="text-white/50 text-base font-light">Main Swara hoon... Saheli AI ki voice. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
             </div>
           ) : (
@@ -980,6 +1854,41 @@ export default function Chat() {
             </div>
           </div>
         </div>
+
+        <AnimatePresence>
+          {selectedMemoryImage ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
+              onClick={() => setSelectedMemoryImage(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.94, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="relative max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/12 bg-[#130b23]/90 p-3 shadow-[0_24px_60px_rgba(0,0,0,0.5)]"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setSelectedMemoryImage(null)}
+                  className="absolute right-4 top-4 z-10 rounded-full border border-white/10 bg-black/35 p-2 text-white/80 transition hover:border-pink-400/30 hover:text-white"
+                  aria-label="Close preview"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <img
+                  src={selectedMemoryImage}
+                  alt="Saved memory preview"
+                  className="max-h-[80vh] w-full rounded-[22px] object-contain"
+                />
+              </motion.div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </div>
   );
