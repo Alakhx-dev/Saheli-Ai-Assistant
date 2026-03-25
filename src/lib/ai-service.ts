@@ -3,9 +3,23 @@ export interface ChatMessage {
   content: string;
 }
 
+export type EmotionLabel = "happy" | "sad" | "neutral" | "angry";
+
+interface GroqTextContentPart {
+  type: "text";
+  text: string;
+}
+
+interface GroqImageContentPart {
+  type: "image_url";
+  image_url: {
+    url: string;
+  };
+}
+
 interface GroqMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | Array<GroqTextContentPart | GroqImageContentPart>;
 }
 
 interface GroqResponse {
@@ -18,7 +32,8 @@ interface GroqResponse {
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
+const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const FALLBACK_MESSAGE = "Thoda busy hoon... thodi der baad try karo <3";
 const RETRY_FALLBACK_MESSAGE = "Network thoda unstable lag raha hai. Ek baar phir try karo <3";
 const MAX_RETRIES = 2;
@@ -47,18 +62,49 @@ GOAL: Don't act like an AI. Be the girl who would fight the world for Alakh, but
 
 let activeRequest: Promise<string> | null = null;
 
-function buildMessages(messages: ChatMessage[], imageBase64?: string): GroqMessage[] {
+function buildEmotionContext(emotion?: EmotionLabel): string {
+  if (!emotion) {
+    return "";
+  }
+
+  const emotionLineByMood: Record<EmotionLabel, string> = {
+    happy: "hmm 😏 mood to acha lag raha hai tumhara",
+    sad: "kya hua... thoda off lag rahe ho",
+    neutral: "normal lag rahe ho... kuch chal raha hai dimaag me?",
+    angry: "itna gussa kyun ho... kya hua?",
+  };
+
+  return `\n\nCamera emotion hint: ${emotionLineByMood[emotion]}. Blend this naturally into your reply if it fits the conversation.`;
+}
+
+function buildMessages(messages: ChatMessage[], imageBase64?: string, emotion?: EmotionLabel): GroqMessage[] {
   const sanitizedMessages = messages.filter((message) => message.content.trim());
   const history = sanitizedMessages.map<GroqMessage>((message, index) => {
     const isLatestUserMessage = index === sanitizedMessages.length - 1 && message.role === "user";
-    const imageNote =
-      imageBase64 && isLatestUserMessage
-        ? "\n\n[User also tried to share a camera image, but respond using the text context only.]"
-        : "";
+    const trimmedContent = message.content.trim();
+    const emotionContext = isLatestUserMessage ? buildEmotionContext(emotion) : "";
+
+    if (imageBase64 && isLatestUserMessage) {
+      return {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: `${trimmedContent}\n\nThe attached image is a silent camera capture for a fit check. If the user is asking how they look, comment on the outfit, appearance, styling, and any visible issue naturally in Hinglish.${emotionContext}`,
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
+            },
+          },
+        ],
+      };
+    }
 
     return {
       role: message.role === "model" ? "assistant" : "user",
-      content: `${message.content.trim()}${imageNote}`,
+      content: `${trimmedContent}${emotionContext}`,
     };
   });
 
@@ -78,12 +124,13 @@ function isRetryableError(error: unknown): boolean {
   return message.includes("failed to fetch") || message.includes("network") || message.includes("connection") || message.includes("aborted") || message.includes("timeout");
 }
 
-async function requestGroq(messages: ChatMessage[], imageBase64?: string): Promise<string> {
+async function requestGroq(messages: ChatMessage[], imageBase64?: string, emotion?: EmotionLabel): Promise<string> {
   if (!GROQ_API_KEY) {
     return FALLBACK_MESSAGE;
   }
 
-  const payloadMessages = buildMessages(messages, imageBase64);
+  const payloadMessages = buildMessages(messages, imageBase64, emotion);
+  const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
   if (payloadMessages.length <= 1) {
     return FALLBACK_MESSAGE;
   }
@@ -100,7 +147,7 @@ async function requestGroq(messages: ChatMessage[], imageBase64?: string): Promi
           Authorization: `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model,
           messages: payloadMessages,
           temperature: 0.8,
         }),
@@ -139,12 +186,12 @@ async function requestGroq(messages: ChatMessage[], imageBase64?: string): Promi
   return RETRY_FALLBACK_MESSAGE;
 }
 
-export async function sendMessage(messages: ChatMessage[], imageBase64?: string): Promise<string> {
+export async function sendMessage(messages: ChatMessage[], imageBase64?: string, emotion?: EmotionLabel): Promise<string> {
   if (activeRequest) {
     return activeRequest;
   }
 
-  activeRequest = requestGroq(messages, imageBase64);
+  activeRequest = requestGroq(messages, imageBase64, emotion);
 
   try {
     return await activeRequest;

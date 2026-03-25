@@ -3,10 +3,19 @@ import { LogOut, Menu, Mic, Send, Sparkles, Heart, Volume2, VolumeX } from "luci
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
-import { sendMessage, type ChatMessage } from "@/lib/ai-service";
+import { AnimatePresence, motion } from "framer-motion";
+import { sendMessage, type ChatMessage, type EmotionLabel } from "@/lib/ai-service";
+import { detectEmotionFromImage } from "@/lib/emotion-service";
 
-const VISION_TRIGGERS = ["dekho", "kaisa lag raha hoon", "outfit"];
+const VISION_TRIGGER_PATTERNS = [
+  /\bdekho\b/i,
+  /\bdekh\s*ke\s*batao\b/i,
+  /\bkais[aei]?\s+lag\s+rah[aei]\b/i,
+  /\bkapd[ae]\b/i,
+  /\bfit\b/i,
+  /\bfit\s*check\b/i,
+  /\bcamera\b/i,
+];
 
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
@@ -125,15 +134,53 @@ interface SpeechToTextResult {
   stopListening: () => void;
 }
 
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface SpeechRecognitionConstructorLike {
+  new (): SpeechRecognitionLike;
+}
+
+type SpeechRecognitionWindow = Window & typeof globalThis & {
+  SpeechRecognition?: SpeechRecognitionConstructorLike;
+  webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
+};
+
 function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const onResultRef = useRef(onResult);
   onResultRef.current = onResult;
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
+      try {
+        recognitionRef.current.stop();
+      } catch (error) {
+        console.warn("Speech recognition stop failed", error);
+      }
     }
     setIsListening(false);
   }, []);
@@ -144,7 +191,9 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as SpeechRecognitionWindow;
+    const SpeechRecognition =
+      speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.warn("SpeechRecognition not supported");
       return;
@@ -157,7 +206,7 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
 
     let finalTranscript = "";
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let interim = "";
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
@@ -183,7 +232,11 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+        try {
+          recognitionRef.current.stop();
+        } catch (error) {
+          console.warn("Speech recognition cleanup failed", error);
+        }
       }
     };
   }, []);
@@ -207,8 +260,22 @@ function detectMood(text: string): string {
   return "neutral";
 }
 
+function logCameraFailure(error: unknown) {
+  if (error instanceof DOMException) {
+    console.warn(`Camera capture failed: ${error.name}`, error.message);
+    return;
+  }
+
+  if (error instanceof Error) {
+    console.warn("Camera capture failed", error.message);
+    return;
+  }
+
+  console.warn("Camera capture failed", error);
+}
+
 // Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
-function ScrollFadeMessageItem({ msg, index, isNew }: { msg: any; index: number; isNew: boolean }) {
+function ScrollFadeMessageItem({ msg, index, isNew }: { msg: ChatMessage; index: number; isNew: boolean }) {
   const itemRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -241,7 +308,17 @@ function ScrollFadeMessageItem({ msg, index, isNew }: { msg: any; index: number;
 }
 
 // Scroll Fade Message List Container
-function ScrollFadeMessageList({ messages, isLoading, messagesEndRef, lastMsgCount }: { messages: any[]; isLoading: boolean; messagesEndRef: React.RefObject<HTMLDivElement>; lastMsgCount: number }) {
+function ScrollFadeMessageList({
+  messages,
+  isLoading,
+  messagesEndRef,
+  lastMsgCount,
+}: {
+  messages: ChatMessage[];
+  isLoading: boolean;
+  messagesEndRef: React.RefObject<HTMLDivElement>;
+  lastMsgCount: number;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -306,38 +383,118 @@ export default function Chat() {
   };
 
   const captureVisionFrame = async (): Promise<string | undefined> => {
+    let stream: MediaStream | undefined;
+    let video: HTMLVideoElement | undefined;
+    let mountedVideo = false;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-      const video = document.createElement("video");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        console.warn("Camera capture unavailable: mediaDevices.getUserMedia is not supported on this browser");
+        return undefined;
+      }
+
+      if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+        console.warn("Camera capture blocked: mobile browsers require HTTPS or a secure local origin");
+        return undefined;
+      }
+
+      const mobileFirstConstraints: MediaStreamConstraints[] = [
+        {
+          video: {
+            facingMode: { ideal: "user" },
+          },
+          audio: false,
+        },
+        {
+          video: {
+            facingMode: "user",
+          },
+          audio: false,
+        },
+        {
+          video: true,
+          audio: false,
+        },
+      ];
+
+      let lastConstraintError: unknown;
+      for (const constraints of mobileFirstConstraints) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          break;
+        } catch (error) {
+          lastConstraintError = error;
+        }
+      }
+
+      if (!stream) {
+        throw lastConstraintError ?? new Error("Unable to initialize camera stream");
+      }
+
+      video = document.createElement("video");
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
-      await video.play();
+      video.autoplay = true;
+      video.setAttribute("playsinline", "true");
+      video.setAttribute("muted", "true");
+      video.setAttribute("autoplay", "true");
+      video.style.position = "fixed";
+      video.style.opacity = "0";
+      video.style.pointerEvents = "none";
+      video.style.width = "1px";
+      video.style.height = "1px";
+      video.style.left = "-9999px";
+      video.style.top = "0";
+      document.body.appendChild(video);
+      mountedVideo = true;
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise<void>((resolve, reject) => {
+        if (!video) {
+          reject(new Error("Video element unavailable"));
+          return;
+        }
+
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error("Camera metadata failed to load"));
+      });
+
+      await video.play();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      const frameWidth = video.videoWidth || 320;
+      const frameHeight = video.videoHeight || 240;
 
       const canvas = document.createElement("canvas");
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = frameWidth;
+      canvas.height = frameHeight;
 
       const context = canvas.getContext("2d");
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
       }
 
-      stream.getTracks().forEach((track) => track.stop());
-
       const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
       return dataUrl.split(",")[1];
     } catch (error) {
-      console.warn("Camera permission denied or capture failed", error);
+      logCameraFailure(error);
       return undefined;
+    } finally {
+      if (video) {
+        video.pause();
+        video.srcObject = null;
+      }
+
+      if (mountedVideo && video?.parentNode) {
+        video.parentNode.removeChild(video);
+      }
+
+      stream?.getTracks().forEach((track) => track.stop());
     }
   };
 
   const containsVisionTrigger = (text: string) => {
-    const lower = text.toLowerCase();
-    return VISION_TRIGGERS.some((trigger) => lower.includes(trigger));
+    return VISION_TRIGGER_PATTERNS.some((pattern) => pattern.test(text));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -360,13 +517,17 @@ export default function Chat() {
     setIsLoading(true);
 
     let base64Image: string | undefined;
+    let detectedEmotion: EmotionLabel | undefined;
     if (containsVisionTrigger(userText)) {
       base64Image = await captureVisionFrame();
+      if (base64Image) {
+        detectedEmotion = await detectEmotionFromImage(base64Image);
+      }
     }
 
     try {
       lastMsgCountRef.current = nextHistory.length;
-      const responseText = await sendMessage(nextHistory, base64Image);
+      const responseText = await sendMessage(nextHistory, base64Image, detectedEmotion);
       speak(responseText);
       setMood(detectMood(responseText));
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
@@ -413,9 +574,6 @@ export default function Chat() {
               <div className="text-xs text-white/80 font-semibold uppercase tracking-wider mb-2">Recent Chats</div>
               <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
                 New Relationship Advice
-              </button>
-              <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
-                Outfit Check
               </button>
             </div>
 

@@ -1,4 +1,4 @@
-import { Home, MessageCircle, Camera, CheckSquare, Settings, LogOut } from "lucide-react";
+import { Home, MessageCircle, CheckSquare, Settings, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,7 +17,6 @@ import {
 const navItems = [
   { title: "Home", url: "/", icon: Home },
   { title: "Chat", url: "/chat", icon: MessageCircle },
-  { title: "Fit-Check", url: "/fit-check", icon: Camera },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
