@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { LogOut, Menu, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { LogOut, Menu, Mic, Send, Sparkles, Heart, Volume2, VolumeX } from "lucide-react";
 import { auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
@@ -118,8 +118,97 @@ function useVoice(isMuted: boolean) {
   return { unlock, speak, stop };
 }
 
-// Message Item with Scroll-triggered Fade
-function ScrollFadeMessageItem({ msg, index }: { msg: any; index: number }) {
+// ── Speech-to-Text Hook ──
+interface SpeechToTextResult {
+  isListening: boolean;
+  toggle: () => void;
+  stopListening: () => void;
+}
+
+function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const onResultRef = useRef(onResult);
+  onResultRef.current = onResult;
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+    }
+    setIsListening(false);
+  }, []);
+
+  const toggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn("SpeechRecognition not supported");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "hi-IN";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event: any) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim = transcript;
+        }
+      }
+      // Show interim text while speaking, replace with final when done
+      onResultRef.current(finalTranscript || interim);
+    };
+
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsListening(true);
+  }, [isListening, stopListening]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+    };
+  }, []);
+
+  return { isListening, toggle, stopListening };
+}
+
+// Mood detection from AI response text
+const MOOD_KEYWORDS: Record<string, string[]> = {
+  jealous: ["jealous", "jalan", "kisse baat", "usse kyun"],
+  angry: ["gussa", "angry", "naraz", "chup", "mat bol"],
+  sweet: ["pyaar", "love", "miss", "sweetie", "jaanu", "❤", "🥰", "😘"],
+  happy: ["haha", "lol", "😂", "maza", "khush", "yay", "great"],
+};
+
+function detectMood(text: string): string {
+  const lower = text.toLowerCase();
+  for (const [mood, keywords] of Object.entries(MOOD_KEYWORDS)) {
+    if (keywords.some((kw) => lower.includes(kw))) return mood;
+  }
+  return "neutral";
+}
+
+// Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
+function ScrollFadeMessageItem({ msg, index, isNew }: { msg: any; index: number; isNew: boolean }) {
   const itemRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -136,12 +225,14 @@ function ScrollFadeMessageItem({ msg, index }: { msg: any; index: number }) {
       <div
         className={`
         max-w-[85%] md:max-w-[75%] p-4 rounded-2xl text-sm leading-snug font-medium relative
+        bubble-hover transition-all duration-300
+        ${isNew ? "msg-sheen" : ""}
         ${msg.role === "user"
-          ? "bg-gradient-to-br from-pink-700/60 to-purple-800/60 backdrop-blur-sm text-white rounded-2xl rounded-tr-none shadow-lg"
-          : "backdrop-blur-lg bg-gray-900/30 border border-white/5 text-white/90 rounded-2xl shadow-2xl"
+          ? "bg-gradient-to-br from-purple-600/50 to-pink-600/50 backdrop-blur-3xl border border-white/15 text-white rounded-2xl rounded-tr-none shadow-[0_4px_24px_rgba(168,85,247,0.25),0_8px_32px_rgba(0,0,0,0.37)]"
+          : "bg-white/[0.05] backdrop-blur-3xl border border-pink-300/15 text-white/90 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
         }
       `}
-        style={{ fontFamily: "'Delius', sans-serif", fontSize: "15px" }}
+        style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: "15px", fontWeight: 500 }}
       >
         {msg.content}
       </div>
@@ -150,14 +241,14 @@ function ScrollFadeMessageItem({ msg, index }: { msg: any; index: number }) {
 }
 
 // Scroll Fade Message List Container
-function ScrollFadeMessageList({ messages, isLoading, messagesEndRef }: { messages: any[]; isLoading: boolean; messagesEndRef: React.RefObject<HTMLDivElement> }) {
+function ScrollFadeMessageList({ messages, isLoading, messagesEndRef, lastMsgCount }: { messages: any[]; isLoading: boolean; messagesEndRef: React.RefObject<HTMLDivElement>; lastMsgCount: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
     <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto">
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
-          <ScrollFadeMessageItem key={idx} msg={msg} index={idx} />
+          <ScrollFadeMessageItem key={idx} msg={msg} index={idx} isNew={idx >= lastMsgCount} />
         ))}
 
         {isLoading && (
@@ -168,7 +259,7 @@ function ScrollFadeMessageList({ messages, isLoading, messagesEndRef }: { messag
             viewport={{ once: false, amount: 0.3 }}
             className="flex justify-start"
           >
-            <div className="backdrop-blur-lg bg-gray-900/30 border border-white/5 p-4 rounded-2xl shadow-2xl">
+            <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-300/15 p-4 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
@@ -191,10 +282,17 @@ export default function Chat() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [mood, setMood] = useState("neutral");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submitLockRef = useRef(false);
+  const lastMsgCountRef = useRef(0);
   const navigate = useNavigate();
   const { unlock, speak, stop } = useVoice(isMuted);
+
+  // Speech-to-text: appends recognized speech to current input
+  const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
+    useCallback((text: string) => setInput(text), [])
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -252,6 +350,7 @@ export default function Chat() {
 
     await unlock();
     stop();
+    stopListening();
 
     submitLockRef.current = true;
     setInput("");
@@ -266,8 +365,10 @@ export default function Chat() {
     }
 
     try {
+      lastMsgCountRef.current = nextHistory.length;
       const responseText = await sendMessage(nextHistory, base64Image);
       speak(responseText);
+      setMood(detectMood(responseText));
       setMessages((prev) => [...prev, { role: "model", content: responseText }]);
     } finally {
       setIsLoading(false);
@@ -276,7 +377,22 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-screen bg-[#0d0d12] text-white overflow-hidden selection:bg-pink-500/30">
+    <div className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" data-mood={mood}>
+      {/* Animated Drifting Mesh Gradient Background */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div
+          className="absolute top-[-15%] left-[-20%] w-[75vw] h-[75vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-1"
+          style={{ background: 'var(--mood-blob-1)' }}
+        />
+        <div
+          className="absolute bottom-[-20%] right-[-15%] w-[65vw] h-[65vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-2"
+          style={{ background: 'var(--mood-blob-2)' }}
+        />
+        <div
+          className="absolute top-[30%] left-[40%] w-[50vw] h-[50vw] rounded-full mix-blend-screen filter blur-[140px] blob-drift-3"
+          style={{ background: 'var(--mood-blob-3)' }}
+        />
+      </div>
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div
@@ -284,7 +400,7 @@ export default function Chat() {
             animate={{ width: 260, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="h-full bg-black/50 border-r border-white/5 flex flex-col hidden md:flex backdrop-blur-md z-20"
+            className="h-full bg-white/[0.05] border-r border-white/15 flex flex-col hidden md:flex backdrop-blur-3xl z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
           >
             <div className="p-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-2 text-pink-400">
@@ -294,7 +410,7 @@ export default function Chat() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <div className="text-xs text-white/40 font-medium uppercase tracking-wider mb-2">Recent Chats</div>
+              <div className="text-xs text-white/80 font-semibold uppercase tracking-wider mb-2">Recent Chats</div>
               <button className="w-full text-left truncate text-white/70 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors text-sm">
                 New Relationship Advice
               </button>
@@ -307,7 +423,7 @@ export default function Chat() {
               <button
                 onClick={handleLogout}
                 aria-label="Sign Out"
-                className="flex items-center gap-2 text-white/60 hover:text-pink-400 w-full p-2 rounded-lg hover:bg-white/5 transition-all text-sm"
+                className="flex items-center gap-2 text-white/80 font-semibold hover:text-pink-400 w-full p-2 rounded-lg hover:bg-white/5 transition-all text-sm"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -317,8 +433,8 @@ export default function Chat() {
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col h-full relative z-10">
-        <header className="h-14 flex items-center justify-between px-4 border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-20">
+      <div className="flex-1 flex flex-col h-full relative z-10" style={{ isolation: 'isolate' }}>
+        <header className="h-14 flex items-center justify-between px-4 border-b border-white/15 bg-white/[0.05] backdrop-blur-3xl sticky top-0 z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             aria-label="Toggle Sidebar"
@@ -372,32 +488,44 @@ export default function Chat() {
               <p className="text-white/50 text-base font-light">I'm Saheli. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
             </div>
           ) : (
-            <ScrollFadeMessageList messages={messages} isLoading={isLoading} messagesEndRef={messagesEndRef} />
+            <ScrollFadeMessageList messages={messages} isLoading={isLoading} messagesEndRef={messagesEndRef} lastMsgCount={lastMsgCountRef.current} />
           )}
         </div>
 
-        <div className="p-4 md:p-6 bg-gradient-to-t from-[#0d0d12] to-transparent z-10">
+        <div className="p-4 md:p-6 bg-gradient-to-t from-purple-950/90 to-transparent z-10">
           <div className="max-w-3xl mx-auto relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-500"></div>
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-white/5 border border-white/10 backdrop-blur-xl rounded-3xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] focus-within:ring-1 focus-within:ring-pink-500/30 transition-all duration-300"
+              className="relative flex items-center bg-white/[0.05] border border-purple-500/40 backdrop-blur-3xl rounded-3xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300"
             >
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Message Saheli..."
-                className="flex-1 bg-transparent px-6 py-3 text-white placeholder-gray-400 focus:outline-none font-sans focus:ring-0"
+                className="flex-1 bg-transparent px-6 py-3.5 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 neon-border-input border-none"
                 style={{ fontSize: "15px" }}
               />
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={isListening ? "Stop Listening" : "Voice Input"}
+                className={`p-2 ml-1 rounded-full transition-all ${
+                  isListening
+                    ? "bg-pink-500/20 text-pink-400 animate-pulse"
+                    : "bg-white/10 text-white/70 hover:text-white/90 hover:bg-white/15"
+                }`}
+              >
+                <Mic className="w-4.5 h-4.5" />
+              </button>
               <button
                 type="submit"
                 aria-label="Send Message"
                 disabled={!input.trim() || isLoading}
-                className="p-4 text-white/50 hover:text-pink-400 disabled:opacity-50 disabled:hover:text-white/50 transition-colors"
+                className="p-3 mr-2 transition-all"
               >
-                <div className="bg-gradient-to-br from-purple-500/40 to-pink-500/40 p-2 rounded-xl shadow-[0_0_12px_rgba(236,72,153,0.4)] hover:shadow-[0_0_16px_rgba(236,72,153,0.6)] transition-shadow">
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 p-2.5 rounded-xl text-white neon-pulse-btn hover:scale-110 transition-transform disabled:opacity-50">
                   <Send className="w-5 h-5" />
                 </div>
               </button>

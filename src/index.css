@@ -158,3 +158,227 @@
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* ===== Glowing Neon Bestie Theme ===== */
+
+/* Drifting Mesh Blobs */
+@keyframes drift-1 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25%      { transform: translate(8%, -6%) rotate(15deg) scale(1.08); }
+  50%      { transform: translate(-5%, 10%) rotate(-10deg) scale(0.95); }
+  75%      { transform: translate(6%, 4%) rotate(8deg) scale(1.05); }
+}
+@keyframes drift-2 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  25%      { transform: translate(-10%, 5%) rotate(-20deg) scale(1.1); }
+  50%      { transform: translate(8%, -8%) rotate(15deg) scale(0.92); }
+  75%      { transform: translate(-4%, -6%) rotate(-5deg) scale(1.06); }
+}
+@keyframes drift-3 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+  33%      { transform: translate(12%, 8%) rotate(25deg) scale(1.12); }
+  66%      { transform: translate(-8%, -10%) rotate(-15deg) scale(0.9); }
+}
+
+.blob-drift-1 { animation: drift-1 18s ease-in-out infinite; }
+.blob-drift-2 { animation: drift-2 22s ease-in-out infinite; }
+.blob-drift-3 { animation: drift-3 26s ease-in-out infinite; }
+
+/* Sheen Wipe Effect on New Messages */
+@keyframes sheen {
+  0%   { left: -100%; }
+  100% { left: 200%; }
+}
+.msg-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.msg-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.12) 60%,
+    transparent 100%
+  );
+  animation: sheen 0.6s ease-out forwards;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+/* Neon Pulse Send Button */
+@keyframes neon-pulse-btn {
+  0%, 100% {
+    box-shadow:
+      0 0 8px rgba(168, 85, 247, 0.5),
+      0 0 20px rgba(236, 72, 153, 0.3),
+      0 0 40px rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 16px rgba(168, 85, 247, 0.7),
+      0 0 35px rgba(236, 72, 153, 0.5),
+      0 0 60px rgba(168, 85, 247, 0.25);
+  }
+}
+.neon-pulse-btn {
+  animation: neon-pulse-btn 2s ease-in-out infinite;
+}
+
+/* Hover Pulse on Chat Bubbles */
+@keyframes bubble-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.3); }
+  70%  { box-shadow: 0 0 0 8px rgba(168, 85, 247, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+}
+.bubble-hover:hover {
+  animation: bubble-pulse 0.8s ease-out;
+}
+
+/* Mood-based Background Variables */
+:root {
+  --mood-blob-1: rgba(88, 28, 135, 0.45);   /* purple-900 */
+  --mood-blob-2: rgba(157, 23, 77, 0.35);    /* pink-900 */
+  --mood-blob-3: rgba(67, 20, 110, 0.30);    /* purple-800 */
+}
+[data-mood="jealous"], [data-mood="angry"] {
+  --mood-blob-1: rgba(127, 29, 29, 0.50);    /* deep red shift */
+  --mood-blob-2: rgba(88, 28, 135, 0.45);    /* deeper purple */
+  --mood-blob-3: rgba(120, 20, 60, 0.35);    /* crimson undertone */
+}
+[data-mood="sweet"], [data-mood="happy"] {
+  --mood-blob-1: rgba(192, 38, 211, 0.40);   /* brighter fuchsia */
+  --mood-blob-2: rgba(236, 72, 153, 0.40);   /* bright pink */
+  --mood-blob-3: rgba(168, 85, 247, 0.30);   /* soft purple */
+}
+
+/* Neon border glow for input */
+@keyframes border-glow {
+  0%, 100% { border-color: rgba(147, 51, 234, 0.5); }
+  50%      { border-color: rgba(236, 72, 153, 0.5); }
+}
+.neon-border-input {
+  animation: border-glow 3s ease-in-out infinite;
+}
+.neon-border-input:focus {
+  animation: none;
+  border-color: rgba(236, 72, 153, 0.6);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 40px rgba(236, 72, 153, 0.15);
+}
+
+/* ===== Premium Nebula Login Theme ===== */
+
+/* Permanent button pulse glow */
+@keyframes btn-nebula-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 10px rgba(236, 72, 153, 0.4),
+      0 0 25px rgba(168, 85, 247, 0.25),
+      0 0 50px rgba(236, 72, 153, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 20px rgba(236, 72, 153, 0.6),
+      0 0 40px rgba(168, 85, 247, 0.4),
+      0 0 70px rgba(236, 72, 153, 0.2);
+  }
+}
+.btn-nebula-pulse {
+  animation: btn-nebula-pulse 2.5s ease-in-out infinite;
+}
+
+/* Star dust cursor particle */
+@keyframes star-fade {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0) translate(var(--tx, 10px), var(--ty, -15px));
+  }
+}
+.star-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.9), rgba(168, 85, 247, 0.6));
+  pointer-events: none;
+  animation: star-fade 0.8s ease-out forwards;
+  z-index: 100;
+}
+
+/* Sparkle skip button */
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.skip-sparkle {
+  position: relative;
+}
+.skip-sparkle::before,
+.skip-sparkle::after {
+  content: '✦';
+  position: absolute;
+  font-size: 10px;
+  color: rgba(236, 72, 153, 0.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.skip-sparkle::before {
+  top: -4px;
+  right: -8px;
+  animation: sparkle-twinkle 1.5s ease-in-out infinite;
+}
+.skip-sparkle::after {
+  bottom: -2px;
+  left: -6px;
+  animation: sparkle-twinkle 1.5s ease-in-out infinite 0.5s;
+}
+.skip-sparkle:hover::before,
+.skip-sparkle:hover::after {
+  opacity: 1;
+}
+
+/* Logo neon pulse */
+@keyframes logo-neon-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.5)) drop-shadow(0 0 16px rgba(168, 85, 247, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 16px rgba(236, 72, 153, 0.8)) drop-shadow(0 0 32px rgba(168, 85, 247, 0.5));
+  }
+}
+.logo-neon-breathe {
+  animation: logo-neon-breathe 3s ease-in-out infinite;
+}
+
+/* Pulsing neon card border */
+@keyframes neon-card-border {
+  0%, 100% {
+    border-color: rgba(147, 51, 234, 0.4);
+    box-shadow:
+      0 0 15px rgba(147, 51, 234, 0.15),
+      0 0 30px rgba(147, 51, 234, 0.08),
+      inset 0 0 15px rgba(147, 51, 234, 0.03);
+  }
+  50% {
+    border-color: rgba(236, 72, 153, 0.5);
+    box-shadow:
+      0 0 20px rgba(236, 72, 153, 0.2),
+      0 0 40px rgba(236, 72, 153, 0.1),
+      inset 0 0 20px rgba(236, 72, 153, 0.04);
+  }
+}
+.neon-card-border {
+  animation: neon-card-border 4s ease-in-out infinite;
+}
