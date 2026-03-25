@@ -168,6 +168,11 @@ type SpeechRecognitionWindow = Window & typeof globalThis & {
   webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
 };
 
+interface PendingMobileVisionRequest {
+  id: number;
+  history: ChatMessage[];
+}
+
 function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -258,6 +263,10 @@ function detectMood(text: string): string {
     if (keywords.some((kw) => lower.includes(kw))) return mood;
   }
   return "neutral";
+}
+
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 function logCameraFailure(error: unknown) {
@@ -360,9 +369,15 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [mood, setMood] = useState("neutral");
+  const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
+  const mobileCameraInputRef = useRef<HTMLInputElement>(null);
+  const mobileCameraCancelTimeoutRef = useRef<number | null>(null);
+  const pendingMobileVisionRequestRef = useRef<PendingMobileVisionRequest | null>(null);
+  const mobileVisionRequestIdRef = useRef(0);
+  const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const { unlock, speak, stop } = useVoice(isMuted);
 
@@ -375,6 +390,14 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (mobileCameraCancelTimeoutRef.current) {
+        window.clearTimeout(mobileCameraCancelTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleLogout = async () => {
     stop();
     await signOut(auth);
@@ -385,7 +408,6 @@ export default function Chat() {
   const captureVisionFrame = async (): Promise<string | undefined> => {
     let stream: MediaStream | undefined;
     let video: HTMLVideoElement | undefined;
-    let mountedVideo = false;
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -393,43 +415,14 @@ export default function Chat() {
         return undefined;
       }
 
-      if (!window.isSecureContext && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-        console.warn("Camera capture blocked: mobile browsers require HTTPS or a secure local origin");
-        return undefined;
-      }
-
-      const mobileFirstConstraints: MediaStreamConstraints[] = [
-        {
-          video: {
-            facingMode: { ideal: "user" },
-          },
-          audio: false,
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 640 },
+          height: { ideal: 480 },
         },
-        {
-          video: {
-            facingMode: "user",
-          },
-          audio: false,
-        },
-        {
-          video: true,
-          audio: false,
-        },
-      ];
-
-      let lastConstraintError: unknown;
-      for (const constraints of mobileFirstConstraints) {
-        try {
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
-          break;
-        } catch (error) {
-          lastConstraintError = error;
-        }
-      }
-
-      if (!stream) {
-        throw lastConstraintError ?? new Error("Unable to initialize camera stream");
-      }
+        audio: false,
+      });
 
       video = document.createElement("video");
       video.srcObject = stream;
@@ -437,17 +430,6 @@ export default function Chat() {
       video.playsInline = true;
       video.autoplay = true;
       video.setAttribute("playsinline", "true");
-      video.setAttribute("muted", "true");
-      video.setAttribute("autoplay", "true");
-      video.style.position = "fixed";
-      video.style.opacity = "0";
-      video.style.pointerEvents = "none";
-      video.style.width = "1px";
-      video.style.height = "1px";
-      video.style.left = "-9999px";
-      video.style.top = "0";
-      document.body.appendChild(video);
-      mountedVideo = true;
 
       await new Promise<void>((resolve, reject) => {
         if (!video) {
@@ -485,11 +467,112 @@ export default function Chat() {
         video.srcObject = null;
       }
 
-      if (mountedVideo && video?.parentNode) {
-        video.parentNode.removeChild(video);
+      stream?.getTracks().forEach((track) => track.stop());
+    }
+  };
+
+  const fileToBase64 = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result.split(",")[1] : "";
+        if (!result) {
+          reject(new Error("Unable to read image"));
+          return;
+        }
+
+        resolve(result);
+      };
+
+      reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
+    if (mobileVisionProcessingRequestIdRef.current === request.id) {
+      return;
+    }
+
+    if (pendingMobileVisionRequestRef.current?.id !== request.id) {
+      return;
+    }
+
+    mobileVisionProcessingRequestIdRef.current = request.id;
+    let detectedEmotion: EmotionLabel | undefined;
+
+    pendingMobileVisionRequestRef.current = null;
+    setPendingMobileVisionRequest(null);
+    setIsLoading(true);
+
+    try {
+      if (imageBase64) {
+        detectedEmotion = await detectEmotionFromImage(imageBase64);
       }
 
-      stream?.getTracks().forEach((track) => track.stop());
+      lastMsgCountRef.current = request.history.length;
+      const responseText = await sendMessage(request.history, imageBase64, detectedEmotion);
+      speak(responseText);
+      setMood(detectMood(responseText));
+      setMessages((prev) => [...prev, { role: "model", content: responseText }]);
+    } finally {
+      setIsLoading(false);
+      submitLockRef.current = false;
+      mobileVisionProcessingRequestIdRef.current = null;
+
+      if (mobileCameraInputRef.current) {
+        mobileCameraInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleMobileCameraOpen = () => {
+    if (!pendingMobileVisionRequest || !mobileCameraInputRef.current) {
+      return;
+    }
+
+    mobileCameraInputRef.current.value = "";
+
+    const pendingRequest = pendingMobileVisionRequest;
+    const handleFocus = () => {
+      mobileCameraCancelTimeoutRef.current = window.setTimeout(() => {
+        const hasSelectedFile = Boolean(mobileCameraInputRef.current?.files?.length);
+        if (!hasSelectedFile) {
+          void completePendingVisionRequest(pendingRequest);
+        }
+      }, 350);
+    };
+
+    window.addEventListener("focus", handleFocus, { once: true });
+    mobileCameraInputRef.current.click();
+  };
+
+  const handleMobileCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (mobileCameraCancelTimeoutRef.current) {
+      window.clearTimeout(mobileCameraCancelTimeoutRef.current);
+      mobileCameraCancelTimeoutRef.current = null;
+    }
+
+    const request = pendingMobileVisionRequest;
+    const file = event.target.files?.[0];
+
+    if (!request) {
+      event.target.value = "";
+      return;
+    }
+
+    if (!file) {
+      await completePendingVisionRequest(request);
+      return;
+    }
+
+    try {
+      const base64Image = await fileToBase64(file);
+      await completePendingVisionRequest(request, base64Image);
+    } catch (error) {
+      console.warn("Mobile camera image processing failed", error);
+      await completePendingVisionRequest(request);
     }
   };
 
@@ -505,6 +588,9 @@ export default function Chat() {
       return;
     }
 
+    const mobile = isMobileDevice();
+    const shouldUseVision = containsVisionTrigger(userText);
+
     await unlock();
     stop();
     stopListening();
@@ -514,19 +600,23 @@ export default function Chat() {
 
     const nextHistory: ChatMessage[] = [...messages, { role: "user", content: userText }];
     setMessages(nextHistory);
-    setIsLoading(true);
 
-    let base64Image: string | undefined;
-    let detectedEmotion: EmotionLabel | undefined;
-    if (containsVisionTrigger(userText)) {
-      base64Image = await captureVisionFrame();
-      if (base64Image) {
-        detectedEmotion = await detectEmotionFromImage(base64Image);
-      }
+    if (mobile && shouldUseVision) {
+      const pendingRequest = {
+        id: ++mobileVisionRequestIdRef.current,
+        history: nextHistory,
+      };
+      pendingMobileVisionRequestRef.current = pendingRequest;
+      setPendingMobileVisionRequest(pendingRequest);
+      submitLockRef.current = true;
+      return;
     }
 
     try {
+      setIsLoading(true);
       lastMsgCountRef.current = nextHistory.length;
+      const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
+      const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
       const responseText = await sendMessage(nextHistory, base64Image, detectedEmotion);
       speak(responseText);
       setMood(detectMood(responseText));
@@ -688,6 +778,25 @@ export default function Chat() {
                 </div>
               </button>
             </form>
+            {pendingMobileVisionRequest && isMobileDevice() && (
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={handleMobileCameraOpen}
+                  className="rounded-full border border-pink-400/30 bg-white/10 px-4 py-2 text-sm text-pink-100 backdrop-blur-xl transition hover:bg-white/15 hover:text-white"
+                >
+                  📷 Open Camera
+                </button>
+                <input
+                  ref={mobileCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  className="hidden"
+                  onChange={handleMobileCameraChange}
+                />
+              </div>
+            )}
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
               Saheli har din tumse thoda aur seekh rahi hai {"<3"}
             </div>
