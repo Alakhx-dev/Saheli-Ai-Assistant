@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, memo } from "react";
 import {
   Globe,
   Brain,
@@ -643,6 +643,7 @@ function ScrollFadeMessageItem({ msg, index, isNew }: { msg: ChatMessage; index:
       transition={{ duration: 0.4, ease: "easeOut" }}
       viewport={{ once: false, amount: 0.3, margin: "50px" }}
       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+      style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
     >
       <div
         className={`
@@ -663,7 +664,7 @@ function ScrollFadeMessageItem({ msg, index, isNew }: { msg: ChatMessage; index:
 }
 
 // Scroll Fade Message List Container
-function ScrollFadeMessageList({
+const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   messages,
   isLoading,
   messagesEndRef,
@@ -679,7 +680,7 @@ function ScrollFadeMessageList({
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto">
+    <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" style={{ overflowAnchor: "none", scrollBehavior: "smooth" }}>
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
           <ScrollFadeMessageItem key={idx} msg={msg} index={idx} isNew={idx >= lastMsgCount} />
@@ -687,17 +688,18 @@ function ScrollFadeMessageList({
 
         {isLoading && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            viewport={{ once: false, amount: 0.3 }}
-            className="flex justify-start"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4, ease: "easeInOut" }}
+            className="flex justify-start min-h-[76px]"
+            style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
           >
-            <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-300/15 p-4 rounded-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
-              <div className="flex items-center gap-2 mb-1.5">
-                <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"></div>
+            <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-400/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] animate-pulse-slow">
+              <div className="flex items-center gap-2 mb-1.5 px-1">
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0s' }}></div>
+                <div className="w-2 h-2 bg-purple-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.4s' }}></div>
               </div>
               <p className="text-white/60 text-xs font-medium">{typingLabel}</p>
             </div>
@@ -708,7 +710,29 @@ function ScrollFadeMessageList({
       <div ref={messagesEndRef} />
     </div>
   );
-}
+});
+
+const BackgroundComponent = memo(function BackgroundComponent({ mood }: { mood: string }) {
+  return (
+    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
+      {/* White Radial Glow for Airy Premium Feel */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.05)_0%,_transparent_70%)] mix-blend-screen" style={{ transform: 'translateZ(0)' }} />
+      
+      <div
+        className="absolute top-[-15%] left-[-20%] w-[75vw] h-[75vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-1"
+        style={{ background: 'var(--mood-blob-1)', transform: 'translateZ(0)' }}
+      />
+      <div
+        className="absolute bottom-[-20%] right-[-15%] w-[65vw] h-[65vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-2"
+        style={{ background: 'var(--mood-blob-2)', transform: 'translateZ(0)' }}
+      />
+      <div
+        className="absolute top-[30%] left-[40%] w-[50vw] h-[50vw] rounded-full mix-blend-screen filter blur-[140px] blob-drift-3"
+        style={{ background: 'var(--mood-blob-3)', transform: 'translateZ(0)' }}
+      />
+    </div>
+  );
+});
 
 export default function Chat() {
   const user = auth.currentUser;
@@ -1497,25 +1521,13 @@ export default function Chat() {
   const memoryEntries = buildMemoryEntries(memoryProfile, t.memoryEntryLabels);
 
   return (
-    <div className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" data-mood={mood}>
+    <div 
+      className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" 
+      data-mood={mood}
+      style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
+    >
       {/* Animated Drifting Mesh Gradient Background + White Premium Glow */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
-        {/* White Radial Glow for Airy Premium Feel */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.05)_0%,_transparent_70%)] mix-blend-screen" />
-        
-        <div
-          className="absolute top-[-15%] left-[-20%] w-[75vw] h-[75vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-1"
-          style={{ background: 'var(--mood-blob-1)' }}
-        />
-        <div
-          className="absolute bottom-[-20%] right-[-15%] w-[65vw] h-[65vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-2"
-          style={{ background: 'var(--mood-blob-2)' }}
-        />
-        <div
-          className="absolute top-[30%] left-[40%] w-[50vw] h-[50vw] rounded-full mix-blend-screen filter blur-[140px] blob-drift-3"
-          style={{ background: 'var(--mood-blob-3)' }}
-        />
-      </div>
+      <BackgroundComponent mood={mood} />
       <AnimatePresence>
         {isSidebarOpen && (
           <motion.div

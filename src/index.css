@@ -232,6 +232,24 @@
   animation: neon-pulse-btn 2s ease-in-out infinite;
 }
 
+/* Premium Wave Typing Animation */
+@keyframes premium-wave {
+  0%, 100% { transform: translateY(0); opacity: 0.3; }
+  50% { transform: translateY(-4px); opacity: 1; }
+}
+.animate-premium-wave {
+  animation: premium-wave 1.2s ease-in-out infinite;
+}
+
+/* Typing Glow Container */
+@keyframes typing-glow-pulse {
+  0%, 100% { border-color: rgba(236, 72, 153, 0.2); box-shadow: 0 0 10px rgba(236, 72, 153, 0.1); }
+  50% { border-color: rgba(236, 72, 153, 0.5); box-shadow: 0 0 20px rgba(236, 72, 153, 0.35); }
+}
+.animate-pulse-slow {
+  animation: typing-glow-pulse 2.5s ease-in-out infinite;
+}
+
 /* Hover Pulse on Chat Bubbles */
 @keyframes bubble-pulse {
   0%   { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.3); }
