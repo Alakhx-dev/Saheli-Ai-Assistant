@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Heart, Star } from "lucide-react";
 import { motion } from "framer-motion";
@@ -53,6 +54,7 @@ function useStarDust(containerRef: React.RefObject<HTMLDivElement>) {
 }
 
 export default function Login() {
+  const t = getLang();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
@@ -120,14 +122,14 @@ export default function Login() {
           <h1 className="text-3xl font-light tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-purple-300 via-pink-300 to-purple-300">
             Saheli AI
           </h1>
-          <p className="text-white/50 text-sm mt-2 font-light tracking-wide">Your Best Friend</p>
+          <p className="text-white/50 text-sm mt-2 font-light tracking-wide">{t.login.bestFriend}</p>
         </div>
 
         <form onSubmit={handleAuth} className="space-y-4">
           <div className="relative group">
             <input
               type="email"
-              placeholder="Email"
+              placeholder={t.login.email}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-black/30 border border-purple-500/30 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none transition-all neon-border-input"
@@ -137,7 +139,7 @@ export default function Login() {
           <div className="relative group">
             <input
               type="password"
-              placeholder="Password"
+              placeholder={t.login.password}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-black/30 border border-purple-500/30 rounded-xl px-4 py-3.5 text-white placeholder-white/30 focus:outline-none transition-all neon-border-input"
@@ -153,7 +155,7 @@ export default function Login() {
             whileTap={{ scale: 0.98 }}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 hover:from-purple-500 hover:via-pink-500 hover:to-purple-500 text-white font-semibold transition-all btn-nebula-pulse"
           >
-            {isSignUp ? "Create Account" : "Welcome Back"}
+            {isSignUp ? t.login.createAccount : t.login.welcomeBack}
           </motion.button>
         </form>
 
@@ -163,7 +165,7 @@ export default function Login() {
             onClick={() => setIsSignUp(!isSignUp)}
             className="text-white/60 hover:text-white/90 text-sm transition-colors"
           >
-            {isSignUp ? "Already have an account? Sign in" : "Need an account? Sign up"}
+            {isSignUp ? t.login.alreadyHaveAccount : t.login.needAccount}
           </button>
 
           <div className="h-px w-full bg-gradient-to-r from-transparent via-white/20 to-transparent my-1" />
@@ -174,7 +176,7 @@ export default function Login() {
             className="flex items-center gap-2 px-6 py-2 rounded-full border border-white/10 hover:border-pink-500/30 hover:bg-white/[0.03] text-white/60 hover:text-pink-300 transition-all text-sm skip-sparkle"
           >
             <Star className="w-3.5 h-3.5 text-pink-400/70" />
-            <span className="tracking-wide">Skip Login</span>
+            <span className="tracking-wide">{t.login.skipLogin}</span>
           </button>
         </div>
       </motion.div>

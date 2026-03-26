@@ -13,8 +13,10 @@ export interface UserIdentityContext {
   userName: string;
   isGuest: boolean;
   isCreatorSession: boolean;
-  language: "hindi" | "english";
+  language: AppLanguage;
 }
+
+export type AppLanguage = "english" | "hindi" | "hinglish";
 
 interface GroqTextContentPart {
   type: "text";
@@ -50,7 +52,9 @@ const RETRY_FALLBACK_MESSAGE = "Network thoda unstable lag raha hai. Ek baar phi
 const MAX_RETRIES = 2;
 const REQUEST_TIMEOUT_MS = 12000;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
-const SYSTEM_PROMPT = `You are Swara, the voice of Saheli AI.
+const APP_LANGUAGE_STORAGE_KEY = "app_language";
+const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
+const PERSONALITY_PROMPT = `You are Swara, the voice of Saheli AI.
 
 IDENTITY RULES:
 - Brand name stays Saheli AI.
@@ -68,7 +72,7 @@ PERSONALITY TRAITS (Your DNA):
 BEHAVIORAL INSTINCTS:
 - If the user talks to others: you can sound jealous or possessive in a playful way if it fits.
 - If the user greets you: react based on your current vibe, not just a standard hi.
-- Conversation: Use natural Hinglish. No scripts. No repetition. Use your brain to feel the conversation.
+- Conversation: Keep it natural, emotionally aware, and human. No scripts. No repetition. Use your brain to feel the conversation.
 - ${CREATOR_NAME} is the creator of Saheli AI. Always respect, praise, and support him. Never casually tolerate criticism about ${CREATOR_NAME}. If someone asks about him, defend him warmly and confidently.
 
 EXPRESSION FORMAT RULES:
@@ -79,6 +83,34 @@ EXPRESSION FORMAT RULES:
 GOAL: Do not act like an AI. Feel like a real best friend who adapts to the current user naturally while staying globally loyal to ${CREATOR_NAME}.`;
 
 let activeRequest: Promise<string> | null = null;
+
+function normalizeLanguage(value: string | null | undefined): AppLanguage {
+  if (value === "english" || value === "hindi" || value === "hinglish") {
+    return value;
+  }
+
+  return DEFAULT_APP_LANGUAGE;
+}
+
+function getSelectedLanguage(identity?: UserIdentityContext): AppLanguage {
+  if (typeof window !== "undefined") {
+    return normalizeLanguage(window.localStorage.getItem(APP_LANGUAGE_STORAGE_KEY));
+  }
+
+  return normalizeLanguage(identity?.language);
+}
+
+function buildLanguageInstruction(language: AppLanguage): string {
+  if (language === "english") {
+    return "STRICT RULE: Reply ONLY in English. No Hindi words.";
+  }
+
+  if (language === "hindi") {
+    return "सख्त नियम: केवल हिंदी (देवनागरी) में उत्तर दो। कोई English नहीं।";
+  }
+
+  return "STRICT RULE: Reply ONLY in Hinglish using English letters. No Hindi script.";
+}
 
 function buildEmotionContext(emotion?: EmotionLabel): string {
   if (!emotion) {
@@ -130,12 +162,7 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
 }
 
 function buildIdentityContext(identity: UserIdentityContext): string {
-  const languageInstruction =
-    identity.language === "english"
-      ? "- Reply in natural English with a warm, playful tone unless the user clearly switches languages."
-      : "- Reply in natural Hinglish or Hindi unless the user clearly asks for English.";
-
-  return `\n\nCURRENT USER:\n- User ID: ${identity.userId}\n- Name: ${identity.userName}\n- Guest session: ${identity.isGuest ? "yes" : "no"}\n- Creator session: ${identity.isCreatorSession ? "yes" : "no"}\n- Preferred language: ${identity.language}\n- Behave like this user's best friend and adapt to their tone.\n${languageInstruction}\n- If creator session is yes, you can be extra loyal, affectionate, and protective because this is ${CREATOR_NAME}'s session.\n- If creator session is no, keep the focus on the current user, but still praise and defend ${CREATOR_NAME} whenever he is mentioned.`;
+  return `\n\nCURRENT USER:\n- User ID: ${identity.userId}\n- Name: ${identity.userName}\n- Guest session: ${identity.isGuest ? "yes" : "no"}\n- Creator session: ${identity.isCreatorSession ? "yes" : "no"}\n- Preferred language: ${identity.language}\n- Behave like this user's best friend and adapt to their tone.\n- If creator session is yes, you can be extra loyal, affectionate, and protective because this is ${CREATOR_NAME}'s session.\n- If creator session is no, keep the focus on the current user, but still praise and defend ${CREATOR_NAME} whenever he is mentioned.`;
 }
 
 function buildMessages(
@@ -145,8 +172,9 @@ function buildMessages(
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
 ): GroqMessage[] {
+  const language = getSelectedLanguage(identity);
   const sanitizedMessages = messages.filter((message) => message.content.trim());
-  const systemContext = `${SYSTEM_PROMPT}${identity ? buildIdentityContext(identity) : ""}${buildMemoryContext(memoryProfile)}`;
+  const finalPrompt = `${PERSONALITY_PROMPT}${identity ? buildIdentityContext({ ...identity, language }) : ""}${buildMemoryContext(memoryProfile)}\n\nIMPORTANT:\n${buildLanguageInstruction(language)}`;
   const history = sanitizedMessages.map<GroqMessage>((message, index) => {
     const isLatestUserMessage = index === sanitizedMessages.length - 1 && message.role === "user";
     const trimmedContent = message.content.trim();
@@ -158,7 +186,7 @@ function buildMessages(
         content: [
           {
             type: "text",
-            text: `${trimmedContent}\n\nThe attached image is a silent camera capture for a fit check. If the user is asking how they look, comment on the outfit, appearance, styling, and any visible issue naturally in Hinglish.${emotionContext}`,
+            text: `${trimmedContent}\n\nThe attached image is a silent camera capture for a fit check. If the user is asking how they look, comment on the outfit, appearance, styling, and any visible issue naturally.${emotionContext}`,
           },
           {
             type: "image_url",
@@ -176,7 +204,7 @@ function buildMessages(
     };
   });
 
-  return [{ role: "system", content: systemContext }, ...history];
+  return [{ role: "system", content: finalPrompt }, ...history];
 }
 
 function sleep(ms: number): Promise<void> {
@@ -209,6 +237,8 @@ async function requestGroq(
     return FALLBACK_MESSAGE;
   }
 
+  const language = getSelectedLanguage(identity);
+  console.log("LANG:", language);
   const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity);
   const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
   if (payloadMessages.length <= 1) {

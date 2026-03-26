@@ -15,6 +15,7 @@ import { db } from "@/lib/firebase";
 import type { ChatMessage } from "@/lib/ai-service";
 
 const LOCAL_CHATS_KEY = "chats";
+const MAX_CHAT_TITLE_LENGTH = 60;
 
 export interface ChatSessionSummary {
   id: string;
@@ -119,7 +120,7 @@ export async function saveChatMessage(chatId: string, message: StoredChatMessage
 }
 
 export async function updateChatSessionTitle(chatId: string, title: string, user: User | null) {
-  const trimmedTitle = title.trim().slice(0, 30) || "New Chat";
+  const trimmedTitle = Array.from(title.trim()).slice(0, MAX_CHAT_TITLE_LENGTH).join("") || "New Chat";
 
   if (isGuestMode(user)) {
     const chats = readLocalChats();

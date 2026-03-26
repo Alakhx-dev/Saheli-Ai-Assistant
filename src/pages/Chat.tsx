@@ -22,7 +22,7 @@ import { sendPasswordResetEmail, signOut, updateProfile } from "firebase/auth";
 import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { sendMessage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
+import { sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   loadChatMessages,
@@ -33,6 +33,7 @@ import {
   type StoredChatMessage,
 } from "@/lib/chat-history";
 import { detectEmotionFromImage } from "@/lib/emotion-service";
+import { formatText, getLang, getStoredLanguage, UI_LANGUAGE_STORAGE_KEY } from "@/lib/useLanguage";
 import {
   CREATOR_NAME,
   deleteMemoryEntry,
@@ -62,15 +63,17 @@ const VISION_TRIGGER_PATTERNS = [
   /\bcamera\b/i,
 ];
 const VOICE_NAME = "Swara";
-const LANGUAGE_STORAGE_KEY = "language";
+const LEGACY_LANGUAGE_STORAGE_KEY = "language";
 const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
+const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const PROFILE_PREVIEW_SIZE = 208;
+const TITLE_UPDATE_INTERVAL = 3;
 
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
-type LanguageOption = "hindi" | "english";
+type LanguageOption = AppLanguage;
 type MemoryEntryDescriptor =
   | { id: "name"; label: "Name"; value: string; field: MemoryFieldKey }
   | { id: "tone"; label: "Tone"; value: string; field: MemoryFieldKey }
@@ -83,7 +86,16 @@ interface ProfileImageMeta {
   height: number;
 }
 
-function buildMemoryEntries(profile: MemoryProfile | null): MemoryEntryDescriptor[] {
+function buildMemoryEntries(
+  profile: MemoryProfile | null,
+  labels: {
+    name: string;
+    tone: string;
+    style: string;
+    mood: string;
+    likes: string;
+  },
+): MemoryEntryDescriptor[] {
   if (!profile) {
     return [];
   }
@@ -91,25 +103,25 @@ function buildMemoryEntries(profile: MemoryProfile | null): MemoryEntryDescripto
   const entries: MemoryEntryDescriptor[] = [];
 
   if (profile.name) {
-    entries.push({ id: "name", label: "Name", value: profile.name, field: "name" });
+    entries.push({ id: "name", label: labels.name, value: profile.name, field: "name" });
   }
 
   if (profile.tone) {
-    entries.push({ id: "tone", label: "Tone", value: profile.tone, field: "tone" });
+    entries.push({ id: "tone", label: labels.tone, value: profile.tone, field: "tone" });
   }
 
   if (profile.style) {
-    entries.push({ id: "style", label: "Style", value: profile.style, field: "style" });
+    entries.push({ id: "style", label: labels.style, value: profile.style, field: "style" });
   }
 
   if (profile.moodPattern) {
-    entries.push({ id: "moodPattern", label: "Mood", value: profile.moodPattern, field: "moodPattern" });
+    entries.push({ id: "moodPattern", label: labels.mood, value: profile.moodPattern, field: "moodPattern" });
   }
 
   for (const preference of profile.preferences ?? []) {
     entries.push({
       id: `preference-${preference}`,
-      label: "Likes",
+      label: labels.likes,
       value: preference,
       field: "preference",
       preferenceValue: preference,
@@ -117,11 +129,6 @@ function buildMemoryEntries(profile: MemoryProfile | null): MemoryEntryDescripto
   }
 
   return entries;
-}
-
-function readLanguagePreference(): LanguageOption {
-  const value = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  return value === "english" ? "english" : "hindi";
 }
 
 function readGuestProfileName() {
@@ -378,6 +385,108 @@ interface PendingMobileVisionRequest {
   identity: UserIdentityContext;
 }
 
+type TitleMood = "flirty" | "sad" | "funny" | "serious" | "neutral";
+
+function includesAny(text: string, keywords: string[]) {
+  return keywords.some((keyword) => text.includes(keyword));
+}
+
+function detectTitleMood(text: string): TitleMood {
+  if (includesAny(text, ["flirt", "sexy", "hot", "cute", "romantic", "naughty", "tease", "wink", "kaisa lag raha", "kaisi lag rahi"])) {
+    return "flirty";
+  }
+
+  if (includesAny(text, ["sad", "mood off", "heartbreak", "cry", "crying", "alone", "hurt", "dukhi", "udas", "toot gaya", "dil toot"])) {
+    return "sad";
+  }
+
+  if (includesAny(text, ["masti", "bakchodi", "funny", "joke", "jokes", "haha", "lol", "lmao", "pagal", "mazak"])) {
+    return "funny";
+  }
+
+  if (includesAny(text, ["serious", "deep", "confused", "overthinking", "soch", "advice", "help", "future", "career"])) {
+    return "serious";
+  }
+
+  return "neutral";
+}
+
+function generateChatTitle(messages: ChatMessage[], language: LanguageOption) {
+  const titles = getLang(language).chatTitles;
+  const recent = messages
+    .slice(-5)
+    .map((message) => message.content.trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+
+  if (!recent) {
+    return titles.newChat;
+  }
+
+  const mood = detectTitleMood(recent);
+
+  if (includesAny(recent, ["kaisa lag raha", "kaisi lag rahi", "fit", "fit check", "look", "looks", "outfit", "dress", "kapde", "photo"])) {
+    return mood === "funny" ? titles.fitCheckFun : titles.fitCheckLooks;
+  }
+
+  if (includesAny(recent, ["relationship", "love", "lover", "breakup", "crush", "pyaar", "pyar", "dil"])) {
+    if (mood === "sad") {
+      return titles.loveHeart;
+    }
+
+    if (mood === "serious") {
+      return titles.relationshipSerious;
+    }
+
+    return titles.relationship;
+  }
+
+  if (includesAny(recent, ["mood", "mood off", "sad", "cry", "crying", "emotional", "dukhi", "udas"])) {
+    return mood === "sad" ? titles.emotional : titles.mood;
+  }
+
+  if (includesAny(recent, ["masti", "bakchodi", "funny", "joke", "jokes", "haha", "lol", "pagal", "mazak"])) {
+    return mood === "flirty" ? titles.lateNightMasti : titles.masti;
+  }
+
+  if (includesAny(recent, ["study", "studies", "exam", "padhai", "college", "school", "homework", "syllabus"])) {
+    return titles.study;
+  }
+
+  if (mood === "flirty") {
+    return titles.lateNightMasti;
+  }
+
+  if (mood === "sad") {
+    return titles.emotional;
+  }
+
+  if (mood === "funny") {
+    return titles.masti;
+  }
+
+  if (mood === "serious") {
+    return titles.deep;
+  }
+
+  return titles.random;
+}
+
+function isDefaultChatTitle(title: string) {
+  return title === "New Chat"
+    || title === getLang("english").chatTitles.newChat
+    || title === getLang("hindi").chatTitles.newChat
+    || title === getLang("hinglish").chatTitles.newChat;
+}
+
+function shouldRefreshGeneratedTitle(messageCount: number, currentTitle: string, language: LanguageOption) {
+  if (messageCount === 0) {
+    return false;
+  }
+
+  return isDefaultChatTitle(currentTitle) || messageCount === 1 || messageCount % TITLE_UPDATE_INTERVAL === 0;
+}
+
 function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -527,11 +636,13 @@ function ScrollFadeMessageList({
   isLoading,
   messagesEndRef,
   lastMsgCount,
+  typingLabel,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   lastMsgCount: number;
+  typingLabel: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -556,7 +667,7 @@ function ScrollFadeMessageList({
                 <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
                 <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce"></div>
               </div>
-              <p className="text-white/60 text-xs font-medium">{VOICE_NAME} typing...</p>
+              <p className="text-white/60 text-xs font-medium">{typingLabel}</p>
             </div>
           </motion.div>
         )}
@@ -570,7 +681,8 @@ function ScrollFadeMessageList({
 export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
-  const [language, setLanguage] = useState<LanguageOption>(() => readLanguagePreference());
+  const [language, setLanguage] = useState<LanguageOption>(() => getStoredLanguage());
+  const t = getLang(language);
   const [profileName, setProfileName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(() => user?.photoURL || (isGuest ? readGuestProfilePhoto() : ""));
   const [profileDraftName, setProfileDraftName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
@@ -598,6 +710,7 @@ export default function Chat() {
     isCreatorSession: isGuest || effectiveUserName.toLowerCase() === CREATOR_NAME.toLowerCase(),
     language,
   };
+  const inputPlaceholder = t.composer.messagePlaceholder;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(null);
   const [input, setInput] = useState("");
@@ -609,6 +722,7 @@ export default function Chat() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
   const mobileCameraInputRef = useRef<HTMLInputElement>(null);
@@ -629,7 +743,12 @@ export default function Chat() {
   }, [messages]);
 
   useEffect(() => {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    chatSessionsRef.current = chatSessions;
+  }, [chatSessions]);
+
+  useEffect(() => {
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, language);
+    localStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY);
   }, [language]);
 
   useEffect(() => {
@@ -657,27 +776,19 @@ export default function Chat() {
     let cancelled = false;
 
     const bootstrapChatHistory = async () => {
+      sessionStorage.removeItem(ACTIVE_CHAT_SESSION_KEY);
+      setCurrentChatId(null);
+      setMessages([]);
+      setPendingMobileVisionRequest(null);
+      pendingMobileVisionRequestRef.current = null;
+
       const sessions = await loadChatSessions(user);
       if (cancelled) {
         return;
       }
 
+      chatSessionsRef.current = sessions;
       setChatSessions(sessions);
-
-      if (sessions.length === 0) {
-        setCurrentChatId(null);
-        setMessages([]);
-        return;
-      }
-
-      const initialChatId = sessions[0].id;
-      const storedMessages = await loadChatMessages(initialChatId, user);
-      if (cancelled) {
-        return;
-      }
-
-      setCurrentChatId(initialChatId);
-      setMessages(storedMessages.map(({ role, content }) => ({ role, content })));
     };
 
     void bootstrapChatHistory();
@@ -686,6 +797,15 @@ export default function Chat() {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    if (currentChatId) {
+      sessionStorage.setItem(ACTIVE_CHAT_SESSION_KEY, currentChatId);
+      return;
+    }
+
+    sessionStorage.removeItem(ACTIVE_CHAT_SESSION_KEY);
+  }, [currentChatId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -751,13 +871,19 @@ export default function Chat() {
   };
 
   const handleLanguageChange = (nextLanguage: LanguageOption) => {
-    setLanguage(nextLanguage);
-    setLanguageMenuOpen(false);
+    if (nextLanguage === language) {
+      setLanguageMenuOpen(false);
+      return;
+    }
+
+    localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, nextLanguage);
+    localStorage.removeItem(LEGACY_LANGUAGE_STORAGE_KEY);
+    window.location.reload();
   };
 
   const handleMemoryToggle = (enabled: boolean) => {
     setMemoryEnabledState(enabled);
-    setMemoryStatus(enabled ? "Memory wapas on hai." : "Memory off hai. Ab Swara nayi memory save nahi karegi.");
+    setMemoryStatus(enabled ? t.statuses.memoryOn : t.statuses.memoryOff);
   };
 
   const handleDeleteMemoryEntry = async (entry: MemoryEntryDescriptor) => {
@@ -766,10 +892,10 @@ export default function Chat() {
 
     try {
       await persistMemoryProfile(user, nextProfile);
-      setMemoryStatus(`${entry.label} memory se hata diya.`);
+      setMemoryStatus(formatText(t.statuses.memoryEntryDeleted, { label: entry.label }));
     } catch (error) {
       console.warn("Failed to delete memory entry", error);
-      setMemoryStatus("Memory item delete nahi hua. Dobara try karo.");
+      setMemoryStatus(t.statuses.memoryEntryDeleteFailed);
     }
   };
 
@@ -781,10 +907,10 @@ export default function Chat() {
       if (selectedMemoryImage && deletedMoment?.imageDataUrl === selectedMemoryImage) {
         setSelectedMemoryImage(null);
       }
-      setMemoryStatus("Saved moment delete kar diya.");
+      setMemoryStatus(t.statuses.savedMomentDeleted);
     } catch (error) {
       console.warn("Failed to delete memory moment", error);
-      setMemoryStatus("Saved moment delete nahi hua.");
+      setMemoryStatus(t.statuses.savedMomentDeleteFailed);
     }
   };
 
@@ -817,10 +943,10 @@ export default function Chat() {
       setProfileCropZoom(1);
       setProfileCropX(0);
       setProfileCropY(0);
-      setProfileStatus("Image ready. Adjust the square crop and save.");
+      setProfileStatus(t.statuses.imageReady);
     } catch (error) {
       console.warn("Profile image selection failed", error);
-      setProfileStatus("Image load nahi ho payi. Ek aur photo try karo.");
+      setProfileStatus(t.statuses.imageLoadFailed);
     } finally {
       event.target.value = "";
     }
@@ -828,16 +954,16 @@ export default function Chat() {
 
   const handlePasswordReset = async () => {
     if (!user?.email) {
-      setProfileStatus("Password reset ke liye email account chahiye.");
+      setProfileStatus(t.statuses.passwordResetNeedsEmail);
       return;
     }
 
     try {
       await sendPasswordResetEmail(auth, user.email);
-      setProfileStatus(`Reset link ${user.email} par bhej diya.`);
+      setProfileStatus(formatText(t.statuses.resetLinkSent, { email: user.email }));
     } catch (error) {
       console.warn("Password reset failed", error);
-      setProfileStatus("Reset email bhejne me thodi problem hui.");
+      setProfileStatus(t.statuses.resetEmailFailed);
     }
   };
 
@@ -845,7 +971,7 @@ export default function Chat() {
     const trimmedName = profileDraftName.trim() || (isGuest ? CREATOR_NAME : "User");
 
     setIsSavingProfile(true);
-    setProfileStatus("Saving profile...");
+    setProfileStatus(t.statuses.savingProfile);
 
     try {
       let nextPhotoUrl = profilePhotoUrl;
@@ -899,10 +1025,10 @@ export default function Chat() {
         });
       }
 
-      setProfileStatus("Profile saved.");
+      setProfileStatus(t.statuses.profileSaved);
     } catch (error) {
       console.warn("Profile save failed", error);
-      setProfileStatus("Profile save nahi hua. Dobara try karo.");
+      setProfileStatus(t.statuses.profileSaveFailed);
     } finally {
       setIsSavingProfile(false);
     }
@@ -995,12 +1121,18 @@ export default function Chat() {
 
   const refreshChatSessions = useCallback(async (nextChatId?: string | null) => {
     const sessions = await loadChatSessions(user);
+    chatSessionsRef.current = sessions;
     setChatSessions(sessions);
 
     if (nextChatId !== undefined) {
       setCurrentChatId(nextChatId);
     }
   }, [user]);
+
+  const getRequestIdentityContext = useCallback((): UserIdentityContext => ({
+    ...identityContext,
+    language: getStoredLanguage(),
+  }), [identityContext]);
 
   const handleSelectChat = async (chatId: string) => {
     if (submitLockRef.current && currentChatId === chatId) {
@@ -1027,21 +1159,31 @@ export default function Chat() {
     await refreshChatSessions(chatId);
   };
 
-  const ensureActiveChat = useCallback(async (firstMessageText: string) => {
+  const syncSmartChatTitle = useCallback(async (chatId: string, history: ChatMessage[]) => {
+    const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
+    if (!shouldRefreshGeneratedTitle(history.length, currentTitle, language)) {
+      return;
+    }
+
+    const nextTitle = generateChatTitle(history, language);
+    if (nextTitle === currentTitle) {
+      return;
+    }
+
+    await updateChatSessionTitle(chatId, nextTitle, user);
+    await refreshChatSessions(chatId);
+  }, [language, refreshChatSessions, user]);
+
+  const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatId;
-    const isFirstMessageInChat = messages.length === 0;
 
     if (!chatId) {
       chatId = await createChatSession(user);
       setCurrentChatId(chatId);
     }
 
-    if (isFirstMessageInChat) {
-      await updateChatSessionTitle(chatId, firstMessageText, user);
-    }
-
-    return { chatId, isFirstMessageInChat };
-  }, [currentChatId, messages.length, user]);
+    return { chatId };
+  }, [currentChatId, user]);
 
   const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
     await saveChatMessage(chatId, message, user);
@@ -1065,6 +1207,11 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
+      const requestIdentity = {
+        ...request.identity,
+        language: getStoredLanguage(),
+      };
+
       if (imageBase64) {
         detectedEmotion = await detectEmotionFromImage(imageBase64);
         if (memoryEnabled) {
@@ -1085,19 +1232,23 @@ export default function Chat() {
         imageBase64,
         detectedEmotion,
         memoryEnabled ? request.memoryProfile : null,
-        request.identity,
+        requestIdentity,
       );
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
+      const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages(nextHistory);
       void persistChatMessage(request.chatId, {
         role: "model",
         content: responseText,
         createdAt: Date.now(),
       }).catch((error) => {
         console.warn("Failed to persist model reply", error);
+      });
+      void syncSmartChatTitle(request.chatId, nextHistory).catch((error) => {
+        console.warn("Failed to update smart chat title", error);
       });
     } finally {
       setIsLoading(false);
@@ -1181,7 +1332,8 @@ export default function Chat() {
     submitLockRef.current = true;
     setInput("");
 
-    const { chatId } = await ensureActiveChat(userText);
+    const requestIdentity = getRequestIdentityContext();
+    const { chatId } = await ensureActiveChat();
     const userMessage: StoredChatMessage = {
       role: "user",
       content: userText,
@@ -1191,6 +1343,9 @@ export default function Chat() {
 
     const nextHistory: ChatMessage[] = [...messages, { role: userMessage.role, content: userMessage.content }];
     setMessages(nextHistory);
+    void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
+      console.warn("Failed to update smart chat title", error);
+    });
 
     let nextMemoryProfile = memoryProfile;
     if (memoryEnabled) {
@@ -1218,7 +1373,7 @@ export default function Chat() {
         chatId,
         history: nextHistory,
         memoryProfile: memoryEnabled ? nextMemoryProfile : null,
-        identity: identityContext,
+        identity: requestIdentity,
       };
       pendingMobileVisionRequestRef.current = pendingRequest;
       setPendingMobileVisionRequest(pendingRequest);
@@ -1246,19 +1401,23 @@ export default function Chat() {
         base64Image,
         detectedEmotion,
         memoryEnabled ? nextMemoryProfile : null,
-        identityContext,
+        requestIdentity,
       );
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
+      const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
-      setMessages((prev) => [...prev, aiMessage]);
+      setMessages(finalHistory);
       void persistChatMessage(chatId, {
         role: "model",
         content: responseText,
         createdAt: Date.now(),
       }).catch((error) => {
         console.warn("Failed to persist model reply", error);
+      });
+      void syncSmartChatTitle(chatId, finalHistory).catch((error) => {
+        console.warn("Failed to update smart chat title", error);
       });
     } finally {
       setIsLoading(false);
@@ -1276,15 +1435,20 @@ export default function Chat() {
   const previewMaxOffsetY = Math.max(0, (previewHeight - PROFILE_PREVIEW_SIZE) / 2);
   const previewOffsetX = (profileCropX / 100) * previewMaxOffsetX;
   const previewOffsetY = (profileCropY / 100) * previewMaxOffsetY;
+  const headerGlassPillClass =
+    "flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-xl shadow-[0_18px_42px_rgba(9,4,24,0.36)] overflow-visible";
   const headerControlButtonClass =
-    "group flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/[0.06] text-white/70 backdrop-blur-2xl shadow-[0_10px_24px_rgba(12,4,24,0.28)] transition-all duration-300 hover:scale-105 hover:border-pink-400/35 hover:bg-white/[0.09] hover:text-pink-100";
-  const memoryButtonClass = `${headerControlButtonClass} ${
-    memoryEnabled
-      ? "border-pink-400/30 bg-pink-500/12 text-pink-100 shadow-[0_0_30px_rgba(236,72,153,0.18)]"
-      : ""
-  }`;
+    "group relative isolate flex h-9 w-9 items-center justify-center rounded-full text-white/72 transition-all duration-300 hover:scale-110 hover:text-white hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-300/55";
+  const activeHeaderControlButtonClass =
+    "bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 text-white shadow-[0_0_24px_rgba(236,72,153,0.35),0_14px_32px_rgba(168,85,247,0.24)]";
+  const headerTooltipClass =
+    "pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-full border border-white/12 bg-[#12091f]/92 px-2.5 py-1 text-[10px] font-medium tracking-[0.16em] text-white/78 opacity-0 shadow-[0_12px_28px_rgba(4,2,12,0.45)] transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100";
+  const voiceButtonClass = `${headerControlButtonClass} ${!isMuted ? activeHeaderControlButtonClass : ""}`;
+  const memoryButtonClass = `${headerControlButtonClass} ${memoryEnabled || memoryMenuOpen ? activeHeaderControlButtonClass : ""}`;
+  const languageButtonClass = `${headerControlButtonClass} ${languageMenuOpen ? activeHeaderControlButtonClass : ""}`;
+  const profileButtonClass = `${headerControlButtonClass} ${profileMenuOpen ? activeHeaderControlButtonClass : ""}`;
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
-  const memoryEntries = buildMemoryEntries(memoryProfile);
+  const memoryEntries = buildMemoryEntries(memoryProfile, t.memoryEntryLabels);
 
   return (
     <div className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" data-mood={mood}>
@@ -1322,14 +1486,14 @@ export default function Chat() {
                 onClick={() => void handleCreateChat()}
                 className="rounded-full border border-white/10 px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/60 transition hover:border-pink-400/40 hover:text-pink-200"
               >
-                New
+                {t.sidebar.newChat}
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <div className="text-xs text-white/80 font-semibold uppercase tracking-wider mb-2">Recent Chats</div>
+              <div className="text-xs text-white/80 font-semibold uppercase tracking-wider mb-2">{t.sidebar.recentChats}</div>
               {chatSessions.length === 0 ? (
-                <p className="p-2 text-sm text-white/40">No chats yet {isGuest ? "in guest mode" : "for this account"}.</p>
+                <p className="p-2 text-sm text-white/40">{isGuest ? t.sidebar.noChatsGuest : t.sidebar.noChatsAccount}</p>
               ) : (
                 chatSessions.map((chat) => (
                   <button
@@ -1342,7 +1506,7 @@ export default function Chat() {
                         : "text-white/70 hover:text-white hover:bg-white/5"
                     }`}
                   >
-                    {chat.title}
+                    {isDefaultChatTitle(chat.title) ? t.chatTitles.newChat : chat.title}
                   </button>
                 ))
               )}
@@ -1351,11 +1515,11 @@ export default function Chat() {
             <div className="p-4 border-t border-white/5">
               <button
                 onClick={handleLogout}
-                aria-label="Sign Out"
+                aria-label={t.sidebar.signOut}
                 className="flex items-center gap-2 text-white/80 font-semibold hover:text-pink-400 w-full p-2 rounded-lg hover:bg-white/5 transition-all text-sm"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                {t.sidebar.signOut}
               </button>
             </div>
           </motion.div>
@@ -1366,7 +1530,7 @@ export default function Chat() {
         <header className="h-14 flex items-center justify-between px-4 border-b border-white/15 bg-white/[0.05] backdrop-blur-3xl sticky top-0 z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label="Toggle Sidebar"
+            aria-label={t.header.toggleSidebar}
             className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
           >
             <Menu className="w-5 h-5" />
@@ -1377,7 +1541,7 @@ export default function Chat() {
             Saheli AI
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className={headerGlassPillClass}>
             <button
               type="button"
               onClick={() => {
@@ -1387,22 +1551,34 @@ export default function Chat() {
                   stop();
                 }
               }}
-              aria-label={isMuted ? "Unmute Voice" : "Mute Voice"}
-              className={headerControlButtonClass}
-              title={isMuted ? "Voice Off" : "Voice On"}
+              aria-label={isMuted ? t.header.unmuteVoice : t.header.muteVoice}
+              className={voiceButtonClass}
             >
-              {isMuted ? <VolumeX className="h-4.5 w-4.5" /> : <Volume2 className="h-4.5 w-4.5" />}
+              <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                <span className="absolute h-8 w-8 rounded-full bg-white/15 blur-md" />
+                <Sparkles className="h-4.5 w-4.5 text-rose-100/90 drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]" />
+              </span>
+              {isMuted ? (
+                <VolumeX className="h-4.5 w-4.5 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]" />
+              ) : (
+                <Volume2 className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(255,204,229,0.55)]" />
+              )}
+              <span className={headerTooltipClass}>{isMuted ? t.header.voiceOff : t.header.voiceOn}</span>
             </button>
 
             <DropdownMenu open={memoryMenuOpen} onOpenChange={setMemoryMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Memory"
+                  aria-label={t.header.memory}
                   className={memoryButtonClass}
-                  title={memoryEnabled ? "Memory On" : "Memory Off"}
                 >
-                  <Brain className="h-4.5 w-4.5" />
+                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    <span className="absolute h-8 w-8 rounded-full bg-fuchsia-400/20 blur-md" />
+                    <Sparkles className="h-4.5 w-4.5 text-fuchsia-200/90 drop-shadow-[0_0_16px_rgba(216,180,254,0.75)]" />
+                  </span>
+                  <Brain className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(216,180,254,0.65)]" />
+                  <span className={headerTooltipClass}>{t.header.memory}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1414,22 +1590,20 @@ export default function Chat() {
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.28em] text-white/35">Memory</p>
-                      <h3 className="mt-1 text-sm font-semibold text-white">What Swara remembers</h3>
+                      <p className="text-xs uppercase tracking-[0.28em] text-white/35">{t.memoryMenu.title}</p>
+                      <h3 className="mt-1 text-sm font-semibold text-white">{t.memoryMenu.heading}</h3>
                     </div>
                     <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/45">
-                      {memoryEnabled ? "On" : "Off"}
+                      {memoryEnabled ? t.common.on : t.common.off}
                     </div>
                   </div>
 
                   <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-white">🧠 Memory</p>
+                        <p className="text-sm font-medium text-white">{t.memoryMenu.summaryTitle}</p>
                         <p className="mt-1 text-xs text-white/45">
-                          {memoryEnabled
-                            ? "Important info aur repeated patterns save honge."
-                            : "Memory off hai. Nayi memory ya saved moments add nahi honge."}
+                          {memoryEnabled ? t.memoryMenu.summaryOn : t.memoryMenu.summaryOff}
                         </p>
                       </div>
                       <Switch checked={memoryEnabled} onCheckedChange={handleMemoryToggle} />
@@ -1439,8 +1613,8 @@ export default function Chat() {
                   <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-white">What I Remember</p>
-                        <p className="mt-1 text-xs text-white/45">Visible memory only. Tap × to forget one item.</p>
+                        <p className="text-sm font-medium text-white">{t.memoryMenu.visibleTitle}</p>
+                        <p className="mt-1 text-xs text-white/45">{t.memoryMenu.visibleHint}</p>
                       </div>
                       <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
                         {memoryEntries.length}
@@ -1449,7 +1623,7 @@ export default function Chat() {
 
                     {memoryEntries.length === 0 ? (
                       <div className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-center text-xs text-white/40">
-                        Abhi koi visible memory save nahi hai.
+                        {t.memoryMenu.emptyVisible}
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
@@ -1465,7 +1639,7 @@ export default function Chat() {
                               type="button"
                               onClick={() => void handleDeleteMemoryEntry(entry)}
                               className="rounded-full p-0.5 text-white/45 transition hover:bg-white/10 hover:text-pink-200"
-                              aria-label={`Delete ${entry.label}`}
+                              aria-label={formatText(t.aria.deleteLabel, { label: entry.label })}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -1478,8 +1652,8 @@ export default function Chat() {
                   <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-medium text-white">Saved Moments</p>
-                        <p className="mt-1 text-xs text-white/45">Recent camera snapshots saved for memory.</p>
+                        <p className="text-sm font-medium text-white">{t.memoryMenu.savedMomentsTitle}</p>
+                        <p className="mt-1 text-xs text-white/45">{t.memoryMenu.savedMomentsHint}</p>
                       </div>
                       <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
                         {memoryMoments.length}
@@ -1489,7 +1663,7 @@ export default function Chat() {
                     {memoryMoments.length === 0 ? (
                       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-white/40">
                         <ImageIcon className="mb-2 h-5 w-5" />
-                        Saved moments abhi empty hain.
+                        {t.memoryMenu.emptySavedMoments}
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1502,7 +1676,7 @@ export default function Chat() {
                             >
                               <img
                                 src={moment.imageDataUrl}
-                                alt="Saved moment"
+                                alt={t.memoryMenu.savedMomentsTitle}
                                 className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                               />
                             </button>
@@ -1510,7 +1684,7 @@ export default function Chat() {
                               type="button"
                               onClick={() => void handleDeleteMemoryMoment(moment.id)}
                               className="absolute right-2 top-2 rounded-full bg-black/45 p-1 text-white/80 opacity-0 transition group-hover:opacity-100 hover:bg-pink-500/70"
-                              aria-label="Delete saved moment"
+                              aria-label={t.aria.deleteSavedMoment}
                             >
                               <X className="h-3.5 w-3.5" />
                             </button>
@@ -1533,11 +1707,15 @@ export default function Chat() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Language"
-                  className={headerControlButtonClass}
-                  title={`Language: ${language === "english" ? "English" : "Hindi"}`}
+                  aria-label={t.header.language}
+                  className={languageButtonClass}
                 >
-                  <Globe className="h-4.5 w-4.5" />
+                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    <span className="absolute h-8 w-8 rounded-full bg-cyan-300/20 blur-md" />
+                    <Sparkles className="h-4.5 w-4.5 text-pink-100/90 drop-shadow-[0_0_16px_rgba(125,211,252,0.65)]" />
+                  </span>
+                  <Globe className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(125,211,252,0.55)]" />
+                  <span className={headerTooltipClass}>{t.languageNames[language]}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1546,39 +1724,54 @@ export default function Chat() {
                 className="w-[min(18rem,calc(100vw-1.5rem))] rounded-3xl border border-white/12 bg-[#1b1131]/85 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.45)] backdrop-blur-3xl"
               >
                 <div className="mb-3">
-                  <p className="text-xs uppercase tracking-[0.28em] text-white/35">Language</p>
-                  <p className="mt-1 text-sm text-white/75">Swara kis language me reply kare, yahan choose karo.</p>
+                  <p className="text-xs uppercase tracking-[0.28em] text-white/35">{t.languageMenu.title}</p>
+                  <p className="mt-1 text-sm text-white/75">{t.languageMenu.description}</p>
                 </div>
                 <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => handleLanguageChange("hinglish")}
+                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                      language === "hinglish"
+                        ? "border-pink-400/40 bg-gradient-to-r from-purple-600/25 via-pink-600/20 to-purple-600/25 text-white"
+                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <div>
+                      <div className="font-medium">{t.languageMenu.hinglishTitle}</div>
+                      <div className="text-xs text-white/45">{t.languageMenu.hinglishDescription}</div>
+                    </div>
+                    {language === "hinglish" ? <Check className="h-4 w-4 text-pink-200" /> : null}
+                  </button>
                   <button
                     type="button"
                     onClick={() => handleLanguageChange("hindi")}
                     className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
                       language === "hindi"
-                        ? "border-pink-400/40 bg-pink-500/14 text-white"
+                        ? "border-fuchsia-400/40 bg-fuchsia-500/14 text-white"
                         : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
                     }`}
                   >
                     <div>
-                      <div className="font-medium">Hindi</div>
-                      <div className="text-xs text-white/45">Natural Hinglish + Hindi vibes</div>
+                      <div className="font-medium">{t.languageMenu.hindiTitle}</div>
+                      <div className="text-xs text-white/45">{t.languageMenu.hindiDescription}</div>
                     </div>
-                    {language === "hindi" ? <Check className="h-4 w-4 text-pink-200" /> : null}
+                    {language === "hindi" ? <Check className="h-4 w-4 text-fuchsia-200" /> : null}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLanguageChange("english")}
                     className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
                       language === "english"
-                        ? "border-purple-400/40 bg-purple-500/14 text-white"
+                        ? "border-cyan-400/40 bg-cyan-500/14 text-white"
                         : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
                     }`}
                   >
                     <div>
-                      <div className="font-medium">English</div>
-                      <div className="text-xs text-white/45">Clear English replies with the same personality</div>
+                      <div className="font-medium">{t.languageMenu.englishTitle}</div>
+                      <div className="text-xs text-white/45">{t.languageMenu.englishDescription}</div>
                     </div>
-                    {language === "english" ? <Check className="h-4 w-4 text-purple-200" /> : null}
+                    {language === "english" ? <Check className="h-4 w-4 text-cyan-200" /> : null}
                   </button>
                 </div>
               </DropdownMenuContent>
@@ -1588,11 +1781,20 @@ export default function Chat() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Profile"
-                  className={headerControlButtonClass}
-                  title="Profile"
+                  aria-label={t.header.profile}
+                  className={profileButtonClass}
                 >
-                  <UserCircle2 className="h-5 w-5" />
+                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
+                    <span className="absolute h-8 w-8 rounded-full bg-amber-200/20 blur-md" />
+                    <Sparkles className="h-4.5 w-4.5 text-amber-100/90 drop-shadow-[0_0_15px_rgba(253,230,138,0.75)]" />
+                  </span>
+                  <Avatar className="relative z-10 h-7 w-7 border border-white/15 shadow-[0_0_14px_rgba(255,244,214,0.35)]">
+                    <AvatarImage src={profileDraftPhotoUrl || undefined} alt={effectiveUserName} className="object-cover" />
+                    <AvatarFallback className="bg-gradient-to-br from-amber-200/40 via-white/30 to-pink-300/35 text-[11px] font-semibold text-white">
+                      {profileInitial}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className={headerTooltipClass}>{t.header.profile}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -1611,35 +1813,35 @@ export default function Chat() {
                     </Avatar>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-white">{effectiveUserName}</p>
-                      <p className="truncate text-xs text-white/45">{user?.email || "Guest mode"}</p>
+                      <p className="truncate text-xs text-white/45">{user?.email || t.profileMenu.guestMode}</p>
                       <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-pink-200/75">
-                        {isGuest ? "Local profile" : "Cloud synced profile"}
+                        {isGuest ? t.profileMenu.localProfile : t.profileMenu.cloudProfile}
                       </p>
                     </div>
                   </div>
 
                   <div className="mt-4 space-y-3">
                     <div>
-                      <label className="mb-1.5 block text-[11px] uppercase tracking-[0.22em] text-white/40">Change Name</label>
+                      <label className="mb-1.5 block text-[11px] uppercase tracking-[0.22em] text-white/40">{t.profileMenu.changeName}</label>
                       <input
                         type="text"
                         value={profileDraftName}
                         onChange={(event) => setProfileDraftName(event.target.value)}
-                        placeholder="Enter your name"
+                        placeholder={t.profileMenu.enterYourName}
                         className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-pink-400/35 focus:bg-white/[0.08]"
                       />
                     </div>
 
                     <div>
                       <div className="mb-1.5 flex items-center justify-between">
-                        <label className="block text-[11px] uppercase tracking-[0.22em] text-white/40">Profile Pic</label>
+                        <label className="block text-[11px] uppercase tracking-[0.22em] text-white/40">{t.profileMenu.profilePic}</label>
                         <button
                           type="button"
                           onClick={() => profileImageInputRef.current?.click()}
                           className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/80 transition hover:border-pink-400/35 hover:text-white"
                         >
                           <Camera className="h-3.5 w-3.5" />
-                          Upload
+                          {t.common.upload}
                         </button>
                       </div>
                       <input
@@ -1656,7 +1858,7 @@ export default function Chat() {
                             <div className="relative h-full w-full overflow-hidden">
                               <img
                                 src={profilePreviewSource}
-                                alt="Profile crop preview"
+                                alt={t.profileMenu.profileCropPreviewAlt}
                                 className="absolute max-w-none select-none"
                                 style={{
                                   width: `${previewWidth}px`,
@@ -1669,7 +1871,7 @@ export default function Chat() {
                           ) : profilePreviewSource ? (
                             <img
                               src={profilePreviewSource}
-                              alt="Profile preview"
+                              alt={t.profileMenu.profilePreviewAlt}
                               className="h-full w-full object-cover"
                             />
                           ) : (
@@ -1683,7 +1885,7 @@ export default function Chat() {
                           <div className="mt-3 space-y-3">
                             <div>
                               <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>Zoom</span>
+                                <span>{t.profileMenu.zoom}</span>
                                 <span>{profileCropZoom.toFixed(1)}x</span>
                               </div>
                               <input
@@ -1698,7 +1900,7 @@ export default function Chat() {
                             </div>
                             <div>
                               <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>Horizontal</span>
+                                <span>{t.profileMenu.horizontal}</span>
                                 <span>{profileCropX}</span>
                               </div>
                               <input
@@ -1713,7 +1915,7 @@ export default function Chat() {
                             </div>
                             <div>
                               <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>Vertical</span>
+                                <span>{t.profileMenu.vertical}</span>
                                 <span>{profileCropY}</span>
                               </div>
                               <input
@@ -1743,7 +1945,7 @@ export default function Chat() {
                       disabled={isSavingProfile}
                       className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(192,38,211,0.25)] transition hover:scale-[1.01] hover:from-purple-500 hover:to-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isSavingProfile ? "Saving..." : "Save Profile"}
+                      {isSavingProfile ? t.common.saving : t.profileMenu.saveProfile}
                     </button>
 
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1754,7 +1956,7 @@ export default function Chat() {
                         className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-purple-400/30 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <KeyRound className="h-4 w-4" />
-                        Change Password
+                        {t.profileMenu.changePassword}
                       </button>
 
                       <button
@@ -1763,7 +1965,7 @@ export default function Chat() {
                         className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-pink-400/30 hover:bg-white/[0.08] hover:text-white"
                       >
                         <LogOut className="h-4 w-4" />
-                        Logout
+                        {t.profileMenu.logout}
                       </button>
                     </div>
                   </div>
@@ -1784,11 +1986,17 @@ export default function Chat() {
               >
                 <Sparkles className="w-10 h-10 text-pink-400" />
               </motion.div>
-              <h2 className="text-2xl font-light mb-2">Hey {effectiveUserName}!</h2>
-              <p className="text-white/50 text-base font-light">Main Swara hoon... Saheli AI ki voice. Tumhari sabse acchi dost. Kuch bhi batao, ya pucho!</p>
+              <h2 className="text-2xl font-light mb-2">{formatText(t.emptyState.greeting, { name: effectiveUserName })}</h2>
+              <p className="text-white/50 text-base font-light">{t.emptyState.description}</p>
             </div>
           ) : (
-            <ScrollFadeMessageList messages={messages} isLoading={isLoading} messagesEndRef={messagesEndRef} lastMsgCount={lastMsgCountRef.current} />
+            <ScrollFadeMessageList
+              messages={messages}
+              isLoading={isLoading}
+              messagesEndRef={messagesEndRef}
+              lastMsgCount={lastMsgCountRef.current}
+              typingLabel={t.composer.typing}
+            />
           )}
         </div>
 
@@ -1803,14 +2011,14 @@ export default function Chat() {
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Swara se baat karo..."
+                placeholder={inputPlaceholder}
                 className="flex-1 bg-transparent px-6 py-3.5 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 neon-border-input border-none"
                 style={{ fontSize: "15px" }}
               />
               <button
                 type="button"
                 onClick={toggleMic}
-                aria-label={isListening ? "Stop Listening" : "Voice Input"}
+                aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
                 className={`p-2 ml-1 rounded-full transition-all ${
                   isListening
                     ? "bg-pink-500/20 text-pink-400 animate-pulse"
@@ -1821,7 +2029,7 @@ export default function Chat() {
               </button>
               <button
                 type="submit"
-                aria-label="Send Message"
+                aria-label={t.composer.sendMessage}
                 disabled={!input.trim() || isLoading}
                 className="p-3 mr-2 transition-all"
               >
@@ -1837,7 +2045,7 @@ export default function Chat() {
                   onClick={handleMobileCameraOpen}
                   className="rounded-full border border-pink-400/30 bg-white/10 px-4 py-2 text-sm text-pink-100 backdrop-blur-xl transition hover:bg-white/15 hover:text-white"
                 >
-                  📷 Open Camera
+                  {t.composer.openCamera}
                 </button>
                 <input
                   ref={mobileCameraInputRef}
@@ -1850,7 +2058,7 @@ export default function Chat() {
               </div>
             )}
             <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
-              Swara har din tumhe aur samajh rahi hai {"<3"}
+              {t.composer.footer}
             </div>
           </div>
         </div>
@@ -1876,13 +2084,13 @@ export default function Chat() {
                   type="button"
                   onClick={() => setSelectedMemoryImage(null)}
                   className="absolute right-4 top-4 z-10 rounded-full border border-white/10 bg-black/35 p-2 text-white/80 transition hover:border-pink-400/30 hover:text-white"
-                  aria-label="Close preview"
+                  aria-label={t.aria.closePreview}
                 >
                   <X className="h-4 w-4" />
                 </button>
                 <img
                   src={selectedMemoryImage}
-                  alt="Saved memory preview"
+                  alt={t.memoryMenu.savedMomentsTitle}
                   className="max-h-[80vh] w-full rounded-[22px] object-contain"
                 />
               </motion.div>
