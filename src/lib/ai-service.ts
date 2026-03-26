@@ -93,11 +93,18 @@ function normalizeLanguage(value: string | null | undefined): AppLanguage {
 }
 
 function getSelectedLanguage(identity?: UserIdentityContext): AppLanguage {
+  // If an identity is passed, use its language directly.
+  // This allows the chat layer to pass an auto-detected language per message
+  // without touching the UI language stored in localStorage.
+  if (identity?.language) {
+    return normalizeLanguage(identity.language);
+  }
+
   if (typeof window !== "undefined") {
     return normalizeLanguage(window.localStorage.getItem(APP_LANGUAGE_STORAGE_KEY));
   }
 
-  return normalizeLanguage(identity?.language);
+  return DEFAULT_APP_LANGUAGE;
 }
 
 function buildLanguageInstruction(language: AppLanguage): string {

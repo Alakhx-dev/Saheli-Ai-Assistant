@@ -75,11 +75,11 @@ const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\
 
 type LanguageOption = AppLanguage;
 type MemoryEntryDescriptor =
-  | { id: "name"; label: "Name"; value: string; field: MemoryFieldKey }
-  | { id: "tone"; label: "Tone"; value: string; field: MemoryFieldKey }
-  | { id: "style"; label: "Style"; value: string; field: MemoryFieldKey }
-  | { id: "moodPattern"; label: "Mood"; value: string; field: MemoryFieldKey }
-  | { id: `preference-${string}`; label: "Likes"; value: string; field: MemoryFieldKey; preferenceValue: string };
+  | { id: "name"; label: string; value: string; field: MemoryFieldKey }
+  | { id: "tone"; label: string; value: string; field: MemoryFieldKey }
+  | { id: "style"; label: string; value: string; field: MemoryFieldKey }
+  | { id: "moodPattern"; label: string; value: string; field: MemoryFieldKey }
+  | { id: `preference-${string}`; label: string; value: string; field: MemoryFieldKey; preferenceValue: string };
 
 interface ProfileImageMeta {
   width: number;
@@ -487,6 +487,38 @@ function shouldRefreshGeneratedTitle(messageCount: number, currentTitle: string,
   return isDefaultChatTitle(currentTitle) || messageCount === 1 || messageCount % TITLE_UPDATE_INTERVAL === 0;
 }
 
+// ── Auto Chat Language Detection ──
+// Detects the language of the user's message to pick the right AI reply language.
+// This is completely separate from the UI language (localStorage "app_language").
+// Word-boundary patterns prevent false positives (e.g. "ho" inside "house").
+const HINGLISH_PATTERNS = [
+  "hai", "kya", "tum", "nahi", "yaar", "kar", "raha", "rahi", "baat", "mera",
+  "tera", "haan", "nhi", "kyun", "kyu", "acha", "theek", "chal", "bol", "hoon",
+  "ho", "hu", "kr", "aur", "kuch", "sab", "bhi", "mat", "ye", "vo", "woh",
+].map((kw) => new RegExp(`\\b${kw}\\b`, "i"));
+
+function detectChatLanguage(text: string): AppLanguage | null {
+  // Too short to detect reliably — return null so caller keeps previous language.
+  if (text.length < 3) {
+    return null;
+  }
+
+  if (/[\u0900-\u097F]/.test(text)) {
+    return "hindi";
+  }
+
+  const hasEnglish = /[a-zA-Z]/.test(text);
+  if (hasEnglish && HINGLISH_PATTERNS.some((pattern) => pattern.test(text))) {
+    return "hinglish";
+  }
+
+  if (hasEnglish) {
+    return "english";
+  }
+
+  return "hinglish"; // default
+}
+
 function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -725,6 +757,9 @@ export default function Chat() {
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
+  // chatLanguageRef: auto-detected language for AI replies - SEPARATE from UI language.
+  // UI language (localStorage app_language) is never modified by this system.
+  const chatLanguageRef = useRef(getStoredLanguage());
   const mobileCameraInputRef = useRef<HTMLInputElement>(null);
   const mobileCameraCancelTimeoutRef = useRef<number | null>(null);
   const pendingMobileVisionRequestRef = useRef<PendingMobileVisionRequest | null>(null);
@@ -1129,9 +1164,14 @@ export default function Chat() {
     }
   }, [user]);
 
-  const getRequestIdentityContext = useCallback((): UserIdentityContext => ({
+  const getRequestIdentityContext = useCallback((
+    detectedLanguage?: AppLanguage,
+  ): UserIdentityContext => ({
     ...identityContext,
-    language: getStoredLanguage(),
+    // Use the auto-detected chat language when provided; otherwise fall back
+    // to the last known chat language (chatLanguageRef). The UI language in
+    // localStorage ("app_language") is NEVER touched here.
+    language: detectedLanguage ?? chatLanguageRef.current,
   }), [identityContext]);
 
   const handleSelectChat = async (chatId: string) => {
@@ -1209,7 +1249,7 @@ export default function Chat() {
     try {
       const requestIdentity = {
         ...request.identity,
-        language: getStoredLanguage(),
+        language: chatLanguageRef.current,
       };
 
       if (imageBase64) {
@@ -1332,7 +1372,13 @@ export default function Chat() {
     submitLockRef.current = true;
     setInput("");
 
-    const requestIdentity = getRequestIdentityContext();
+    // ── Auto language detection (chat only, does NOT touch UI language) ──
+    const detected = detectChatLanguage(userText);
+    if (detected) {
+      chatLanguageRef.current = detected; // update only if text is long enough
+    }
+
+    const requestIdentity = getRequestIdentityContext(chatLanguageRef.current);
     const { chatId } = await ensureActiveChat();
     const userMessage: StoredChatMessage = {
       role: "user",
@@ -1452,8 +1498,11 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-purple-950 text-white overflow-hidden selection:bg-pink-500/30 relative" data-mood={mood}>
-      {/* Animated Drifting Mesh Gradient Background */}
-      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+      {/* Animated Drifting Mesh Gradient Background + White Premium Glow */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
+        {/* White Radial Glow for Airy Premium Feel */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.05)_0%,_transparent_70%)] mix-blend-screen" />
+        
         <div
           className="absolute top-[-15%] left-[-20%] w-[75vw] h-[75vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-1"
           style={{ background: 'var(--mood-blob-1)' }}
@@ -1474,7 +1523,7 @@ export default function Chat() {
             animate={{ width: 260, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="h-full bg-white/[0.05] border-r border-white/15 flex flex-col hidden md:flex backdrop-blur-3xl z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
+            className="h-full bg-black/20 border-r border-white/10 flex flex-col hidden md:flex backdrop-blur-3xl z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]"
           >
             <div className="p-4 flex items-center justify-between border-b border-white/5">
               <div className="flex items-center gap-2 text-pink-400">
@@ -1527,21 +1576,23 @@ export default function Chat() {
       </AnimatePresence>
 
       <div className="flex-1 flex flex-col h-full relative z-10" style={{ isolation: 'isolate' }}>
-        <header className="h-14 flex items-center justify-between px-4 border-b border-white/15 bg-white/[0.05] backdrop-blur-3xl sticky top-0 z-20 shadow-[0_8px_32px_0_rgba(0,0,0,0.37)]">
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            aria-label={t.header.toggleSidebar}
-            className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+        <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none">
+          <div className="flex items-center gap-4 pointer-events-auto">
+            <button
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              aria-label={t.header.toggleSidebar}
+              className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>
-            <Heart className="w-5 h-5 fill-current" />
-            Saheli AI
+            <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>
+              <Heart className="w-5 h-5 fill-current" />
+              Saheli AI
+            </div>
           </div>
 
-          <div className={headerGlassPillClass}>
+          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-5 py-2 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] pointer-events-auto">
             <button
               type="button"
               onClick={() => {
@@ -1552,16 +1603,15 @@ export default function Chat() {
                 }
               }}
               aria-label={isMuted ? t.header.unmuteVoice : t.header.muteVoice}
-              className={voiceButtonClass}
+              className="group relative flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-all hover:text-white"
             >
-              <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
-                <span className="absolute h-8 w-8 rounded-full bg-white/15 blur-md" />
-                <Sparkles className="h-4.5 w-4.5 text-rose-100/90 drop-shadow-[0_0_12px_rgba(255,255,255,0.7)]" />
+              <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                <span className="absolute h-6 w-6 rounded-full bg-white/5 blur-sm" />
               </span>
               {isMuted ? (
-                <VolumeX className="h-4.5 w-4.5 drop-shadow-[0_0_10px_rgba(255,255,255,0.24)]" />
+                <VolumeX className="h-[18px] w-[18px] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" />
               ) : (
-                <Volume2 className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(255,204,229,0.55)]" />
+                <Volume2 className="h-[18px] w-[18px] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]" />
               )}
               <span className={headerTooltipClass}>{isMuted ? t.header.voiceOff : t.header.voiceOn}</span>
             </button>
@@ -1571,58 +1621,43 @@ export default function Chat() {
                 <button
                   type="button"
                   aria-label={t.header.memory}
-                  className={memoryButtonClass}
+                  className="group relative flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-all hover:text-white"
                 >
-                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    <span className="absolute h-8 w-8 rounded-full bg-fuchsia-400/20 blur-md" />
-                    <Sparkles className="h-4.5 w-4.5 text-fuchsia-200/90 drop-shadow-[0_0_16px_rgba(216,180,254,0.75)]" />
+                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                    <span className="absolute h-6 w-6 rounded-full bg-white/5 blur-sm" />
                   </span>
-                  <Brain className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(216,180,254,0.65)]" />
+                  <Brain className={`h-[18px] w-[18px] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] ${memoryEnabled || memoryMenuOpen ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]" : ""}`} />
                   <span className={headerTooltipClass}>{t.header.memory}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                sideOffset={10}
-                className="w-[min(26rem,calc(100vw-1rem))] rounded-[28px] border border-white/12 bg-[#140c27]/90 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.5)] backdrop-blur-3xl"
+                sideOffset={14}
+                className="w-[min(26rem,calc(100vw-1rem))] rounded-[32px] border border-white/20 bg-[rgba(255,255,255,0.05)] p-4 text-white shadow-[0_32px_80px_rgba(0,0,0,0.5),inset_0_0_0_1px_rgba(255,255,255,0.1)] backdrop-blur-[40px]"
                 onCloseAutoFocus={(event) => event.preventDefault()}
               >
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
-                  <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-4">
+                  <div className="flex items-center justify-between px-2">
                     <div>
-                      <p className="text-xs uppercase tracking-[0.28em] text-white/35">{t.memoryMenu.title}</p>
-                      <h3 className="mt-1 text-sm font-semibold text-white">{t.memoryMenu.heading}</h3>
+                      <h3 className="text-lg font-semibold tracking-tight text-white/90">{t.memoryMenu.heading}</h3>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/40">{t.memoryMenu.title}</p>
                     </div>
-                    <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.2em] text-white/45">
-                      {memoryEnabled ? t.common.on : t.common.off}
-                    </div>
+                    <label className="relative inline-flex cursor-pointer items-center">
+                      <input type="checkbox" className="peer sr-only" checked={memoryEnabled} onChange={(e) => handleMemoryToggle(e.target.checked)} />
+                      <div className="peer h-6 w-11 rounded-full bg-white/10 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-white/10 after:bg-white after:transition-all after:content-[''] peer-checked:bg-gradient-to-r peer-checked:from-pink-500 peer-checked:to-purple-500 peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300/50" />
+                    </label>
                   </div>
 
-                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-white">{t.memoryMenu.summaryTitle}</p>
-                        <p className="mt-1 text-xs text-white/45">
-                          {memoryEnabled ? t.memoryMenu.summaryOn : t.memoryMenu.summaryOff}
-                        </p>
-                      </div>
-                      <Switch checked={memoryEnabled} onCheckedChange={handleMemoryToggle} />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-white">{t.memoryMenu.visibleTitle}</p>
-                        <p className="mt-1 text-xs text-white/45">{t.memoryMenu.visibleHint}</p>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-medium text-white/80">{t.memoryMenu.visibleTitle}</p>
+                      <div className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/60">
                         {memoryEntries.length}
                       </div>
                     </div>
 
                     {memoryEntries.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-white/10 px-4 py-5 text-center text-xs text-white/40">
+                      <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-xs text-white/40">
                         {t.memoryMenu.emptyVisible}
                       </div>
                     ) : (
@@ -1630,18 +1665,18 @@ export default function Chat() {
                         {memoryEntries.map((entry) => (
                           <div
                             key={entry.id}
-                            className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs text-white/85"
+                            className="group flex max-w-full relative overflow-hidden items-center rounded-2xl border border-white/10 bg-white/5 py-1.5 pl-3 pr-8 text-xs text-white/80 transition hover:bg-white/10"
                           >
                             <span className="truncate">
-                              <span className="text-white/45">{entry.label}:</span> {entry.value}
+                              <span className="text-white/40">{entry.label}:</span> {entry.value}
                             </span>
                             <button
                               type="button"
                               onClick={() => void handleDeleteMemoryEntry(entry)}
-                              className="rounded-full p-0.5 text-white/45 transition hover:bg-white/10 hover:text-pink-200"
+                              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-white/30 transition hover:bg-rose-500/20 hover:text-rose-400"
                               aria-label={formatText(t.aria.deleteLabel, { label: entry.label })}
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <X className="h-3 w-3" />
                             </button>
                           </div>
                         ))}
@@ -1649,26 +1684,23 @@ export default function Chat() {
                     )}
                   </div>
 
-                  <div className="mt-4 rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-white">{t.memoryMenu.savedMomentsTitle}</p>
-                        <p className="mt-1 text-xs text-white/45">{t.memoryMenu.savedMomentsHint}</p>
-                      </div>
-                      <div className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-white/40">
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="text-sm font-medium text-white/80">{t.memoryMenu.savedMomentsTitle}</p>
+                      <div className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/60">
                         {memoryMoments.length}
                       </div>
                     </div>
 
                     {memoryMoments.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-white/40">
-                        <ImageIcon className="mb-2 h-5 w-5" />
+                      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/10 p-6 text-center text-xs text-white/40">
+                        <ImageIcon className="mb-2 h-5 w-5 opacity-50" />
                         {t.memoryMenu.emptySavedMoments}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <div className="grid grid-cols-3 gap-2">
                         {memoryMoments.map((moment) => (
-                          <div key={moment.id} className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                          <div key={moment.id} className="group relative overflow-hidden rounded-[18px] border border-white/10">
                             <button
                               type="button"
                               onClick={() => setSelectedMemoryImage(moment.imageDataUrl)}
@@ -1677,28 +1709,42 @@ export default function Chat() {
                               <img
                                 src={moment.imageDataUrl}
                                 alt={t.memoryMenu.savedMomentsTitle}
-                                className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                               />
                             </button>
                             <button
                               type="button"
                               onClick={() => void handleDeleteMemoryMoment(moment.id)}
-                              className="absolute right-2 top-2 rounded-full bg-black/45 p-1 text-white/80 opacity-0 transition group-hover:opacity-100 hover:bg-pink-500/70"
+                              className="absolute right-1.5 top-1.5 rounded-full bg-black/40 p-1 text-white opacity-0 backdrop-blur-md transition hover:bg-rose-500 hover:text-white group-hover:opacity-100"
                               aria-label={t.aria.deleteSavedMoment}
                             >
-                              <X className="h-3.5 w-3.5" />
+                              <X className="h-3 w-3" />
                             </button>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-
+                  
                   {memoryStatus ? (
-                    <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65">
+                    <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-center text-[10px] uppercase tracking-wider text-white/50">
                       {memoryStatus}
                     </div>
                   ) : null}
+
+                  {(memoryEntries.length > 0 || memoryMoments.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                         // Quick way to clear all memory visually
+                         memoryEntries.forEach((entry) => void handleDeleteMemoryEntry(entry));
+                         memoryMoments.forEach((moment) => void handleDeleteMemoryMoment(moment.id));
+                      }}
+                      className="mt-2 w-full rounded-full border border-rose-500/30 bg-rose-500/10 py-2.5 text-xs font-semibold text-rose-300 transition-all hover:bg-rose-500/20 hover:shadow-[0_0_20px_rgba(225,29,72,0.2)]"
+                    >
+                      Clear Memory
+                    </button>
+                  )}
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1708,267 +1754,236 @@ export default function Chat() {
                 <button
                   type="button"
                   aria-label={t.header.language}
-                  className={languageButtonClass}
+                  className="group relative flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-all hover:text-white"
                 >
-                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    <span className="absolute h-8 w-8 rounded-full bg-cyan-300/20 blur-md" />
-                    <Sparkles className="h-4.5 w-4.5 text-pink-100/90 drop-shadow-[0_0_16px_rgba(125,211,252,0.65)]" />
+                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                    <span className="absolute h-6 w-6 rounded-full bg-white/5 blur-sm" />
                   </span>
-                  <Globe className="h-4.5 w-4.5 drop-shadow-[0_0_14px_rgba(125,211,252,0.55)]" />
+                  <Globe className={`h-[18px] w-[18px] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] ${languageMenuOpen ? "text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]" : ""}`} />
                   <span className={headerTooltipClass}>{t.languageNames[language]}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                sideOffset={10}
-                className="w-[min(18rem,calc(100vw-1.5rem))] rounded-3xl border border-white/12 bg-[#1b1131]/85 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.45)] backdrop-blur-3xl"
+                sideOffset={14}
+                className="w-40 rounded-[24px] border border-white/20 bg-[rgba(255,255,255,0.05)] p-2 text-white shadow-[0_32px_80px_rgba(0,0,0,0.5)] backdrop-blur-[40px]"
               >
-                <div className="mb-3">
-                  <p className="text-xs uppercase tracking-[0.28em] text-white/35">{t.languageMenu.title}</p>
-                  <p className="mt-1 text-sm text-white/75">{t.languageMenu.description}</p>
-                </div>
-                <div className="space-y-2">
+                <div className="flex flex-col gap-1">
                   <button
                     type="button"
                     onClick={() => handleLanguageChange("hinglish")}
-                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                    className={`flex w-full items-center justify-between rounded-[18px] px-3 py-2.5 text-sm font-medium transition-all ${
                       language === "hinglish"
-                        ? "border-pink-400/40 bg-gradient-to-r from-purple-600/25 via-pink-600/20 to-purple-600/25 text-white"
-                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                        ? "bg-gradient-to-r from-pink-500/60 to-purple-500/60 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]"
+                        : "text-white/60 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <div>
-                      <div className="font-medium">{t.languageMenu.hinglishTitle}</div>
-                      <div className="text-xs text-white/45">{t.languageMenu.hinglishDescription}</div>
-                    </div>
-                    {language === "hinglish" ? <Check className="h-4 w-4 text-pink-200" /> : null}
+                    <span>{t.languageMenu.hinglishTitle}</span>
+                    {language === "hinglish" && <Check className="h-3.5 w-3.5" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLanguageChange("hindi")}
-                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                    className={`flex w-full items-center justify-between rounded-[18px] px-3 py-2.5 text-sm font-medium transition-all ${
                       language === "hindi"
-                        ? "border-fuchsia-400/40 bg-fuchsia-500/14 text-white"
-                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                        ? "bg-gradient-to-r from-pink-500/60 to-purple-500/60 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]"
+                        : "text-white/60 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <div>
-                      <div className="font-medium">{t.languageMenu.hindiTitle}</div>
-                      <div className="text-xs text-white/45">{t.languageMenu.hindiDescription}</div>
-                    </div>
-                    {language === "hindi" ? <Check className="h-4 w-4 text-fuchsia-200" /> : null}
+                    <span>{t.languageMenu.hindiTitle}</span>
+                    {language === "hindi" && <Check className="h-3.5 w-3.5" />}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleLanguageChange("english")}
-                    className={`flex w-full items-center justify-between rounded-2xl border px-3 py-3 text-left text-sm transition ${
+                    className={`flex w-full items-center justify-between rounded-[18px] px-3 py-2.5 text-sm font-medium transition-all ${
                       language === "english"
-                        ? "border-cyan-400/40 bg-cyan-500/14 text-white"
-                        : "border-white/10 bg-white/[0.04] text-white/70 hover:border-white/20 hover:bg-white/[0.08]"
+                        ? "bg-gradient-to-r from-pink-500/60 to-purple-500/60 text-white shadow-[0_0_15px_rgba(236,72,153,0.3)]"
+                        : "text-white/60 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <div>
-                      <div className="font-medium">{t.languageMenu.englishTitle}</div>
-                      <div className="text-xs text-white/45">{t.languageMenu.englishDescription}</div>
-                    </div>
-                    {language === "english" ? <Check className="h-4 w-4 text-cyan-200" /> : null}
+                    <span>{t.languageMenu.englishTitle}</span>
+                    {language === "english" && <Check className="h-3.5 w-3.5" />}
                   </button>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <div className="mx-1 h-5 w-px bg-white/20" />
 
             <DropdownMenu open={profileMenuOpen} onOpenChange={setProfileMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
                   aria-label={t.header.profile}
-                  className={profileButtonClass}
+                  className="group relative ml-1 flex items-center justify-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none"
                 >
-                  <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-all duration-300 group-hover:opacity-100">
-                    <span className="absolute h-8 w-8 rounded-full bg-amber-200/20 blur-md" />
-                    <Sparkles className="h-4.5 w-4.5 text-amber-100/90 drop-shadow-[0_0_15px_rgba(253,230,138,0.75)]" />
-                  </span>
-                  <Avatar className="relative z-10 h-7 w-7 border border-white/15 shadow-[0_0_14px_rgba(255,244,214,0.35)]">
+                  <Avatar className="h-[26px] w-[26px] border border-white/20 shadow-[0_0_10px_rgba(255,255,255,0.3)]">
                     <AvatarImage src={profileDraftPhotoUrl || undefined} alt={effectiveUserName} className="object-cover" />
-                    <AvatarFallback className="bg-gradient-to-br from-amber-200/40 via-white/30 to-pink-300/35 text-[11px] font-semibold text-white">
+                    <AvatarFallback className="bg-gradient-to-br from-white/20 to-white/5 text-[10px] font-semibold text-white">
                       {profileInitial}
                     </AvatarFallback>
                   </Avatar>
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[rgba(20,10,30,0.8)] bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
                   <span className={headerTooltipClass}>{t.header.profile}</span>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="end"
-                sideOffset={10}
-                className="w-[min(24rem,calc(100vw-1rem))] rounded-[28px] border border-white/12 bg-[#140c27]/90 p-3 text-white shadow-[0_24px_60px_rgba(5,5,15,0.5)] backdrop-blur-3xl"
+                sideOffset={14}
+                className="w-[min(22rem,calc(100vw-1rem))] rounded-[32px] border border-white/10 bg-[rgba(255,255,255,0.03)] p-6 text-white shadow-[0_32px_80px_rgba(0,0,0,0.55),inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-3xl"
                 onCloseAutoFocus={(event) => event.preventDefault()}
               >
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-14 w-14 border border-white/10 shadow-[0_10px_28px_rgba(236,72,153,0.18)]">
-                      <AvatarImage src={profileDraftPhotoUrl || undefined} alt={effectiveUserName} className="object-cover" />
-                      <AvatarFallback className="bg-gradient-to-br from-purple-500/30 to-pink-500/30 text-base font-semibold text-white">
+                {/* ── Modern Circle Avatar ── */}
+                <div className="flex flex-col items-center pt-2 pb-6">
+                  <div className="group relative">
+                    <Avatar className="h-24 w-24 border-[3px] border-pink-300/60 shadow-[0_0_24px_rgba(236,72,153,0.35),0_8px_32px_rgba(0,0,0,0.4)] transition-transform duration-300 group-hover:scale-105">
+                      <AvatarImage src={profilePreviewSource || profileDraftPhotoUrl || undefined} alt={effectiveUserName} className="object-cover" />
+                      <AvatarFallback className="bg-gradient-to-br from-purple-500/35 to-pink-500/35 text-2xl font-light text-white">
                         {profileInitial}
                       </AvatarFallback>
                     </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">{effectiveUserName}</p>
-                      <p className="truncate text-xs text-white/45">{user?.email || t.profileMenu.guestMode}</p>
-                      <p className="mt-1 text-[11px] uppercase tracking-[0.2em] text-pink-200/75">
-                        {isGuest ? t.profileMenu.localProfile : t.profileMenu.cloudProfile}
-                      </p>
-                    </div>
+                    
+                    {/* Camera Upload Overlay */}
+                    <button
+                      type="button"
+                      onClick={() => profileImageInputRef.current?.click()}
+                      className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 backdrop-blur-sm transition-all duration-300 group-hover:opacity-100"
+                      aria-label={t.common.upload}
+                    >
+                      <Camera className="h-8 w-8 text-white/90 drop-shadow-md" />
+                    </button>
+                    <input
+                      ref={profileImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      aria-label="Upload profile image"
+                      onChange={handleProfileImageSelect}
+                    />
+
+                    {/* Online Status Dot */}
+                    <span className="absolute bottom-1 right-1 h-5 w-5 rounded-full border-4 border-[#120a1f] bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]" />
                   </div>
 
-                  <div className="mt-4 space-y-3">
-                    <div>
-                      <label className="mb-1.5 block text-[11px] uppercase tracking-[0.22em] text-white/40">{t.profileMenu.changeName}</label>
+                  {/* ── Name Inline Editor ── */}
+                  <div className="mt-5 w-full">
+                    <div className="group relative mx-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-transparent px-4 py-1.5 transition-all hover:border-white/10 hover:bg-white/5 focus-within:border-pink-300/30 focus-within:bg-white/[0.08] focus-within:shadow-[0_0_15px_rgba(236,72,153,0.15)] focus-within:hover:border-pink-300/30 focus-within:hover:bg-white/[0.08]">
                       <input
                         type="text"
                         value={profileDraftName}
                         onChange={(event) => setProfileDraftName(event.target.value)}
                         placeholder={t.profileMenu.enterYourName}
-                        className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-pink-400/35 focus:bg-white/[0.08]"
+                        className="w-full min-w-[120px] bg-transparent text-center text-lg font-semibold text-white/90 outline-none placeholder:text-white/20"
                       />
+                      <button 
+                        type="button" 
+                        onClick={() => document.activeElement instanceof HTMLElement && document.activeElement.blur()} 
+                        className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100"
+                        aria-label="Save Name"
+                      >
+                         <Check className="h-4 w-4 text-pink-300 drop-shadow-[0_0_8px_rgba(236,72,153,0.8)]" />
+                      </button>
                     </div>
+                    <p className="mt-1 text-center text-xs text-white/40">
+                      {user?.email || t.profileMenu.guestMode}
+                    </p>
+                  </div>
+                </div>
 
+                {profileImageSource ? (
+                  <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
                     <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <label className="block text-[11px] uppercase tracking-[0.22em] text-white/40">{t.profileMenu.profilePic}</label>
-                        <button
-                          type="button"
-                          onClick={() => profileImageInputRef.current?.click()}
-                          className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/80 transition hover:border-pink-400/35 hover:text-white"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                          {t.common.upload}
-                        </button>
+                      <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-white/40">
+                        <span>{t.profileMenu.zoom}</span>
+                        <span>{profileCropZoom.toFixed(1)}x</span>
                       </div>
                       <input
-                        ref={profileImageInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleProfileImageSelect}
+                        type="range"
+                        min="1"
+                        max="3"
+                        step="0.1"
+                        value={profileCropZoom}
+                        onChange={(event) => setProfileCropZoom(Number(event.target.value))}
+                        className="w-full accent-pink-400"
+                        aria-label="Zoom"
                       />
-
-                      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-3">
-                        <div className="mx-auto h-[208px] w-[208px] overflow-hidden rounded-[28px] border border-white/10 bg-[#12091f] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                          {profilePreviewSource && profileImageMeta ? (
-                            <div className="relative h-full w-full overflow-hidden">
-                              <img
-                                src={profilePreviewSource}
-                                alt={t.profileMenu.profileCropPreviewAlt}
-                                className="absolute max-w-none select-none"
-                                style={{
-                                  width: `${previewWidth}px`,
-                                  height: `${previewHeight}px`,
-                                  left: `${(PROFILE_PREVIEW_SIZE - previewWidth) / 2 + previewOffsetX}px`,
-                                  top: `${(PROFILE_PREVIEW_SIZE - previewHeight) / 2 + previewOffsetY}px`,
-                                }}
-                              />
-                            </div>
-                          ) : profilePreviewSource ? (
-                            <img
-                              src={profilePreviewSource}
-                              alt={t.profileMenu.profilePreviewAlt}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-purple-500/12 to-pink-500/12 text-white/40">
-                              <UserCircle2 className="h-16 w-16" />
-                            </div>
-                          )}
-                        </div>
-
-                        {profileImageSource ? (
-                          <div className="mt-3 space-y-3">
-                            <div>
-                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>{t.profileMenu.zoom}</span>
-                                <span>{profileCropZoom.toFixed(1)}x</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="1"
-                                max="3"
-                                step="0.1"
-                                value={profileCropZoom}
-                                onChange={(event) => setProfileCropZoom(Number(event.target.value))}
-                                className="w-full accent-pink-400"
-                              />
-                            </div>
-                            <div>
-                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>{t.profileMenu.horizontal}</span>
-                                <span>{profileCropX}</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="-100"
-                                max="100"
-                                step="1"
-                                value={profileCropX}
-                                onChange={(event) => setProfileCropX(Number(event.target.value))}
-                                className="w-full accent-pink-400"
-                              />
-                            </div>
-                            <div>
-                              <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-white/35">
-                                <span>{t.profileMenu.vertical}</span>
-                                <span>{profileCropY}</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="-100"
-                                max="100"
-                                step="1"
-                                value={profileCropY}
-                                onChange={(event) => setProfileCropY(Number(event.target.value))}
-                                className="w-full accent-pink-400"
-                              />
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
                     </div>
-
-                    {profileStatus ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/65">
-                        {profileStatus}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-white/40">
+                          <span>{t.profileMenu.horizontal}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-100"
+                          max="100"
+                          step="1"
+                          value={profileCropX}
+                          onChange={(event) => setProfileCropX(Number(event.target.value))}
+                          className="w-full accent-pink-400"
+                          aria-label="Horizontal offset"
+                        />
                       </div>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      onClick={() => void handleSaveProfile()}
-                      disabled={isSavingProfile}
-                      className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(192,38,211,0.25)] transition hover:scale-[1.01] hover:from-purple-500 hover:to-pink-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isSavingProfile ? t.common.saving : t.profileMenu.saveProfile}
-                    </button>
-
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => void handlePasswordReset()}
-                        disabled={!user?.email}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-purple-400/30 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <KeyRound className="h-4 w-4" />
-                        {t.profileMenu.changePassword}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => void handleLogout()}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80 transition hover:border-pink-400/30 hover:bg-white/[0.08] hover:text-white"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        {t.profileMenu.logout}
-                      </button>
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-white/40">
+                          <span>{t.profileMenu.vertical}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-100"
+                          max="100"
+                          step="1"
+                          value={profileCropY}
+                          onChange={(event) => setProfileCropY(Number(event.target.value))}
+                          className="w-full accent-pink-400"
+                          aria-label="Vertical offset"
+                        />
+                      </div>
                     </div>
                   </div>
+                ) : null}
+
+                {/* Status */}
+                {profileStatus ? (
+                  <div className="mb-4 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-center text-xs text-white/70">
+                    {profileStatus}
+                  </div>
+                ) : null}
+
+                {/* Save Button */}
+                <button
+                  type="button"
+                  onClick={() => void handleSaveProfile()}
+                  disabled={isSavingProfile}
+                  className="mb-6 w-full rounded-2xl bg-gradient-to-r from-purple-600 to-pink-600 px-4 py-3.5 text-sm font-semibold text-white shadow-[0_4px_24px_rgba(236,72,153,0.4)] transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_8px_32px_rgba(236,72,153,0.6)] disabled:opacity-50 disabled:hover:scale-100 neon-pulse-btn"
+                >
+                  {isSavingProfile ? t.common.saving : t.profileMenu.saveProfile}
+                </button>
+
+                {/* Bottom Actions Row */}
+                <div className="flex items-center justify-center gap-6 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void handlePasswordReset()}
+                    disabled={!user?.email}
+                    className="group relative flex items-center justify-center rounded-full p-2.5 text-white/40 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-30"
+                  >
+                    <KeyRound className="h-5 w-5 transition-transform group-hover:scale-110" />
+                    <span className="pointer-events-none absolute -top-8 whitespace-nowrap rounded-lg bg-black/60 px-2.5 py-1 text-[10px] font-medium text-white opacity-0 backdrop-blur-md transition-all group-hover:-top-10 group-hover:opacity-100">
+                      {t.profileMenu.changePassword}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleLogout()}
+                    className="group relative flex items-center justify-center rounded-full p-2.5 text-white/40 transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    <LogOut className="h-5 w-5 transition-transform group-hover:scale-110" />
+                    <span className="pointer-events-none absolute -top-8 whitespace-nowrap rounded-lg bg-black/60 px-2.5 py-1 text-[10px] font-medium text-white opacity-0 backdrop-blur-md transition-all group-hover:-top-10 group-hover:opacity-100">
+                      {t.profileMenu.logout}
+                    </span>
+                  </button>
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -2000,19 +2015,17 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="p-4 md:p-6 bg-gradient-to-t from-purple-950/90 to-transparent z-10">
-          <div className="max-w-3xl mx-auto relative group">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-purple-500 to-pink-500 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-500"></div>
+        <div className="flex-none p-4 max-w-4xl mx-auto w-full group relative mt-auto z-10 backdrop-blur-sm pt-8">
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-white/[0.05] border border-purple-500/40 backdrop-blur-3xl rounded-3xl overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)] transition-all duration-300"
+              className="relative flex items-center bg-white/10 border border-white/30 backdrop-blur-3xl rounded-full overflow-visible shadow-[0_10px_30px_rgba(0,0,0,0.5),0_0_15px_rgba(255,255,255,0.06)] transition-all duration-300"
             >
               <input
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={inputPlaceholder}
-                className="flex-1 bg-transparent px-6 py-3.5 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 neon-border-input border-none"
+                className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/50 focus:outline-none font-sans focus:ring-0 border-none"
                 style={{ fontSize: "15px" }}
               />
               <button
@@ -2022,19 +2035,19 @@ export default function Chat() {
                 className={`p-2 ml-1 rounded-full transition-all ${
                   isListening
                     ? "bg-pink-500/20 text-pink-400 animate-pulse"
-                    : "bg-white/10 text-white/70 hover:text-white/90 hover:bg-white/15"
+                    : "bg-white/5 text-white/50 hover:text-white hover:bg-white/15"
                 }`}
               >
-                <Mic className="w-4.5 h-4.5" />
+                <Mic className="w-5 h-5" />
               </button>
               <button
                 type="submit"
                 aria-label={t.composer.sendMessage}
                 disabled={!input.trim() || isLoading}
-                className="p-3 mr-2 transition-all"
+                className="p-2 mr-2 transition-all"
               >
-                <div className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 p-2.5 rounded-xl text-white neon-pulse-btn hover:scale-110 transition-transform disabled:opacity-50">
-                  <Send className="w-5 h-5" />
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 p-2.5 rounded-full text-white shadow-[0_4px_16px_rgba(236,72,153,0.3)] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none">
+                  <Send className="w-4.5 h-4.5" />
                 </div>
               </button>
             </form>
@@ -2053,15 +2066,15 @@ export default function Chat() {
                   accept="image/*"
                   capture="user"
                   className="hidden"
+                  aria-label="Capture photo"
                   onChange={handleMobileCameraChange}
                 />
               </div>
             )}
-            <div className="text-center mt-2 text-[10px] tracking-widest uppercase text-white/30">
+            <div className="text-center mt-3 text-[10px] tracking-widest uppercase text-white/40 font-medium pb-2">
               {t.composer.footer}
             </div>
           </div>
-        </div>
 
         <AnimatePresence>
           {selectedMemoryImage ? (

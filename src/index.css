@@ -310,7 +310,7 @@
   width: 4px;
   height: 4px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(236, 72, 153, 0.9), rgba(168, 85, 247, 0.6));
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.9), rgba(255, 182, 193, 0.6));
   pointer-events: none;
   animation: star-fade 0.8s ease-out forwards;
   z-index: 100;
@@ -382,3 +382,14 @@
 .neon-card-border {
   animation: neon-card-border 4s ease-in-out infinite;
 }
+
+/* Save Profile button soft gradient pulse */
+@keyframes profile-save-shimmer {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.profile-save-pulse {
+  animation: profile-save-shimmer 3s ease-in-out infinite;
+}
+
