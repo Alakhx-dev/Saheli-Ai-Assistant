@@ -10,11 +10,11 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { auth, storage, db } from "@/lib/firebase";
+import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
-import { addDoc, collection, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { FALLBACK_MESSAGE, sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
@@ -44,6 +44,7 @@ import {
   setMemoryEnabled,
   type MemoryProfile,
 } from "@/lib/memory";
+import { saveImageMemoryDB, saveMessageToDB } from "@/lib/chatService";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
@@ -595,14 +596,20 @@ function logCameraFailure(error: unknown) {
   console.warn("Camera capture failed", error);
 }
 
-// Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
-function ScrollFadeMessageItem({ msg, index, isNew }: { msg: ChatMessage; index: number; isNew: boolean }) {
-  const itemRef = useRef<HTMLDivElement>(null);
+function getMessageKey(msg: ChatMessage, index: number) {
+  const possibleId = (msg as ChatMessage & { id?: string }).id;
+  if (possibleId) {
+    return possibleId;
+  }
+  return `${msg.role}-${index}-${msg.content.length}`;
+}
 
-  return (
-    <motion.div
-      ref={itemRef}
-      key={index}
+// Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
+const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean }>(
+  function ScrollFadeMessageItem({ msg, isNew }, ref) {
+    return (
+      <motion.div
+      ref={ref}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
@@ -626,8 +633,9 @@ function ScrollFadeMessageItem({ msg, index, isNew }: { msg: ChatMessage; index:
         {msg.content}
       </div>
     </motion.div>
-  );
-}
+    );
+  },
+);
 
 // Scroll Fade Message List Container
 const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
@@ -649,7 +657,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
     <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" style={{ overflowAnchor: "none", scrollBehavior: "smooth" }}>
       <AnimatePresence mode="popLayout">
         {messages.map((msg, idx) => (
-          <ScrollFadeMessageItem key={idx} msg={msg} index={idx} isNew={idx >= lastMsgCount} />
+          <ScrollFadeMessageItem key={getMessageKey(msg, idx)} msg={msg} isNew={idx >= lastMsgCount} />
         ))}
 
         {isLoading && (
@@ -700,21 +708,6 @@ const BackgroundComponent = memo(function BackgroundComponent({ mood }: { mood: 
   );
 });
 
-// --- NEW CHAT SAVE SYSTEM ---
-async function saveMessageToDB(content: string, role: string, userId?: string) {
-  if (!userId) return;
-  try {
-    await addDoc(collection(db, "chats"), {
-      userId,
-      content,
-      role,
-      createdAt: serverTimestamp()
-    });
-  } catch (err) {
-    console.warn("Failed to save message to new DB structure", err);
-  }
-}
-
 function saveLocal(message: { content: string, role: string }) {
   try {
     const chats = JSON.parse(localStorage.getItem("chats") || "[]");
@@ -725,63 +718,15 @@ function saveLocal(message: { content: string, role: string }) {
   }
 }
 
-// --- NEW MEMORY EXTRACT SYSTEM ---
-function autoMemoryExtract(text: string) {
-  const memory: Array<{ type: string, value: string }> = [];
-  const lowerText = text.toLowerCase();
-
-  // Name extraction
-  const nameMatch = lowerText.match(/(?:mera naam|my name is)\s+([^.!?\n]+)/i);
-  if (nameMatch) {
-    memory.push({ type: "name", value: nameMatch[1].trim() });
-  }
-
-  // Preference extraction
-  if (lowerText.includes("mujhe pasand")) {
-    memory.push({ type: "preference", value: text });
-  }
-  
-  // Custom manual memory
-  if (lowerText.includes("yaad rakh")) {
-    memory.push({ type: "custom", value: text });
-  }
-
-  return memory;
-}
-
-async function saveMemoryToDB(memoryItem: { type: string, value: string }, userId?: string) {
-  if (!userId) return;
-  try {
-    await addDoc(collection(db, "memory"), {
-      userId,
-      ...memoryItem,
-      createdAt: serverTimestamp()
-    });
-  } catch (err) {
-    console.warn("Failed to save auto memory", err);
-  }
-}
-
-// --- IMAGE MEMORY SAVE ---
-async function saveImageMemoryDB(imageUrl: string, userId?: string) {
-  if (!userId) return;
-  try {
-    await addDoc(collection(db, "imageMemory"), {
-      userId,
-      imageUrl,
-      createdAt: serverTimestamp()
-    });
-  } catch (err) {
-    console.warn("Failed to save image memory", err);
-  }
-}
-
-export async function deleteChatDoc(id: string) {
-  await deleteDoc(doc(db, "chats", id));
-}
-
-export async function deleteImageMemoryDoc(id: string) {
-  await deleteDoc(doc(db, "imageMemory", id));
+function isFirestoreConnectivityError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code ?? "") : "";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return (
+    code.includes("unavailable") ||
+    code.includes("offline") ||
+    code.includes("network") ||
+    message.includes("client is offline")
+  );
 }
 
 export default function Chat() {
@@ -809,6 +754,7 @@ export default function Chat() {
   const [memoryHydrated, setMemoryHydrated] = useState(false);
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const [dbStatus, setDbStatus] = useState<string | null>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
   const effectiveUserName = profileName.trim() || (isGuest ? CREATOR_NAME : "User");
   const identityContext: UserIdentityContext = {
@@ -842,6 +788,9 @@ export default function Chat() {
   const mobileVisionRequestIdRef = useRef(0);
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const navigate = useNavigate();
+  const { chatId: routeChatId } = useParams<{ chatId?: string }>();
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const currentChatIdRef = useRef<string | null>(null);
   const setStoreUser = useAppStore((state) => state.setUser);
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
@@ -863,6 +812,14 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    currentChatIdRef.current = currentChatId;
+  }, [currentChatId]);
 
   useEffect(() => {
     chatSessionsRef.current = chatSessions;
@@ -939,6 +896,106 @@ export default function Chat() {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    const nextChatId = routeChatId ?? sessionStorage.getItem(ACTIVE_CHAT_SESSION_KEY);
+    if (!nextChatId) {
+      return;
+    }
+
+    if (currentChatIdRef.current === nextChatId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const hydrateActiveChat = async () => {
+      try {
+        const storedMessages = await loadChatMessages(nextChatId, user);
+        if (cancelled) {
+          return;
+        }
+
+        const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
+        setCurrentChatId(nextChatId);
+        setMessages(normalizedMessages);
+        messagesRef.current = normalizedMessages;
+        setPendingMobileVisionRequest(null);
+        pendingMobileVisionRequestRef.current = null;
+        setStoreChats(
+          chatSessionsRef.current.map((chat: any) =>
+            chat.id === nextChatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] },
+          ),
+        );
+        setDbStatus(null);
+      } catch (error) {
+        console.error("Failed to hydrate active chat", error);
+        if (!cancelled && isFirestoreConnectivityError(error)) {
+          setDbStatus("Connecting to database...");
+        }
+      }
+    };
+
+    void hydrateActiveChat();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeChatId, setStoreChats, user]);
+
+  useEffect(() => {
+    if (!currentChatId || isGuest || !user?.uid) {
+      return;
+    }
+
+    const messagesQuery = query(collection(db, "chats", currentChatId, "messages"), orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(
+      messagesQuery,
+      (snapshot) => {
+        if (currentChatIdRef.current !== currentChatId) {
+          return;
+        }
+
+        const realtimeMessages = snapshot.docs.map((messageDoc) => {
+          const data = messageDoc.data();
+          return {
+            role: data.role === "user" ? "user" : "model",
+            content: typeof data.content === "string" ? data.content : "",
+          } as ChatMessage;
+        });
+
+        if (realtimeMessages.length === 0 && messagesRef.current.length > 0) {
+          return;
+        }
+
+        setMessages(realtimeMessages);
+        messagesRef.current = realtimeMessages;
+        setStoreChats(
+          chatSessionsRef.current.map((chat: any) =>
+            chat.id === currentChatId ? { ...chat, messages: realtimeMessages } : { ...chat, messages: chat.messages ?? [] },
+          ),
+        );
+        setDbStatus(null);
+      },
+      (error) => {
+        console.error("Chat onSnapshot error:", error);
+        if (String((error as { code?: string }).code ?? "").includes("permission-denied")) {
+          console.error("Firestore permission denied for chat listener");
+        }
+        if (isFirestoreConnectivityError(error)) {
+          setDbStatus("Connecting to database...");
+        }
+        const code = String((error as { code?: string }).code ?? "");
+        if (code.includes("failed-precondition")) {
+          void resetFirestorePersistence().catch((resetError) => {
+            console.error("Failed to reset Firestore persistence", resetError);
+          });
+        }
+      },
+    );
+
+    return () => unsubscribe();
+  }, [currentChatId, isGuest, setStoreChats, user?.uid]);
 
   useEffect(() => {
     if (currentChatId) {
@@ -1080,8 +1137,6 @@ export default function Chat() {
       return;
     }
 
-    console.log("Saving message...", message);
-
     try {
       await saveMessage(user, message);
     } catch (error) {
@@ -1102,8 +1157,6 @@ export default function Chat() {
     if (!user) {
       return;
     }
-
-    console.log("Saving image...", payload.url);
 
     try {
       await saveImage(user, payload);
@@ -1409,8 +1462,10 @@ export default function Chat() {
     setStoreChats(chatSessionsRef.current.map((chat: any) => (
       chat.id === chatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] }
     )));
+    messagesRef.current = normalizedMessages;
     setPendingMobileVisionRequest(null);
     pendingMobileVisionRequestRef.current = null;
+    navigate(`/chat/${chatId}`);
   };
 
   const handleCreateChat = async () => {
@@ -1418,12 +1473,13 @@ export default function Chat() {
       return;
     }
 
-    const chatId = await createChatSession(user);
-    setCurrentChatId(chatId);
+    setCurrentChatId(null);
     setMessages([]);
+    messagesRef.current = [];
     setPendingMobileVisionRequest(null);
     pendingMobileVisionRequestRef.current = null;
-    await refreshChatSessions(chatId);
+    navigate("/chat");
+    await refreshChatSessions(null);
   };
 
   const handleDeleteChat = async (chatId: string) => {
@@ -1436,6 +1492,8 @@ export default function Chat() {
     if (currentChatId === chatId) {
       setCurrentChatId(null);
       setMessages([]);
+      messagesRef.current = [];
+      navigate("/chat", { replace: true });
     }
 
     await refreshChatSessions(currentChatId === chatId ? null : currentChatId);
@@ -1488,20 +1546,29 @@ export default function Chat() {
   }, [language, refreshChatSessions, user]);
 
   const ensureActiveChat = useCallback(async () => {
-    let chatId = currentChatId;
+    let chatId = currentChatIdRef.current ?? routeChatId ?? null;
 
     if (!chatId) {
       chatId = await createChatSession(user);
       setCurrentChatId(chatId);
+      currentChatIdRef.current = chatId;
     }
 
     return { chatId };
-  }, [currentChatId, user]);
+  }, [routeChatId, user]);
 
   const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
-    await saveChatMessage(chatId, message, user);
-    storeAddMessage(chatId, message);
-    await refreshChatSessions(chatId);
+    try {
+      await saveChatMessage(chatId, message, user);
+      storeAddMessage(chatId, message);
+      await refreshChatSessions(chatId);
+      setDbStatus(null);
+    } catch (error) {
+      if (isFirestoreConnectivityError(error)) {
+        setDbStatus("Connecting to database...");
+      }
+      throw error;
+    }
   }, [refreshChatSessions, storeAddMessage, user]);
 
   const updateStreamingMessage = useCallback((chatId: string, content: string) => {
@@ -1723,10 +1790,21 @@ export default function Chat() {
       content: userText,
       createdAt: Date.now(),
     };
-    await persistChatMessage(chatId, userMessage);
-
-    const nextHistory: ChatMessage[] = [...messages, { role: userMessage.role, content: userMessage.content }];
-    setMessages(nextHistory);
+    const optimisticUserMessage: ChatMessage = { role: userMessage.role, content: userMessage.content };
+    const nextHistory: ChatMessage[] = [...messagesRef.current, optimisticUserMessage];
+    setMessages((prev) => [...prev, optimisticUserMessage]);
+    messagesRef.current = nextHistory;
+    try {
+      await persistChatMessage(chatId, userMessage);
+    } catch (error) {
+      console.error("Failed to persist user message", error);
+      if (isFirestoreConnectivityError(error)) {
+        setDbStatus("Connecting to database...");
+      }
+    }
+    if (routeChatId !== chatId) {
+      navigate(`/chat/${chatId}`);
+    }
 
     if (nextHistory.length === 1) {
       // First message — generate title
@@ -1964,7 +2042,7 @@ export default function Chat() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
-          {messages.length === 0 ? (
+          {messages.length === 0 && !isLoading && !submitLockRef.current ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
@@ -1989,6 +2067,11 @@ export default function Chat() {
         </div>
 
         <div className="flex-none p-4 max-w-4xl mx-auto w-full group relative mt-auto z-10 backdrop-blur-sm pt-8">
+            {dbStatus ? (
+              <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+                {dbStatus}
+              </div>
+            ) : null}
             <form
               onSubmit={handleSubmit}
               className="relative flex items-center bg-white/[0.09] border border-white/35 backdrop-blur-[28px] rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(2,6,23,0.55),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-300"
