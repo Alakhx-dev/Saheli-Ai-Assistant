@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { Heart, LogOut, Pencil, Trash2 } from "lucide-react";
+import { DoorOpen, Heart, Pencil, Trash2 } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -15,7 +15,9 @@ interface SidebarProps {
   recentChatsLabel: string;
   noChatsGuestLabel: string;
   noChatsAccountLabel: string;
-  signOutLabel: string;
+  userName: string;
+  userPhotoUrl?: string;
+  userEmail?: string;
   resolveChatTitle: (title: string) => string;
   onCreateChat: () => void | Promise<void>;
   onSelectChat: (chatId: string) => void | Promise<void>;
@@ -139,7 +141,9 @@ export default function Sidebar({
   recentChatsLabel,
   noChatsGuestLabel,
   noChatsAccountLabel,
-  signOutLabel,
+  userName,
+  userPhotoUrl,
+  userEmail,
   resolveChatTitle,
   onCreateChat,
   onSelectChat,
@@ -171,6 +175,8 @@ export default function Sidebar({
     await onRenameChat(chatId, nextTitle);
     handleCancelEdit();
   };
+
+  const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
 
   return (
     <>
@@ -225,14 +231,37 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="border-t border-white/10 p-3">
-        <button
-          onClick={() => void onLogout()}
-          className="flex w-full items-center gap-2 rounded-2xl border border-transparent px-3 py-2 text-sm font-semibold text-white/75 transition hover:border-white/15 hover:bg-white/7 hover:text-white"
+      <div className="mt-auto border-t border-white/10 p-3">
+        <div
+          className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-2 transition hover:bg-white/5"
+          title={userEmail || ""}
         >
-          <LogOut className="h-4 w-4" />
-          {signOutLabel}
-        </button>
+          <div className="flex min-w-0 items-center gap-2">
+            {userPhotoUrl ? (
+              <img
+                src={userPhotoUrl}
+                alt="avatar"
+                className="h-8 w-8 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
+                {profileInitial}
+              </div>
+            )}
+            <span className="max-w-[120px] truncate text-sm font-medium text-white/85">
+              {userName || "User"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onLogout()}
+            className="rounded-md p-1 text-red-400 transition hover:bg-white/5 hover:text-red-500"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <DoorOpen className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       </aside>
     </>

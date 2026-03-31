@@ -15,7 +15,7 @@ import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "
 import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
+import { FALLBACK_MESSAGE, sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -46,6 +46,7 @@ import {
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
+import { useAppStore } from "@/store/app-store";
 
 const SettingsPanel = lazy(() => import("@/components/settings/SettingsPanel"));
 
@@ -734,6 +735,13 @@ export default function Chat() {
   const mobileVisionRequestIdRef = useRef(0);
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const navigate = useNavigate();
+  const setStoreUser = useAppStore((state) => state.setUser);
+  const setStoreChats = useAppStore((state) => state.setChats);
+  const setStoreMemory = useAppStore((state) => state.setMemory);
+  const setStoreSettings = useAppStore((state) => state.setSettings);
+  const storeAddMessage = useAppStore((state) => state.addMessage);
+  const storeUpdateStreamingMessage = useAppStore((state) => state.updateStreamingMessage);
+  const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
   const { unlock, speak, stop } = useVoice(isMuted);
 
   // Speech-to-text: appends recognized speech to current input
@@ -755,7 +763,8 @@ export default function Chat() {
 
   useEffect(() => {
     localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, language);
-  }, [language]);
+    setStoreSettings({ language });
+  }, [language, setStoreSettings]);
 
   useEffect(() => {
     localStorage.setItem(REPLY_LANGUAGE_MODE_STORAGE_KEY, replyLanguageMode);
@@ -772,10 +781,15 @@ export default function Chat() {
       return;
     }
 
+    setStoreSettings({ memoryEnabled });
     void setMemoryEnabled(user, memoryEnabled).catch((error) => {
       console.warn("Failed to persist memory toggle", error);
     });
-  }, [memoryEnabled, memoryHydrated, user]);
+  }, [memoryEnabled, memoryHydrated, setStoreSettings, user]);
+
+  useEffect(() => {
+    setStoreUser(user ?? null);
+  }, [setStoreUser, user]);
 
   useEffect(() => {
     const nextName = user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User");
@@ -811,6 +825,7 @@ export default function Chat() {
 
       chatSessionsRef.current = sessions;
       setChatSessions(sessions);
+      setStoreChats(sessions.map((chat) => ({ ...chat, messages: [] })));
     };
 
     void bootstrapChatHistory();
@@ -839,12 +854,15 @@ export default function Chat() {
           setMemoryProfile(profile);
           setMemoryEnabledState(profile.memoryEnabled);
           setMemoryHydrated(true);
+          setStoreMemory(profile);
+          setStoreSettings({ memoryEnabled: profile.memoryEnabled });
         }
       } catch (error) {
         if (!cancelled) {
           console.warn("Failed to load memory", error);
           setMemoryProfile(createEmptyMemoryProfile());
           setMemoryHydrated(true);
+          setStoreMemory(createEmptyMemoryProfile());
         }
       }
     };
@@ -896,10 +914,12 @@ export default function Chat() {
       const nextMemory = await fetchMemory(user);
       setMemoryProfile(nextMemory);
       setMemoryEnabledState(nextMemory.memoryEnabled);
+      setStoreMemory(nextMemory);
+      setStoreSettings({ memoryEnabled: nextMemory.memoryEnabled });
     } catch (error) {
       console.warn("Failed to refresh memory", error);
     }
-  }, [user]);
+  }, [setStoreMemory, setStoreSettings, user]);
 
   const handleDeleteMemoryChat = async (messageId: string) => {
     if (!window.confirm("Delete this chat memory?")) {
@@ -1214,11 +1234,12 @@ export default function Chat() {
     const sessions = await loadChatSessions(user);
     chatSessionsRef.current = sessions;
     setChatSessions(sessions);
+    setStoreChats(sessions.map((chat) => ({ ...chat, messages: [] })));
 
     if (nextChatId !== undefined) {
       setCurrentChatId(nextChatId);
     }
-  }, [user]);
+  }, [setStoreChats, user]);
 
   const getRequestIdentityContext = useCallback((
     detectedLanguage?: AppLanguage,
@@ -1236,8 +1257,12 @@ export default function Chat() {
     }
 
     const storedMessages = await loadChatMessages(chatId, user);
+    const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
     setCurrentChatId(chatId);
-    setMessages(storedMessages.map(({ role, content }) => ({ role, content })));
+    setMessages(normalizedMessages);
+    setStoreChats(chatSessionsRef.current.map((chat) => (
+      chat.id === chatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] }
+    )));
     setPendingMobileVisionRequest(null);
     pendingMobileVisionRequestRef.current = null;
   };
@@ -1329,8 +1354,103 @@ export default function Chat() {
 
   const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
     await saveChatMessage(chatId, message, user);
+    storeAddMessage(chatId, message);
     await refreshChatSessions(chatId);
-  }, [refreshChatSessions, user]);
+  }, [refreshChatSessions, storeAddMessage, user]);
+
+  const updateStreamingMessage = useCallback((chatId: string, content: string) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      if (!next.length || next[next.length - 1].role !== "model") {
+        next.push({ role: "model", content });
+      } else {
+        next[next.length - 1] = { ...next[next.length - 1], content };
+      }
+      return next;
+    });
+    storeUpdateStreamingMessage(chatId, content);
+  }, [storeUpdateStreamingMessage]);
+
+  const saveFinalMessage = useCallback((chatId: string, content: string) => {
+    setMessages((prev) => {
+      const next = [...prev];
+      if (!next.length || next[next.length - 1].role !== "model") {
+        next.push({ role: "model", content });
+      } else {
+        next[next.length - 1] = { ...next[next.length - 1], content };
+      }
+      return next;
+    });
+    storeSaveFinalMessage(chatId, { role: "model", content });
+  }, [storeSaveFinalMessage]);
+
+  const streamResponse = useCallback(async (
+    prompt: string,
+    chatId: string,
+    history: ChatMessage[],
+    imageBase64?: string,
+    detectedEmotion?: EmotionLabel,
+    requestIdentity?: UserIdentityContext,
+    nextMemoryProfile?: MemoryProfile | null,
+  ) => {
+    if (imageBase64) {
+      return sendMessage(
+        history,
+        imageBase64,
+        detectedEmotion,
+        memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
+        requestIdentity,
+        memoryEnabled ? "enabled" : "disabled",
+      );
+    }
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          messages: history,
+          identity: requestIdentity,
+          memory: memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
+        }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Streaming failed: ${response.status}`);
+      }
+
+      let fullText = "";
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      updateStreamingMessage(chatId, "");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        updateStreamingMessage(chatId, fullText);
+      }
+
+      fullText += decoder.decode();
+      return fullText.trim() || FALLBACK_MESSAGE;
+    } catch {
+      return sendMessage(
+        history,
+        imageBase64,
+        detectedEmotion,
+        memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
+        requestIdentity,
+        memoryEnabled ? "enabled" : "disabled",
+      );
+    }
+  }, [memoryEnabled, updateStreamingMessage]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
@@ -1366,20 +1486,21 @@ export default function Chat() {
       }
 
       lastMsgCountRef.current = request.history.length;
-      const responseText = await sendMessage(
+      const responseText = await streamResponse(
+        request.history[request.history.length - 1]?.content ?? "",
+        request.chatId,
         request.history,
         imageBase64,
         detectedEmotion,
-        memoryEnabled && request.memoryProfile ? buildPromptMemoryContext(request.memoryProfile) : null,
         requestIdentity,
-        memoryEnabled ? "enabled" : "disabled",
+        request.memoryProfile,
       );
+      saveFinalMessage(request.chatId, responseText);
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
-      setMessages(nextHistory);
       if (memoryEnabled) {
         void saveMessage(user, {
           role: "assistant",
@@ -1584,20 +1705,21 @@ export default function Chat() {
             console.warn("Failed to save memory image", error);
           });
       }
-      const responseText = await sendMessage(
+      const responseText = await streamResponse(
+        userText,
+        chatId,
         nextHistory,
         base64Image,
         detectedEmotion,
-        memoryEnabled ? buildPromptMemoryContext(nextMemoryProfile) : null,
         requestIdentity,
-        memoryEnabled ? "enabled" : "disabled",
+        nextMemoryProfile,
       );
+      saveFinalMessage(chatId, responseText);
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
-      setMessages(finalHistory);
       if (memoryEnabled) {
         void saveMessage(user, {
           role: "assistant",
@@ -1658,7 +1780,9 @@ export default function Chat() {
         recentChatsLabel={t.sidebar.recentChats}
         noChatsGuestLabel={t.sidebar.noChatsGuest}
         noChatsAccountLabel={t.sidebar.noChatsAccount}
-        signOutLabel={t.sidebar.signOut}
+        userName={effectiveUserName}
+        userPhotoUrl={profileDraftPhotoUrl || profilePhotoUrl}
+        userEmail={user?.email || undefined}
         resolveChatTitle={(title) => (isDefaultChatTitle(title) ? t.chatTitles.newChat : title)}
         onCreateChat={() => void handleCreateChat()}
         onSelectChat={(chatId) => void handleSelectChat(chatId)}
@@ -1810,13 +1934,7 @@ export default function Chat() {
             </div>
           </div>
 
-        <Suspense
-          fallback={
-            settingsPanelOpen ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 text-sm text-white/80">Loading...</div>
-            ) : null
-          }
-        >
+        <Suspense fallback={null}>
           {settingsPanelOpen ? (
             <SettingsPanel
               open={settingsPanelOpen}
