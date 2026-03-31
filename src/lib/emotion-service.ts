@@ -29,7 +29,8 @@ export async function detectEmotionFromImage(imageBase64: string): Promise<Emoti
     const data = (await response.json()) as EmotionDetectionResponse;
     return data.emotion ?? undefined;
   } catch (error) {
-    console.warn("Emotion detection failed", error);
+    console.error("Emotion detection failed", error);
     return undefined;
   }
 }
+

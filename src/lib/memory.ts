@@ -21,13 +21,10 @@ const CHAT_HISTORY_COLLECTION = "chat_history";
 const IMAGES_COLLECTION = "images";
 const LOCAL_MEMORY_ENABLED_KEY = "memory_enabled_guest";
 
-const MAX_CHAT_HISTORY = 30;
 const MAX_IMAGE_HISTORY = 60;
 const MAX_PREFERENCES = 20;
 const MAX_FACTS = 20;
 const MAX_MEMORY_WORDS = 8;
-const MAX_MEMORY_KEYWORDS = 4;
-const MIN_MEMORY_WORDS = 2;
 
 const GREETING_PATTERN =
   /^(hi|hello|hey|hii|heyy|yo|ok|okay|hmm|hmmm|thik|theek|fine|good|nice|thanks|thank you|sup|kya haal|kaise ho)$/i;
@@ -37,6 +34,8 @@ const EXPLICIT_MEMORY_PATTERN =
   /\b(yaad\s*rakh(?:na)?|remember\s+(?:this|that)|remember|note\s+this|save\s+this|important)\b/i;
 const FORGET_MEMORY_PATTERN =
   /\b(bhool\s*jao|mat\s+yaad\s*rakhna|forget\s+(?:this|that)|don't\s+remember\s+this|dont\s+remember\s+this)\b/i;
+const PERSONAL_SIGNAL_PATTERN =
+  /\b(i\s+am|i'm|my|i\s+like|i\s+love|i\s+prefer|i\s+want|i\s+usually|i\s+often|mera|mujhe|main|har\s+roz)\b/i;
 
 export const STRICT_MEMORY_EXTRACTION_INSTRUCTION =
   "Extract facts ONLY if they are identity (name/age), preferences (likes/dislikes), habits, or explicit remember commands. Ignore greetings, small talk, and temporary status.";
@@ -159,62 +158,6 @@ function passesMemoryValidation(value: string) {
   return count >= 3;
 }
 
-function summarizeToKeywords(content: string) {
-  // Strict instruction equivalent:
-  // "Extract facts ONLY if Identity, Preferences, Habits, or Explicit Commands.
-  // Ignore greetings, small talk, temporary status. Return 3-4 keywords."
-  const text = sanitizeText(content);
-  const lower = text.toLowerCase();
-
-  if (isLowValueText(text) || wordCount(text) < MIN_MEMORY_WORDS) {
-    return undefined;
-  }
-
-  const nameMatch = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,60})/i);
-  if (nameMatch) {
-    const name = toShortPhrase(nameMatch[1], 2);
-    return name ? `Name: ${name}` : undefined;
-  }
-
-  const ageMatch = lower.match(/\b(?:i am|i'm|age|umr)\s*(\d{1,2})\b/i);
-  if (ageMatch) {
-    return `Age: ${ageMatch[1]}`;
-  }
-
-  const likesMatch = text.match(/(?:i\s+like|mujhe\s+pasand\s+hai|mujhe)\s+([^.!?\n]{1,120})(?:\s+pasand\s+hai)?/i);
-  if (likesMatch) {
-    const likes = toShortPhrase(likesMatch[1], MAX_MEMORY_WORDS);
-    return likes ? `Likes: ${likes}` : undefined;
-  }
-
-  const dislikesMatch = text.match(/(?:i\s+don't\s+like|i\s+dislike|mujhe\s+pasand\s+nahi)\s+([^.!?\n]{1,120})/i);
-  if (dislikesMatch) {
-    const dislikes = toShortPhrase(dislikesMatch[1], MAX_MEMORY_WORDS);
-    return dislikes ? `Dislikes: ${dislikes}` : undefined;
-  }
-
-  const habitMatch = text.match(/(?:i\s+usually|i\s+always|i\s+often|har\s+roz|daily)\s+([^.!?\n]{1,120})/i);
-  if (habitMatch) {
-    const habit = toShortPhrase(habitMatch[1], MAX_MEMORY_WORDS);
-    return habit ? `Habit: ${habit}` : undefined;
-  }
-
-  if (EXPLICIT_MEMORY_PATTERN.test(lower)) {
-    const remembered = toShortPhrase(
-      text
-        .replace(EXPLICIT_MEMORY_PATTERN, "")
-        .replace(/[:\-]/g, " ")
-        .trim(),
-      MAX_MEMORY_WORDS,
-    );
-    if (remembered) {
-      return `Remember: ${remembered}`;
-    }
-  }
-
-  return undefined;
-}
-
 function rememberSummary(content: string) {
   const short = toShortPhrase(content, MAX_MEMORY_WORDS);
   if (!short) {
@@ -224,7 +167,7 @@ function rememberSummary(content: string) {
   return `Remember: ${short}`;
 }
 
-function extractExplicitRemember(text: string) {
+function extractExplicitMemoryPayload(text: string) {
   if (!EXPLICIT_MEMORY_PATTERN.test(text)) {
     return undefined;
   }
@@ -234,11 +177,7 @@ function extractExplicitRemember(text: string) {
     .replace(/^[:\-\s]+/, "")
     .trim();
 
-  if (!cleaned || !hasAlphabet(cleaned)) {
-    return undefined;
-  }
-
-  return rememberSummary(cleaned);
+  return cleaned;
 }
 
 function extractForgetTopic(text: string) {
@@ -312,6 +251,14 @@ function extractImplicitMemories(text: string) {
   }
 
   return memories;
+}
+
+function logMemoryDecision(message: string, save: boolean, type: string) {
+  console.log("Memory Decision:", {
+    message,
+    save,
+    type,
+  });
 }
 
 function uniqueValues(values: string[], max: number) {
@@ -388,25 +335,6 @@ function mapMemoryDoc(data: MemoryDocShape | undefined): Omit<MemoryProfile, "ch
   };
 }
 
-function mapChatEntry(id: string, raw: unknown): MemoryChatEntry | null {
-  if (!isRecord(raw)) {
-    return null;
-  }
-
-  const role = raw.role === "assistant" ? "assistant" : raw.role === "user" ? "user" : null;
-  const content = typeof raw.content === "string" ? toShortPhrase(raw.content, MAX_MEMORY_WORDS) ?? "" : "";
-  const timestamp =
-    raw.timestamp && isRecord(raw.timestamp) && typeof raw.timestamp.toDate === "function"
-      ? raw.timestamp.toDate().toISOString()
-      : normalizeIsoTimestamp(raw.timestampIso);
-
-  if (!role || !content || !passesMemoryValidation(content)) {
-    return null;
-  }
-
-  return { id, role, content, timestamp };
-}
-
 function mapImageEntry(id: string, raw: unknown): MemoryImageEntry | null {
   if (!isRecord(raw)) {
     return null;
@@ -439,87 +367,6 @@ export function createEmptyMemoryProfile(): MemoryProfile {
   };
 }
 
-export function isMeaningfulMessage(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed) {
-    return false;
-  }
-
-  if (trimmed.length < 6 || trimmed.length > 1600) {
-    return false;
-  }
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return false;
-  }
-
-  return /[a-zA-Z\u0900-\u097F]/u.test(trimmed);
-}
-
-function extractNameFact(text: string) {
-  const match = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,60})/i);
-  const name = match ? normalizeText(match[1], 2, 60) : undefined;
-  if (!name) {
-    return undefined;
-  }
-  return `Name: ${toShortPhrase(name, 2)}`;
-}
-
-function extractPreference(text: string) {
-  const patterns = [
-    /i\s+like\s+([^.!?\n]{1,120})/i,
-    /mujhe\s+pasand\s+hai\s+([^.!?\n]{1,120})/i,
-    /mujhe\s+([^.!?\n]{1,120})\s+pasand\s+hai/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (!match) {
-      continue;
-    }
-
-    const value = normalizeText(match[1], 2, 120);
-    if (value) {
-      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
-      return short ? `Likes: ${short}` : undefined;
-    }
-  }
-
-  return undefined;
-}
-
-function extractFact(text: string) {
-  const patterns: Array<[RegExp, (value: string) => string | undefined]> = [
-    [/\bi\s+am\s+from\s+([^.!?\n]{1,120})/i, (value) => {
-      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
-      return short ? `Remember: from ${short}` : undefined;
-    }],
-    [/\bmain\s+([^.!?\n]{1,120})\s+se\s+hu/i, (value) => {
-      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
-      return short ? `Remember: from ${short}` : undefined;
-    }],
-    [/\bi\s+work\s+as\s+([^.!?\n]{1,120})/i, (value) => {
-      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
-      return short ? `Habit: work ${short}` : undefined;
-    }],
-    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => `Age: ${value}`],
-  ];
-
-  for (const [pattern, formatter] of patterns) {
-    const match = text.match(pattern);
-    if (!match) {
-      continue;
-    }
-
-    const fact = formatter(match[1]);
-    if (fact) {
-      return fact;
-    }
-  }
-
-  return undefined;
-}
-
 export function deriveMemoryFields(current: Pick<MemoryProfile, "preferences" | "facts">, text: string) {
   const currentPreferences = normalizeList(current.preferences, MAX_PREFERENCES);
   const currentFacts = normalizeList(current.facts, MAX_FACTS);
@@ -527,16 +374,44 @@ export function deriveMemoryFields(current: Pick<MemoryProfile, "preferences" | 
   const nextFacts = [...currentFacts];
 
   const cleaned = sanitizeText(text);
-  if (!cleaned || isLowValueText(cleaned)) {
+  if (!cleaned) {
+    logMemoryDecision(text, false, "ignored-empty");
     return {
       preferences: currentPreferences,
       facts: currentFacts,
     };
   }
 
+  // Highest priority: explicit user memory request should always be saved.
+  const explicitPayload = extractExplicitMemoryPayload(cleaned);
+  if (typeof explicitPayload === "string") {
+    const explicitInsights = explicitPayload ? extractImplicitMemories(explicitPayload) : [];
+
+    if (explicitInsights.length) {
+      for (const memory of explicitInsights) {
+        if (memory.key === "preferences") {
+          nextPreferences.unshift(memory.value);
+        } else {
+          nextFacts.unshift(memory.value);
+        }
+      }
+      logMemoryDecision(text, true, "explicit-structured");
+    } else {
+      const fallback = rememberSummary(explicitPayload) ?? "Remember: user requested memory";
+      nextFacts.unshift(fallback);
+      logMemoryDecision(text, true, "explicit-fallback");
+    }
+
+    return {
+      preferences: uniqueValues(nextPreferences, MAX_PREFERENCES),
+      facts: uniqueValues(nextFacts, MAX_FACTS),
+    };
+  }
+
   const forgetTopic = extractForgetTopic(cleaned);
   if (forgetTopic) {
     if (forgetTopic === "__all__") {
+      logMemoryDecision(text, true, "forget-all");
       return {
         preferences: [],
         facts: [],
@@ -549,27 +424,44 @@ export function deriveMemoryFields(current: Pick<MemoryProfile, "preferences" | 
       return !memoryKey.includes(normalizedTopic) && !normalizedTopic.includes(memoryKey);
     };
 
-    return {
+    const next = {
       preferences: currentPreferences.filter(keepByTopic),
       facts: currentFacts.filter(keepByTopic),
     };
+    logMemoryDecision(text, true, "forget-topic");
+    return next;
   }
 
-  const explicit = extractExplicitRemember(cleaned);
-  if (explicit) {
-    nextFacts.unshift(explicit);
+  const hasPersonalSignal = PERSONAL_SIGNAL_PATTERN.test(cleaned);
+  const isImplicitCandidate = cleaned.length > 15 || hasPersonalSignal;
+
+  if (!isImplicitCandidate || (isLowValueText(cleaned) && !hasPersonalSignal)) {
+    logMemoryDecision(text, false, "ignored-random");
     return {
-      preferences: uniqueValues(nextPreferences, MAX_PREFERENCES),
-      facts: uniqueValues(nextFacts, MAX_FACTS),
+      preferences: currentPreferences,
+      facts: currentFacts,
     };
   }
 
-  for (const memory of extractImplicitMemories(cleaned)) {
+  const implicitMemories = extractImplicitMemories(cleaned);
+  for (const memory of implicitMemories) {
     if (memory.key === "preferences") {
       nextPreferences.unshift(memory.value);
     } else {
       nextFacts.unshift(memory.value);
     }
+  }
+
+  if (!implicitMemories.length) {
+    const lowConfidence = rememberSummary(cleaned);
+    if (lowConfidence) {
+      nextFacts.unshift(lowConfidence);
+      logMemoryDecision(text, true, "fallback-low-confidence");
+    } else {
+      logMemoryDecision(text, false, "ignored-unparsable");
+    }
+  } else {
+    logMemoryDecision(text, true, "implicit-structured");
   }
 
   return {
@@ -671,33 +563,6 @@ export async function saveMemoryFields(
     facts: uniqueValues(normalizeList(fields.facts, MAX_FACTS), MAX_FACTS),
     updatedAt: serverTimestamp(),
   });
-}
-
-export async function saveMessage(
-  user: User | null,
-  payload: {
-    role: MemoryMessageRole;
-    content: string;
-  },
-) {
-  if (!user || payload.role !== "user") {
-    return;
-  }
-
-  const content = payload.content.trim();
-  if (!content) {
-    return;
-  }
-  try {
-    await ensureUserMemoryDoc(user);
-    const snapshot = await getDoc(getUserDocRef(user));
-    const current = mapMemoryDoc(snapshot.data() as MemoryDocShape | undefined);
-    const next = deriveMemoryFields(current, content);
-    await saveMemoryFields(user, next);
-  } catch (error) {
-    console.error("Memory save failed:", error);
-    throw error;
-  }
 }
 
 export async function saveImage(

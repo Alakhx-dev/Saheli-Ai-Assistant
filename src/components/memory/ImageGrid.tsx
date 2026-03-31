@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Trash2 } from "lucide-react";
 import type { MemoryImageEntry } from "@/lib/memory";
 
@@ -8,7 +8,7 @@ interface ImageGridProps {
   onPreview: (url: string) => void;
 }
 
-export default function ImageGrid({ items, onDelete, onPreview }: ImageGridProps) {
+function ImageGrid({ items, onDelete, onPreview }: ImageGridProps) {
   if (!items.length) {
     return <p className="px-4 py-5 text-sm text-white/45">No image memory saved yet.</p>;
   }
@@ -41,3 +41,5 @@ export default function ImageGrid({ items, onDelete, onPreview }: ImageGridProps
     </div>
   );
 }
+
+export default memo(ImageGrid);

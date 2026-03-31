@@ -45,7 +45,7 @@ function readLocalChats(): LocalChatsMap {
     const parsed = JSON.parse(raw) as LocalChatsMap;
     return parsed ?? {};
   } catch (error) {
-    console.warn("Failed to read local chat history", error);
+    console.error("Failed to read local chat history", error);
     return {};
   }
 }
@@ -202,3 +202,4 @@ export async function deleteChatSession(chatId: string, user: User | null) {
   await Promise.all(snapshot.docs.map((messageDoc) => deleteDoc(messageDoc.ref)));
   await deleteDoc(doc(db, "chats", chatId));
 }
+

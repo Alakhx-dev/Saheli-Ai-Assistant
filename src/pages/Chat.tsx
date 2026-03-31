@@ -44,7 +44,7 @@ import {
   setMemoryEnabled,
   type MemoryProfile,
 } from "@/lib/memory";
-import { saveImageMemoryDB, saveMessageToDB } from "@/lib/chatService";
+import { detectMemory, saveImageMemoryDB, saveMemoryToDB } from "@/lib/chatService";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
@@ -240,7 +240,7 @@ function useVoice(isMuted: boolean) {
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
       unlockedRef.current = true;
     } catch (error) {
-      console.warn("Voice unlock failed", error);
+      console.error("Voice unlock failed", error);
     }
   };
 
@@ -497,7 +497,7 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
       try {
         recognitionRef.current.stop();
       } catch (error) {
-        console.warn("Speech recognition stop failed", error);
+        console.error("Speech recognition stop failed", error);
       }
     }
     setIsListening(false);
@@ -513,7 +513,7 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
     const SpeechRecognition =
       speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn("SpeechRecognition not supported");
+      console.error("SpeechRecognition not supported");
       return;
     }
 
@@ -553,7 +553,7 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
         try {
           recognitionRef.current.stop();
         } catch (error) {
-          console.warn("Speech recognition cleanup failed", error);
+          console.error("Speech recognition cleanup failed", error);
         }
       }
     };
@@ -584,16 +584,16 @@ function isMobileDevice() {
 
 function logCameraFailure(error: unknown) {
   if (error instanceof DOMException) {
-    console.warn(`Camera capture failed: ${error.name}`, error.message);
+    console.error(`Camera capture failed: ${error.name}`, error.message);
     return;
   }
 
   if (error instanceof Error) {
-    console.warn("Camera capture failed", error.message);
+    console.error("Camera capture failed", error.message);
     return;
   }
 
-  console.warn("Camera capture failed", error);
+  console.error("Camera capture failed", error);
 }
 
 function getMessageKey(msg: ChatMessage, index: number) {
@@ -720,7 +720,7 @@ function saveLocal(message: { content: string, role: string }) {
     chats.push(message);
     localStorage.setItem("chats", JSON.stringify(chats));
   } catch (err) {
-    console.warn("Failed to save local chat", err);
+    console.error("Failed to save local chat", err);
   }
 }
 
@@ -798,6 +798,8 @@ export default function Chat() {
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const messagesRef = useRef<ChatMessage[]>([]);
   const currentChatIdRef = useRef<string | null>(null);
+  const titleUpdateTimeoutRef = useRef<number | null>(null);
+  const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
   const setStoreUser = useAppStore((state) => state.setUser);
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
@@ -852,7 +854,7 @@ export default function Chat() {
 
     setStoreSettings({ memoryEnabled });
     void setMemoryEnabled(user, memoryEnabled).catch((error) => {
-      console.warn("Failed to persist memory toggle", error);
+      console.error("Failed to persist memory toggle", error);
     });
   }, [memoryEnabled, memoryHydrated, setStoreSettings, user]);
 
@@ -1021,7 +1023,7 @@ export default function Chat() {
         if (user && !memoryCleanupDoneRef.current) {
           memoryCleanupDoneRef.current = true;
           void pruneLowValueMemories(user).catch((error) => {
-            console.warn("Failed to prune low-value memories", error);
+            console.error("Failed to prune low-value memories", error);
           });
         }
         const profile = await fetchMemory(user);
@@ -1034,7 +1036,7 @@ export default function Chat() {
         }
       } catch (error) {
         if (!cancelled) {
-          console.warn("Failed to load memory", error);
+          console.error("Failed to load memory", error);
           setMemoryProfile(createEmptyMemoryProfile());
           setMemoryHydrated(true);
           setStoreMemory(createEmptyMemoryProfile());
@@ -1051,6 +1053,10 @@ export default function Chat() {
 
   useEffect(() => {
     return () => {
+      if (titleUpdateTimeoutRef.current) {
+        window.clearTimeout(titleUpdateTimeoutRef.current);
+      }
+
       if (mobileCameraCancelTimeoutRef.current) {
         window.clearTimeout(mobileCameraCancelTimeoutRef.current);
       }
@@ -1087,7 +1093,7 @@ export default function Chat() {
       setStoreMemory(nextMemory);
       setStoreSettings({ memoryEnabled: nextMemory.memoryEnabled });
     } catch (error) {
-      console.warn("Failed to refresh memory", error);
+      console.error("Failed to refresh memory", error);
     }
   }, [setStoreMemory, setStoreSettings, user]);
 
@@ -1101,7 +1107,7 @@ export default function Chat() {
       await refreshMemoryState();
       setMemoryStatus("Chat memory deleted.");
     } catch (error) {
-      console.warn("Failed to delete chat memory", error);
+      console.error("Failed to delete chat memory", error);
       setMemoryStatus("Could not delete chat memory.");
     }
   };
@@ -1120,7 +1126,7 @@ export default function Chat() {
       await refreshMemoryState();
       setMemoryStatus("Image memory deleted.");
     } catch (error) {
-      console.warn("Failed to delete image memory", error);
+      console.error("Failed to delete image memory", error);
       setMemoryStatus("Could not delete image memory.");
     }
   };
@@ -1136,7 +1142,7 @@ export default function Chat() {
       setSelectedMemoryImage(null);
       setMemoryStatus("All memory cleared.");
     } catch (error) {
-      console.warn("Failed to clear memory", error);
+      console.error("Failed to clear memory", error);
       setMemoryStatus("Couldn't clear memory right now.");
     }
   };
@@ -1223,7 +1229,7 @@ export default function Chat() {
       setProfileCropY(0);
       setProfileStatus(t.statuses.imageReady);
     } catch (error) {
-      console.warn("Profile image selection failed", error);
+      console.error("Profile image selection failed", error);
       setProfileStatus(t.statuses.imageLoadFailed);
     } finally {
       event.target.value = "";
@@ -1240,7 +1246,7 @@ export default function Chat() {
       await sendPasswordResetEmail(auth, user.email);
       setProfileStatus(formatText(t.statuses.resetLinkSent, { email: user.email }));
     } catch (error) {
-      console.warn("Password reset failed", error);
+      console.error("Password reset failed", error);
       setProfileStatus(t.statuses.resetEmailFailed);
     }
   };
@@ -1265,7 +1271,7 @@ export default function Chat() {
       await updatePassword(user, nextPassword.trim());
       setMemoryStatus("Password updated.");
     } catch (error) {
-      console.warn("Password update failed", error);
+      console.error("Password update failed", error);
       setMemoryStatus("Could not change password. Please re-login and try again.");
     }
   }, [user]);
@@ -1328,13 +1334,13 @@ export default function Chat() {
         void saveMemoryFields(user, nextMemoryFields)
           .then(() => refreshMemoryState())
           .catch((error) => {
-            console.warn("Failed to sync memory name with profile", error);
+            console.error("Failed to sync memory name with profile", error);
           });
       }
 
       setProfileStatus(t.statuses.profileSaved);
     } catch (error) {
-      console.warn("Profile save failed", error);
+      console.error("Profile save failed", error);
       setProfileStatus(t.statuses.profileSaveFailed);
     } finally {
       setIsSavingProfile(false);
@@ -1347,7 +1353,7 @@ export default function Chat() {
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        console.warn("Camera capture unavailable: mediaDevices.getUserMedia is not supported on this browser");
+        console.error("Camera capture unavailable: mediaDevices.getUserMedia is not supported on this browser");
         return undefined;
       }
 
@@ -1527,6 +1533,44 @@ export default function Chat() {
       .join(" ");
   }, []);
 
+  const scheduleChatTitleUpdate = useCallback((chatId: string | null, nextTitle: string) => {
+    const trimmedTitle = nextTitle.trim();
+    if (!chatId || !trimmedTitle) {
+      return;
+    }
+
+    const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
+    if (trimmedTitle === currentTitle) {
+      return;
+    }
+
+    const pendingUpdate = pendingTitleUpdateRef.current;
+    if (pendingUpdate && pendingUpdate.chatId === chatId && pendingUpdate.title === trimmedTitle) {
+      return;
+    }
+
+    pendingTitleUpdateRef.current = { chatId, title: trimmedTitle };
+    if (titleUpdateTimeoutRef.current) {
+      window.clearTimeout(titleUpdateTimeoutRef.current);
+    }
+
+    titleUpdateTimeoutRef.current = window.setTimeout(() => {
+      const queuedUpdate = pendingTitleUpdateRef.current;
+      pendingTitleUpdateRef.current = null;
+      titleUpdateTimeoutRef.current = null;
+
+      if (!queuedUpdate) {
+        return;
+      }
+
+      void updateChatSessionTitle(queuedUpdate.chatId, queuedUpdate.title, user)
+        .then(() => refreshChatSessions(queuedUpdate.chatId))
+        .catch((error) => {
+          console.error("Failed to update debounced chat title", error);
+        });
+    }, 1000);
+  }, [refreshChatSessions, user]);
+
   const syncSmartChatTitle = useCallback(async (chatId: string, history: ChatMessage[]) => {
     const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
     if (!shouldRefreshGeneratedTitle(history.length, currentTitle, language)) {
@@ -1538,9 +1582,8 @@ export default function Chat() {
       return;
     }
 
-    await updateChatSessionTitle(chatId, nextTitle, user);
-    await refreshChatSessions(chatId);
-  }, [language, refreshChatSessions, user]);
+    scheduleChatTitleUpdate(chatId, nextTitle);
+  }, [language, scheduleChatTitleUpdate]);
 
   const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatIdRef.current ?? routeChatId ?? null;
@@ -1691,7 +1734,7 @@ export default function Chat() {
           try {
             await uploadMemoryImage(imageBase64, "upload");
           } catch (error) {
-            console.warn("Failed to save memory image", error);
+            console.error("Failed to save memory image", error);
           }
         }
       }
@@ -1715,8 +1758,6 @@ export default function Chat() {
       setMood(nextMood);
       if (isGuest) {
         saveLocal({ role: "assistant", content: responseText });
-      } else {
-        void saveMessageToDB(responseText, "assistant", user?.uid);
       }
 
       void persistChatMessage(request.chatId, {
@@ -1724,11 +1765,11 @@ export default function Chat() {
         content: responseText,
         createdAt: Date.now(),
       }).catch((error) => {
-        console.warn("Failed to persist model reply (mobile vision)", error);
+        console.error("Failed to persist model reply (mobile vision)", error);
       });
 
       void syncSmartChatTitle(request.chatId, nextHistory).catch((error) => {
-        console.warn("Failed to update smart chat title (mobile vision)", error);
+        console.error("Failed to update smart chat title (mobile vision)", error);
       });
     } finally {
       setIsLoading(false);
@@ -1756,7 +1797,7 @@ export default function Chat() {
 
       await completePendingVisionRequest(pendingMobileVisionRequest, base64);
     } catch (error) {
-      console.warn("Mobile camera capture failed", error);
+      console.error("Mobile camera capture failed", error);
       setIsLoading(false);
       submitLockRef.current = false;
     }
@@ -1770,6 +1811,21 @@ export default function Chat() {
 
     const userText = input.trim();
     setInput("");
+
+    if (!isGuest && user?.uid) {
+      const memoryResult = detectMemory(userText);
+      if (memoryResult.save && memoryResult.type && memoryResult.content) {
+        void saveMemoryToDB(
+          {
+            type: memoryResult.type,
+            content: memoryResult.content,
+          },
+          user.uid,
+        ).catch((error) => {
+          console.error("Failed to save detected memory", error);
+        });
+      }
+    }
 
     const { chatId } = await ensureActiveChat();
 
@@ -1808,18 +1864,17 @@ export default function Chat() {
           if (!title) {
             return;
           }
-          await updateChatSessionTitle(chatId, title, user);
-          await refreshChatSessions(chatId);
+          scheduleChatTitleUpdate(chatId, title);
         })
         .catch(() => {
           void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
-            console.warn("Failed to update fallback smart chat title", error);
+            console.error("Failed to update fallback smart chat title", error);
           });
         });
     }
 
     void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
-      console.warn("Failed to update smart chat title", error);
+      console.error("Failed to update smart chat title", error);
     });
 
     let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
@@ -1839,7 +1894,7 @@ export default function Chat() {
       setMemoryProfile(nextMemoryProfile);
 
       void saveMemoryFields(user, nextMemoryFields).catch((error) => {
-        console.warn("Failed to persist memory fields", error);
+        console.error("Failed to persist memory fields", error);
       });
     }
 
@@ -1870,7 +1925,7 @@ export default function Chat() {
         try {
           await uploadMemoryImage(base64Image, "upload", userText);
         } catch (error) {
-          console.warn("Failed to save memory image", error);
+          console.error("Failed to save memory image", error);
         }
       }
 
@@ -1894,8 +1949,6 @@ export default function Chat() {
 
       if (isGuest) {
         saveLocal({ role: "assistant", content: responseText });
-      } else {
-        void saveMessageToDB(responseText, "assistant", user?.uid);
       }
 
       void persistChatMessage(chatId, {
@@ -1903,11 +1956,11 @@ export default function Chat() {
         content: responseText,
         createdAt: Date.now(),
       }).catch((error) => {
-        console.warn("Failed to persist model reply", error);
+        console.error("Failed to persist model reply", error);
       });
 
       void syncSmartChatTitle(chatId, finalHistory).catch((error) => {
-        console.warn("Failed to update smart chat title", error);
+        console.error("Failed to update smart chat title", error);
       });
     } finally {
       setIsLoading(false);
@@ -1916,7 +1969,7 @@ export default function Chat() {
   };
 
   const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
-  const profileSubtext = useMemo(() => user?.email || t.profileMenu.guestMode, [t.profileMenu.guestMode, user?.email]);
+  const profileSubtext = user?.email || t.profileMenu.guestMode || "";
   const handleOpenMemoryFromSettings = useCallback(() => {
     setActiveSettingsSection("personalization");
     setSettingsPanelOpen(false);
@@ -2217,3 +2270,4 @@ export default function Chat() {
     </div>
   );
 }
+

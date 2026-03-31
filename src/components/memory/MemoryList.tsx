@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Trash2 } from "lucide-react";
 import type { MemoryChatEntry } from "@/lib/memory";
 
@@ -15,7 +15,7 @@ function previewText(value: string, maxLength = 140) {
   return `${value.slice(0, maxLength)}...`;
 }
 
-export default function MemoryList({ items, onDelete }: MemoryListProps) {
+function MemoryList({ items, onDelete }: MemoryListProps) {
   if (!items.length) {
     return <p className="px-4 py-5 text-sm text-white/45">No memory insights saved yet.</p>;
   }
@@ -40,3 +40,5 @@ export default function MemoryList({ items, onDelete }: MemoryListProps) {
     </div>
   );
 }
+
+export default memo(MemoryList);

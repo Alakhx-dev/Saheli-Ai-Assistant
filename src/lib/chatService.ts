@@ -1,9 +1,21 @@
-import { addDoc, collection, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export type ChatMemoryItem = {
-  type: string;
-  value: string;
+  type: "explicit" | "implicit";
+  content: string;
+};
+
+export type MemoryDetectionResult = {
+  save: boolean;
+  type?: "explicit" | "implicit";
+  content?: string;
+};
+
+export type MemorySaveResult = {
+  saved: boolean;
+  message: string;
+  aiResponse: string;
 };
 
 export async function saveMessageToDB(content: string, role: string, userId?: string) {
@@ -16,40 +28,131 @@ export async function saveMessageToDB(content: string, role: string, userId?: st
       createdAt: serverTimestamp(),
     });
   } catch (err) {
-    console.warn("Failed to save message to new DB structure", err);
+    console.error("Failed to save message to new DB structure", err);
   }
 }
 
-export function autoMemoryExtract(text: string): ChatMemoryItem[] {
-  const memory: ChatMemoryItem[] = [];
-  const lowerText = text.toLowerCase();
-
-  const nameMatch = lowerText.match(/(?:mera naam|my name is)\s+([^.!?\n]+)/i);
-  if (nameMatch) {
-    memory.push({ type: "name", value: nameMatch[1].trim() });
-  }
-
-  if (lowerText.includes("mujhe pasand")) {
-    memory.push({ type: "preference", value: text });
-  }
-
-  if (lowerText.includes("yaad rakh")) {
-    memory.push({ type: "custom", value: text });
-  }
-
-  return memory;
+export function cleanMemory(message: string) {
+  return message
+    .replace(/yaad\s*rakhna|remember\s*this|note\s*this/gi, "")
+    .trim();
 }
 
-export async function saveMemoryToDB(memoryItem: ChatMemoryItem, userId?: string) {
-  if (!userId) return;
+function normalizeMemoryContent(content: string) {
+  return content
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function memoryExists(userId: string, content: string) {
+  const trimmed = content.trim();
+  if (!userId || !trimmed) {
+    return false;
+  }
+
+  const normalized = normalizeMemoryContent(trimmed);
+
+  const normalizedQuery = query(
+    collection(db, "memories"),
+    where("userId", "==", userId),
+    where("contentNormalized", "==", normalized),
+  );
+
+  const normalizedSnapshot = await getDocs(normalizedQuery);
+  if (!normalizedSnapshot.empty) {
+    return true;
+  }
+
+  const exactQuery = query(
+    collection(db, "memories"),
+    where("userId", "==", userId),
+    where("content", "==", trimmed),
+  );
+  const exactSnapshot = await getDocs(exactQuery);
+  return !exactSnapshot.empty;
+}
+
+export function detectMemory(message: string): MemoryDetectionResult {
+  const msg = message.toLowerCase();
+
+  if (
+    msg.includes("yaad rakhna") ||
+    msg.includes("remember this") ||
+    msg.includes("note this")
+  ) {
+    const result: MemoryDetectionResult = {
+      save: true,
+      type: "explicit",
+      content: cleanMemory(message),
+    };
+    console.log("Memory Check:", result);
+    return result;
+  }
+
+  if (
+    msg.includes("mera") ||
+    msg.includes("mujhe") ||
+    msg.includes("i am") ||
+    msg.includes("i like") ||
+    msg.includes("pasand")
+  ) {
+    const result: MemoryDetectionResult = {
+      save: true,
+      type: "implicit",
+      content: cleanMemory(message),
+    };
+    console.log("Memory Check:", result);
+    return result;
+  }
+
+  const result: MemoryDetectionResult = { save: false };
+  console.log("Memory Check:", result);
+  return result;
+}
+
+export async function saveMemoryToDB(memoryItem: ChatMemoryItem, userId?: string): Promise<MemorySaveResult> {
+  if (!userId || !memoryItem.content?.trim()) {
+    return {
+      saved: false,
+      message: "Invalid memory payload",
+      aiResponse: "",
+    };
+  }
+
+  const content = memoryItem.content.trim();
+
   try {
-    await addDoc(collection(db, "memory"), {
+    const exists = await memoryExists(userId, content);
+    if (exists) {
+      return {
+        saved: false,
+        message: "Already saved",
+        aiResponse: "maine ye already yaad rakha hai 😉",
+      };
+    }
+
+    await addDoc(collection(db, "memories"), {
       userId,
       ...memoryItem,
+      content,
+      contentNormalized: normalizeMemoryContent(content),
       createdAt: serverTimestamp(),
     });
+
+    return {
+      saved: true,
+      message: "Saved successfully",
+      aiResponse: "ye yaad rakh liya 💖",
+    };
   } catch (err) {
-    console.warn("Failed to save auto memory", err);
+    console.error("Failed to save auto memory", err);
+
+    return {
+      saved: false,
+      message: "Save failed",
+      aiResponse: "",
+    };
   }
 }
 
@@ -62,7 +165,7 @@ export async function saveImageMemoryDB(imageUrl: string, userId?: string) {
       createdAt: serverTimestamp(),
     });
   } catch (err) {
-    console.warn("Failed to save image memory", err);
+    console.error("Failed to save image memory", err);
   }
 }
 
@@ -73,4 +176,5 @@ export async function deleteChatDoc(id: string) {
 export async function deleteImageMemoryDoc(id: string) {
   await deleteDoc(doc(db, "imageMemory", id));
 }
+
 

@@ -251,7 +251,7 @@ async function requestGroq(
   }
 
   const language = getSelectedLanguage(identity);
-  console.log("LANG:", language);
+  console.error("LANG:", language);
   const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
   const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
   if (payloadMessages.length <= 1) {
@@ -331,3 +331,4 @@ export async function sendMessage(
 }
 
 export { FALLBACK_MESSAGE };
+
