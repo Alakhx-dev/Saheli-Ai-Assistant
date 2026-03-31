@@ -25,7 +25,7 @@ const MAX_CHAT_HISTORY = 30;
 const MAX_IMAGE_HISTORY = 60;
 const MAX_PREFERENCES = 20;
 const MAX_FACTS = 20;
-const MAX_MEMORY_WORDS = 4;
+const MAX_MEMORY_WORDS = 8;
 const MAX_MEMORY_KEYWORDS = 4;
 const MIN_MEMORY_WORDS = 2;
 
@@ -34,7 +34,9 @@ const GREETING_PATTERN =
 const STATUS_PATTERN =
   /\b(thik hu|theek hu|i am fine|i'm fine|all good|sab thik|bas thik|just fine|okay hu)\b/i;
 const EXPLICIT_MEMORY_PATTERN =
-  /\b(yaad rakh|yaad rakhna|remember this|remember that|save this|important)\b/i;
+  /\b(yaad\s*rakh(?:na)?|remember\s+(?:this|that)|remember|note\s+this|save\s+this|important)\b/i;
+const FORGET_MEMORY_PATTERN =
+  /\b(bhool\s*jao|mat\s+yaad\s*rakhna|forget\s+(?:this|that)|don't\s+remember\s+this|dont\s+remember\s+this)\b/i;
 
 export const STRICT_MEMORY_EXTRACTION_INSTRUCTION =
   "Extract facts ONLY if they are identity (name/age), preferences (likes/dislikes), habits, or explicit remember commands. Ignore greetings, small talk, and temporary status.";
@@ -96,6 +98,16 @@ function normalizeText(value: string, min = 2, max = 280) {
   return cleaned;
 }
 
+function normalizeSemanticKey(value: string) {
+  return sanitizeText(value)
+    .toLowerCase()
+    .replace(/^user\s+(prefers|dislikes|often|goal|is\s+from|works\s+as|studies\s+in|name\s+is):?\s*/i, "")
+    .replace(/^remember:\s*/i, "")
+    .replace(/\b(the|a|an|very|really|just|to|for|in|on|at|of|and)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function toShortPhrase(input: string, maxWords = MAX_MEMORY_WORDS) {
   const cleaned = sanitizeText(input);
   const words = cleaned.split(/\s+/).filter(Boolean).slice(0, maxWords);
@@ -103,6 +115,10 @@ function toShortPhrase(input: string, maxWords = MAX_MEMORY_WORDS) {
     return undefined;
   }
   return words.join(" ");
+}
+
+function hasAlphabet(text: string) {
+  return /[a-zA-Z\u0900-\u097F]/u.test(text);
 }
 
 function wordCount(text: string) {
@@ -199,17 +215,121 @@ function summarizeToKeywords(content: string) {
   return undefined;
 }
 
+function rememberSummary(content: string) {
+  const short = toShortPhrase(content, MAX_MEMORY_WORDS);
+  if (!short) {
+    return undefined;
+  }
+
+  return `Remember: ${short}`;
+}
+
+function extractExplicitRemember(text: string) {
+  if (!EXPLICIT_MEMORY_PATTERN.test(text)) {
+    return undefined;
+  }
+
+  const cleaned = sanitizeText(text)
+    .replace(EXPLICIT_MEMORY_PATTERN, " ")
+    .replace(/^[:\-\s]+/, "")
+    .trim();
+
+  if (!cleaned || !hasAlphabet(cleaned)) {
+    return undefined;
+  }
+
+  return rememberSummary(cleaned);
+}
+
+function extractForgetTopic(text: string) {
+  if (!FORGET_MEMORY_PATTERN.test(text)) {
+    return undefined;
+  }
+
+  const cleaned = sanitizeText(text)
+    .replace(FORGET_MEMORY_PATTERN, " ")
+    .replace(/^[:\-\s]+/, "")
+    .trim();
+
+  return cleaned || "__all__";
+}
+
+function extractImplicitMemories(text: string) {
+  const memories: Array<{ key: MemoryFieldKey; value: string }> = [];
+
+  const nameMatch = text.match(/(?:my\s+name\s+is|mera\s+naam\s+hai|mera\s+naam)\s+([^.!?\n]{1,60})/i);
+  if (nameMatch) {
+    const name = toShortPhrase(nameMatch[1], 3);
+    if (name) {
+      memories.push({ key: "facts", value: `User name is ${name}` });
+    }
+  }
+
+  const likesMatch = text.match(/(?:i\s+(?:like|love|prefer|enjoy))\s+([^.!?\n]{1,120})|(?:mujhe\s+([^.!?\n]{1,120})\s+pasand\s+hai)/i);
+  if (likesMatch) {
+    const pref = toShortPhrase(likesMatch[1] ?? likesMatch[2], MAX_MEMORY_WORDS);
+    if (pref && !/^(you|tum)\b/i.test(pref)) {
+      memories.push({ key: "preferences", value: `User prefers ${pref}` });
+    }
+  }
+
+  const dislikesMatch = text.match(/(?:i\s+(?:don't\s+like|dislike|hate)|mujhe\s+pasand\s+nahi)\s+([^.!?\n]{1,120})/i);
+  if (dislikesMatch) {
+    const pref = toShortPhrase(dislikesMatch[1], MAX_MEMORY_WORDS);
+    if (pref) {
+      memories.push({ key: "preferences", value: `User dislikes ${pref}` });
+    }
+  }
+
+  const habitMatch = text.match(/(?:i\s+(?:usually|often|always)|har\s+roz|daily|every\s+day)\s+([^.!?\n]{1,120})/i);
+  if (habitMatch) {
+    const habit = toShortPhrase(habitMatch[1], MAX_MEMORY_WORDS);
+    if (habit) {
+      memories.push({ key: "facts", value: `User often ${habit}` });
+    }
+  }
+
+  const fromEnglish = text.match(/(?:i\s+am\s+from|my\s+home\s+is\s+in)\s+([^.!?\n]{1,120})/i);
+  const fromHindi = text.match(/main\s+([^.!?\n]{1,120})\s+se\s+hu/i);
+  const place = toShortPhrase(fromEnglish?.[1] ?? fromHindi?.[1] ?? "", MAX_MEMORY_WORDS);
+  if (place) {
+    memories.push({ key: "facts", value: `User is from ${place}` });
+  }
+
+  const roleMatch = text.match(/(?:i\s+work\s+as|main\s+ek)\s+([^.!?\n]{1,120})/i);
+  if (roleMatch) {
+    const role = toShortPhrase(roleMatch[1], MAX_MEMORY_WORDS);
+    if (role) {
+      memories.push({ key: "facts", value: `User works as ${role}` });
+    }
+  }
+
+  const goalEnglish = text.match(/(?:my\s+goal\s+is|i\s+want\s+to)\s+([^.!?\n]{1,120})/i);
+  const goalHindi = text.match(/mujhe\s+([^.!?\n]{1,120})\s+karna\s+hai/i);
+  const goal = toShortPhrase(goalEnglish?.[1] ?? goalHindi?.[1] ?? "", MAX_MEMORY_WORDS);
+  if (goal) {
+    memories.push({ key: "facts", value: `User goal: ${goal}` });
+  }
+
+  return memories;
+}
+
 function uniqueValues(values: string[], max: number) {
   const seen = new Set<string>();
+  const semanticSeen = new Set<string>();
   const result: string[] = [];
 
   for (const value of values) {
     const normalized = value.toLowerCase();
-    if (seen.has(normalized)) {
+    const semantic = normalizeSemanticKey(value);
+    if (seen.has(normalized) || (semantic && semanticSeen.has(semantic))) {
       continue;
     }
 
     seen.add(normalized);
+    if (semantic) {
+      semanticSeen.add(semantic);
+    }
     result.push(value);
 
     if (result.length >= max) {
@@ -228,7 +348,7 @@ function normalizeList(values: unknown, max: number) {
   return uniqueValues(
     values
       .filter((value): value is string => typeof value === "string")
-      .map((value) => toShortPhrase(value, MAX_MEMORY_WORDS))
+      .map((value) => sanitizeText(value))
       .map((value) => (value ? normalizeText(value, 2, 80) : undefined))
       .filter((value): value is string => Boolean(value)),
     max,
@@ -406,19 +526,50 @@ export function deriveMemoryFields(current: Pick<MemoryProfile, "preferences" | 
   const nextPreferences = [...currentPreferences];
   const nextFacts = [...currentFacts];
 
-  const preference = extractPreference(text);
-  if (preference) {
-    nextPreferences.unshift(preference);
+  const cleaned = sanitizeText(text);
+  if (!cleaned || isLowValueText(cleaned)) {
+    return {
+      preferences: currentPreferences,
+      facts: currentFacts,
+    };
   }
 
-  const nameFact = extractNameFact(text);
-  if (nameFact) {
-    nextFacts.unshift(nameFact);
+  const forgetTopic = extractForgetTopic(cleaned);
+  if (forgetTopic) {
+    if (forgetTopic === "__all__") {
+      return {
+        preferences: [],
+        facts: [],
+      };
+    }
+
+    const normalizedTopic = normalizeSemanticKey(forgetTopic);
+    const keepByTopic = (value: string) => {
+      const memoryKey = normalizeSemanticKey(value);
+      return !memoryKey.includes(normalizedTopic) && !normalizedTopic.includes(memoryKey);
+    };
+
+    return {
+      preferences: currentPreferences.filter(keepByTopic),
+      facts: currentFacts.filter(keepByTopic),
+    };
   }
 
-  const fact = extractFact(text);
-  if (fact) {
-    nextFacts.unshift(fact);
+  const explicit = extractExplicitRemember(cleaned);
+  if (explicit) {
+    nextFacts.unshift(explicit);
+    return {
+      preferences: uniqueValues(nextPreferences, MAX_PREFERENCES),
+      facts: uniqueValues(nextFacts, MAX_FACTS),
+    };
+  }
+
+  for (const memory of extractImplicitMemories(cleaned)) {
+    if (memory.key === "preferences") {
+      nextPreferences.unshift(memory.value);
+    } else {
+      nextFacts.unshift(memory.value);
+    }
   }
 
   return {
@@ -464,15 +615,22 @@ export async function fetchMemory(
   const chatLimit = options?.chatLimit ?? 20;
   const imageLimit = options?.imageLimit ?? 20;
 
-  const [chatSnapshot, imageSnapshot] = await Promise.all([
-    getDocs(query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(chatLimit))),
-    getDocs(query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(imageLimit))),
-  ]);
+  const imageSnapshot = await getDocs(query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(imageLimit)));
 
-  const chatHistory = chatSnapshot.docs
-    .map((entry) => mapChatEntry(entry.id, entry.data()))
-    .filter((entry): entry is MemoryChatEntry => Boolean(entry))
-    .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+  const visibleInsights: MemoryChatEntry[] = [
+    ...base.preferences.map((value, index) => ({
+      id: `preference:${index}`,
+      role: "user" as const,
+      content: value,
+      timestamp: new Date(0).toISOString(),
+    })),
+    ...base.facts.map((value, index) => ({
+      id: `fact:${index}`,
+      role: "user" as const,
+      content: value,
+      timestamp: new Date(0).toISOString(),
+    })),
+  ].slice(0, chatLimit);
 
   const images = imageSnapshot.docs
     .map((entry) => mapImageEntry(entry.id, entry.data()))
@@ -481,7 +639,7 @@ export async function fetchMemory(
 
   return {
     ...base,
-    chat_history: chatHistory,
+    chat_history: visibleInsights,
     images,
   };
 }
@@ -522,7 +680,7 @@ export async function saveMessage(
     content: string;
   },
 ) {
-  if (!user) {
+  if (!user || payload.role !== "user") {
     return;
   }
 
@@ -530,25 +688,12 @@ export async function saveMessage(
   if (!content) {
     return;
   }
-  const summarized = summarizeToKeywords(content);
-  if (!summarized || !passesMemoryValidation(summarized)) {
-    return;
-  }
-
   try {
     await ensureUserMemoryDoc(user);
-    await addDoc(getChatHistoryCollection(user), {
-      role: payload.role,
-      content: summarized,
-      timestamp: serverTimestamp(),
-      timestampIso: new Date().toISOString(),
-    });
-
-    const overflowSnapshot = await getDocs(
-      query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(MAX_CHAT_HISTORY + 20)),
-    );
-    const overflowDocs = overflowSnapshot.docs.slice(MAX_CHAT_HISTORY);
-    await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+    const snapshot = await getDoc(getUserDocRef(user));
+    const current = mapMemoryDoc(snapshot.data() as MemoryDocShape | undefined);
+    const next = deriveMemoryFields(current, content);
+    await saveMemoryFields(user, next);
   } catch (error) {
     console.error("Memory save failed:", error);
     throw error;
@@ -602,7 +747,29 @@ export async function deleteMemoryChat(user: User | null, messageId: string) {
     return;
   }
 
-  await deleteDoc(doc(db, 'users', user.uid, 'memory', messageId));
+  const snapshot = await getDoc(getUserDocRef(user));
+  const current = mapMemoryDoc(snapshot.data() as MemoryDocShape | undefined);
+  const [bucket, rawIndex] = messageId.split(":");
+  const index = Number(rawIndex);
+
+  if ((bucket === "preference" || bucket === "fact") && Number.isInteger(index) && index >= 0) {
+    const nextPreferences = [...current.preferences];
+    const nextFacts = [...current.facts];
+
+    if (bucket === "preference") {
+      nextPreferences.splice(index, 1);
+    } else {
+      nextFacts.splice(index, 1);
+    }
+
+    await saveMemoryFields(user, {
+      preferences: nextPreferences,
+      facts: nextFacts,
+    });
+    return;
+  }
+
+  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, CHAT_HISTORY_COLLECTION, messageId));
 }
 
 export async function deleteMemoryImage(user: User | null, imageId: string) {
@@ -610,7 +777,7 @@ export async function deleteMemoryImage(user: User | null, imageId: string) {
     return;
   }
 
-  await deleteDoc(doc(db, 'users', user.uid, 'memory_images', imageId));
+  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION, imageId));
 }
 
 export async function clearAllMemory(user: User | null) {
@@ -666,7 +833,7 @@ export function buildPromptMemoryContext(memory: MemoryProfile) {
     preferences: memory.preferences.slice(0, 10),
     facts: memory.facts.slice(0, 10),
     memoryEnabled: memory.memoryEnabled,
-    chat_history: memory.chat_history.slice(-20),
+    chat_history: [],
     images: memory.images.slice(0, 12),
   };
 }

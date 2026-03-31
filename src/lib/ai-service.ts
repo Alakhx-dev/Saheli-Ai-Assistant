@@ -145,14 +145,6 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
     lines.push(`- Preferences: ${memoryProfile.preferences.join("; ")}`);
   }
 
-  if (memoryProfile.chat_history?.length) {
-    const recentHistory = memoryProfile.chat_history
-      .slice(-10)
-      .map((entry) => `${entry.role}: ${entry.content}`)
-      .join(" | ");
-    lines.push(`- Recent chat history: ${recentHistory}`);
-  }
-
   if (memoryProfile.images?.length) {
     const imageContext = memoryProfile.images
       .slice(0, 8)
@@ -165,7 +157,7 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
     return "";
   }
 
-  return `\n\nUSER MEMORY:\n${lines.join("\n")}\n- Use this as durable structured memory for the current user.\n- Adapt naturally when the memory is relevant, but do not mention stored memory unless it helps the conversation.\n- Treat recent context as lightweight continuity, not a permanent identity trait.`;
+  return `\n\nUSER MEMORY:\n${lines.join("\n")}\n- Use this as durable structured memory for the current user.\n- Adapt naturally when the memory is relevant, but do not mention stored memory unless it helps the conversation.`;
 }
 
 function buildMemoryModeContext(memoryMode?: MemoryMode): string {

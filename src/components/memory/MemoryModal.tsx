@@ -48,7 +48,7 @@ export default function MemoryModal({
           <DialogHeader className="space-y-2 text-left">
             <DialogTitle className="text-xl font-semibold text-white">Manage Memory</DialogTitle>
             <DialogDescription className="text-sm text-white/50">
-              Review chat memory, image memory, and storage controls.
+              Review long-term memory insights, image memory, and storage controls.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -56,7 +56,7 @@ export default function MemoryModal({
         <div className="space-y-5 p-6">
           <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-white/40">Chats</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-white/40">Insights</p>
               <p className="text-xs text-white/45">{profile.chat_history.length}</p>
             </div>
             <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />

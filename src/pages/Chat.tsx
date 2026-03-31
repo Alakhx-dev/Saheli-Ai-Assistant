@@ -41,7 +41,6 @@ import {
   pruneLowValueMemories,
   saveImage,
   saveMemoryFields,
-  saveMessage,
   setMemoryEnabled,
   type MemoryProfile,
 } from "@/lib/memory";
@@ -1142,22 +1141,6 @@ export default function Chat() {
     }
   };
 
-  const persistMemoryMessage = useCallback(async (message: { role: "user" | "assistant"; content: string }) => {
-    if (!memoryEnabled) {
-      return;
-    }
-
-    if (!user) {
-      return;
-    }
-
-    try {
-      await saveMessage(user, message);
-    } catch (error) {
-      console.error("Memory save failed:", error);
-    }
-  }, [memoryEnabled, user]);
-
   const persistMemoryImage = useCallback(async (payload: {
     type: "upload" | "generated";
     url: string;
@@ -1730,11 +1713,6 @@ export default function Chat() {
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
-      await persistMemoryMessage({
-        role: "assistant",
-        content: responseText,
-      });
-
       if (isGuest) {
         saveLocal({ role: "assistant", content: responseText });
       } else {
@@ -1863,10 +1841,6 @@ export default function Chat() {
       void saveMemoryFields(user, nextMemoryFields).catch((error) => {
         console.warn("Failed to persist memory fields", error);
       });
-      await persistMemoryMessage({
-        role: "user",
-        content: userText,
-      });
     }
 
     const mobile = isMobileDevice();
@@ -1917,11 +1891,6 @@ export default function Chat() {
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
-
-      await persistMemoryMessage({
-        role: "assistant",
-        content: responseText,
-      });
 
       if (isGuest) {
         saveLocal({ role: "assistant", content: responseText });
