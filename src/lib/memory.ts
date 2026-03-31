@@ -10,112 +10,82 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
+  type DocumentReference,
   type User,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-const MEMORY_COLLECTION = "memory";
-const PROFILE_SUBCOLLECTION = "profile";
-const PROFILE_DOC_ID = "main";
-const MEMORY_MOMENTS_SUBCOLLECTION = "moments";
-const LOCAL_GUEST_MEMORY_KEY = "memory_guest";
-const LOCAL_GUEST_MOMENTS_KEY = "memory_guest_moments";
-const MEMORY_ENABLED_KEY = "memory_enabled";
-const MAX_MOMENTS = 12;
-const MAX_MEMORY_ITEMS = {
-  preferences: 16,
-  facts: 16,
-  recent_context: 10,
-} as const;
+const USERS_COLLECTION = "users";
+const CHAT_HISTORY_COLLECTION = "chat_history";
+const IMAGES_COLLECTION = "images";
+const LOCAL_MEMORY_ENABLED_KEY = "memory_enabled_guest";
+
+const MAX_CHAT_HISTORY = 30;
+const MAX_IMAGE_HISTORY = 60;
+const MAX_PREFERENCES = 20;
+const MAX_FACTS = 20;
 
 export const CREATOR_NAME = "Alakh";
+
+export type MemoryImageType = "upload" | "generated";
+export type MemoryMessageRole = "user" | "assistant";
+export type MemoryFieldKey = "preferences" | "facts";
+
+export interface MemoryChatEntry {
+  id: string;
+  role: MemoryMessageRole;
+  content: string;
+  timestamp: string;
+}
+
+export interface MemoryImageEntry {
+  id: string;
+  type: MemoryImageType;
+  url: string;
+  prompt?: string;
+  caption?: string;
+  timestamp: string;
+  storagePath?: string;
+}
 
 export interface MemoryProfile {
   preferences: string[];
   facts: string[];
-  recent_context: string[];
-  updatedAtMs?: number;
+  memoryEnabled: boolean;
+  chat_history: MemoryChatEntry[];
+  images: MemoryImageEntry[];
 }
 
-export interface MemoryMoment {
-  id: string;
-  imageDataUrl: string;
-  createdAt: number;
-}
-
-export type MemoryFieldKey = keyof Pick<MemoryProfile, "preferences" | "facts" | "recent_context">;
-
-type FirestoreMemoryProfile = Partial<MemoryProfile> & {
-  name?: string;
-  tone?: string;
-  style?: string;
-  moodPattern?: string;
-};
-
-function getMemoryDocRef(user: User) {
-  return doc(db, MEMORY_COLLECTION, user.uid, PROFILE_SUBCOLLECTION, PROFILE_DOC_ID);
-}
-
-function getMemoryMomentsCollectionRef(user: User) {
-  return collection(db, MEMORY_COLLECTION, user.uid, MEMORY_MOMENTS_SUBCOLLECTION);
-}
-
-export function createEmptyMemoryProfile(): MemoryProfile {
-  return {
-    preferences: [],
-    facts: [],
-    recent_context: [],
-    updatedAtMs: Date.now(),
-  };
+interface MemoryDocShape {
+  preferences?: string[];
+  facts?: string[];
+  memoryEnabled?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function sanitizeMemoryValue(value: string) {
+function sanitizeText(value: string) {
   return value
     .replace(/\s+/g, " ")
     .replace(/[<>{}\[\]]/g, "")
-    .trim()
-    .replace(/[.,!?]+$/g, "")
     .trim();
 }
 
-function capitalizeSentence(value: string) {
-  if (!value) {
-    return value;
-  }
-
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-function normalizeMemoryValue(value: string, minLength = 3, maxLength = 160) {
-  const cleaned = capitalizeSentence(sanitizeMemoryValue(value));
-
-  if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
+function normalizeText(value: string, min = 2, max = 280) {
+  const cleaned = sanitizeText(value);
+  if (!cleaned || cleaned.length < min || cleaned.length > max) {
     return undefined;
   }
 
   return cleaned;
 }
 
-function normalizeName(rawName: string): string | undefined {
-  const cleaned = sanitizeMemoryValue(rawName)
-    .replace(/\b(hai|hoon|hu|hun|ho)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleaned || cleaned.length > 40 || cleaned.split(" ").length > 4) {
-    return undefined;
-  }
-
-  return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function uniqueMemoryItems(values: string[], maxItems: number) {
+function uniqueValues(values: string[], max: number) {
   const seen = new Set<string>();
-  const deduped: string[] = [];
+  const result: string[] = [];
 
   for (const value of values) {
     const normalized = value.toLowerCase();
@@ -124,183 +94,168 @@ function uniqueMemoryItems(values: string[], maxItems: number) {
     }
 
     seen.add(normalized);
-    deduped.push(value);
+    result.push(value);
 
-    if (deduped.length >= maxItems) {
+    if (result.length >= max) {
       break;
     }
   }
 
-  return deduped;
+  return result;
 }
 
-function normalizeBucket(values: unknown, bucket: MemoryFieldKey): string[] {
+function normalizeList(values: unknown, max: number) {
   if (!Array.isArray(values)) {
     return [];
   }
 
-  return uniqueMemoryItems(
+  return uniqueValues(
     values
       .filter((value): value is string => typeof value === "string")
-      .map((value) => normalizeMemoryValue(value))
+      .map((value) => normalizeText(value))
       .filter((value): value is string => Boolean(value)),
-    MAX_MEMORY_ITEMS[bucket],
+    max,
   );
 }
 
-function legacyFacts(profile: FirestoreMemoryProfile) {
-  const facts: string[] = [];
-
-  if (typeof profile.name === "string") {
-    const name = normalizeName(profile.name);
-    if (name) {
-      facts.push(`Name: ${name}`);
-    }
+function normalizeIsoTimestamp(value: unknown) {
+  if (typeof value !== "string") {
+    return new Date(0).toISOString();
   }
 
-  if (typeof profile.tone === "string") {
-    const tone = normalizeMemoryValue(`Preferred tone: ${profile.tone}`);
-    if (tone) {
-      facts.push(tone);
-    }
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return new Date(0).toISOString();
   }
 
-  if (typeof profile.style === "string") {
-    const style = normalizeMemoryValue(`Preferred response style: ${profile.style}`);
-    if (style) {
-      facts.push(style);
-    }
-  }
-
-  if (typeof profile.moodPattern === "string") {
-    const moodPattern = normalizeMemoryValue(`Conversation mood: ${profile.moodPattern}`);
-    if (moodPattern) {
-      facts.push(moodPattern);
-    }
-  }
-
-  return facts;
+  return new Date(parsed).toISOString();
 }
 
-function normalizeProfile(profile: unknown): MemoryProfile {
-  const empty = createEmptyMemoryProfile();
+function getUserDocRef(user: User): DocumentReference {
+  return doc(db, USERS_COLLECTION, user.uid);
+}
 
-  if (!isRecord(profile)) {
-    return empty;
-  }
+function getChatHistoryCollection(user: User) {
+  return collection(db, USERS_COLLECTION, user.uid, CHAT_HISTORY_COLLECTION);
+}
 
-  const storedProfile = profile as FirestoreMemoryProfile;
-  const preferences = normalizeBucket(storedProfile.preferences, "preferences");
-  const facts = uniqueMemoryItems(
-    [...normalizeBucket(storedProfile.facts, "facts"), ...legacyFacts(storedProfile)],
-    MAX_MEMORY_ITEMS.facts,
-  );
-  const recentContext = normalizeBucket(storedProfile.recent_context, "recent_context");
+function getImagesCollection(user: User) {
+  return collection(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION);
+}
 
+function mapMemoryDoc(data: MemoryDocShape | undefined): Omit<MemoryProfile, "chat_history" | "images"> {
   return {
-    preferences,
-    facts,
-    recent_context: recentContext,
-    updatedAtMs: typeof storedProfile.updatedAtMs === "number" ? storedProfile.updatedAtMs : empty.updatedAtMs,
+    preferences: normalizeList(data?.preferences, MAX_PREFERENCES),
+    facts: normalizeList(data?.facts, MAX_FACTS),
+    memoryEnabled: typeof data?.memoryEnabled === "boolean" ? data.memoryEnabled : true,
   };
 }
 
-function readGuestMemory(): MemoryProfile {
-  try {
-    const raw = localStorage.getItem(LOCAL_GUEST_MEMORY_KEY);
-    if (!raw) {
-      return createEmptyMemoryProfile();
-    }
-
-    return normalizeProfile(JSON.parse(raw));
-  } catch (error) {
-    console.warn("Failed to read guest memory", error);
-    return createEmptyMemoryProfile();
+function mapChatEntry(id: string, raw: unknown): MemoryChatEntry | null {
+  if (!isRecord(raw)) {
+    return null;
   }
+
+  const role = raw.role === "assistant" ? "assistant" : raw.role === "user" ? "user" : null;
+  const content = typeof raw.content === "string" ? raw.content.trim() : "";
+  const timestamp =
+    raw.timestamp && isRecord(raw.timestamp) && typeof raw.timestamp.toDate === "function"
+      ? raw.timestamp.toDate().toISOString()
+      : normalizeIsoTimestamp(raw.timestampIso);
+
+  if (!role || !content) {
+    return null;
+  }
+
+  return { id, role, content, timestamp };
 }
 
-function writeGuestMemory(profile: MemoryProfile) {
-  try {
-    localStorage.setItem(LOCAL_GUEST_MEMORY_KEY, JSON.stringify(profile));
-  } catch (error) {
-    console.warn("Failed to persist guest memory", error);
+function mapImageEntry(id: string, raw: unknown): MemoryImageEntry | null {
+  if (!isRecord(raw)) {
+    return null;
   }
+
+  const type = raw.type === "generated" ? "generated" : raw.type === "upload" ? "upload" : null;
+  const url = typeof raw.url === "string" ? raw.url.trim() : "";
+  const prompt = typeof raw.prompt === "string" ? raw.prompt : undefined;
+  const caption = typeof raw.caption === "string" ? raw.caption : undefined;
+  const storagePath = typeof raw.storagePath === "string" ? raw.storagePath : undefined;
+  const timestamp =
+    raw.timestamp && isRecord(raw.timestamp) && typeof raw.timestamp.toDate === "function"
+      ? raw.timestamp.toDate().toISOString()
+      : normalizeIsoTimestamp(raw.timestampIso);
+
+  if (!type || !url) {
+    return null;
+  }
+
+  return { id, type, url, prompt, caption, timestamp, storagePath };
 }
 
-function readGuestMoments(): MemoryMoment[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_GUEST_MOMENTS_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as MemoryMoment[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn("Failed to read guest memory moments", error);
-    return [];
-  }
+export function createEmptyMemoryProfile(): MemoryProfile {
+  return {
+    preferences: [],
+    facts: [],
+    memoryEnabled: true,
+    chat_history: [],
+    images: [],
+  };
 }
 
-function writeGuestMoments(moments: MemoryMoment[]) {
-  try {
-    localStorage.setItem(LOCAL_GUEST_MOMENTS_KEY, JSON.stringify(moments.slice(0, MAX_MOMENTS)));
-  } catch (error) {
-    console.warn("Failed to persist guest memory moments", error);
+export function isMeaningfulMessage(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed) {
+    return false;
   }
+
+  if (trimmed.length < 6 || trimmed.length > 1600) {
+    return false;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return false;
+  }
+
+  return /[a-zA-Z\u0900-\u097F]/u.test(trimmed);
 }
 
 function extractNameFact(text: string) {
-  const match = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,40})/i);
-  const name = match ? normalizeName(match[1]) : undefined;
+  const match = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,60})/i);
+  const name = match ? normalizeText(match[1], 2, 60) : undefined;
   return name ? `Name: ${name}` : undefined;
 }
 
-function normalizePreference(rawPreference: string) {
-  const cleaned = sanitizeMemoryValue(rawPreference)
-    .replace(/\b(bahut|bohot|bahot|really|very)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleaned || cleaned.length < 2 || cleaned.length > 80) {
-    return undefined;
-  }
-
-  return capitalizeSentence(cleaned);
-}
-
 function extractPreference(text: string) {
-  const trailingPreferenceMatch = text.match(/mujhe\s+pasand\s+hai\s+([^.!?\n]{1,80})/i);
-  if (trailingPreferenceMatch) {
-    const preference = normalizePreference(trailingPreferenceMatch[1]);
-    return preference ? `Likes ${preference}` : undefined;
-  }
+  const patterns = [
+    /i\s+like\s+([^.!?\n]{1,120})/i,
+    /mujhe\s+pasand\s+hai\s+([^.!?\n]{1,120})/i,
+    /mujhe\s+([^.!?\n]{1,120})\s+pasand\s+hai/i,
+  ];
 
-  const leadingPreferenceMatch = text.match(/mujhe\s+([^.!?\n]{1,80})\s+pasand\s+hai/i);
-  if (leadingPreferenceMatch) {
-    const preference = normalizePreference(leadingPreferenceMatch[1]);
-    return preference ? `Likes ${preference}` : undefined;
-  }
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
 
-  const englishMatch = text.match(/i\s+like\s+([^.!?\n]{1,80})/i);
-  if (englishMatch) {
-    const preference = normalizePreference(englishMatch[1]);
-    return preference ? `Likes ${preference}` : undefined;
+    const value = normalizeText(match[1], 2, 120);
+    if (value) {
+      return value;
+    }
   }
 
   return undefined;
 }
 
 function extractFact(text: string) {
-  const matchers: Array<[RegExp, (value: string) => string | undefined]> = [
-    [/\bi\s+am\s+from\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`From ${value}`)],
-    [/\bmain\s+([^.!?\n]{1,80})\s+se\s+hu/i, (value) => normalizeMemoryValue(`From ${value}`)],
-    [/\bi\s+work\s+as\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`Works as ${value}`)],
-    [/\bi\s+study\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`Studies ${value}`)],
-    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => normalizeMemoryValue(`Age: ${value}`)],
+  const patterns: Array<[RegExp, (value: string) => string | undefined]> = [
+    [/\bi\s+am\s+from\s+([^.!?\n]{1,120})/i, (value) => normalizeText(`From ${value}`, 4, 140)],
+    [/\bmain\s+([^.!?\n]{1,120})\s+se\s+hu/i, (value) => normalizeText(`From ${value}`, 4, 140)],
+    [/\bi\s+work\s+as\s+([^.!?\n]{1,120})/i, (value) => normalizeText(`Works as ${value}`, 4, 140)],
+    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => normalizeText(`Age ${value}`, 4, 140)],
   ];
 
-  for (const [pattern, formatter] of matchers) {
+  for (const [pattern, formatter] of patterns) {
     const match = text.match(pattern);
     if (!match) {
       continue;
@@ -315,179 +270,236 @@ function extractFact(text: string) {
   return undefined;
 }
 
-function shouldStoreAsRecentContext(text: string) {
-  const trimmed = text.trim();
+export function deriveMemoryFields(current: Pick<MemoryProfile, "preferences" | "facts">, text: string) {
+  const currentPreferences = normalizeList(current.preferences, MAX_PREFERENCES);
+  const currentFacts = normalizeList(current.facts, MAX_FACTS);
+  const nextPreferences = [...currentPreferences];
+  const nextFacts = [...currentFacts];
 
-  if (!trimmed || trimmed.length < 8 || trimmed.length > 180) {
-    return false;
+  const preference = extractPreference(text);
+  if (preference) {
+    nextPreferences.unshift(preference);
   }
 
-  if (/https?:\/\//i.test(trimmed)) {
-    return false;
+  const nameFact = extractNameFact(text);
+  if (nameFact) {
+    nextFacts.unshift(nameFact);
   }
 
-  if (!/[a-z]/i.test(trimmed) && !/[\u0900-\u097F]/u.test(trimmed)) {
-    return false;
+  const fact = extractFact(text);
+  if (fact) {
+    nextFacts.unshift(fact);
   }
 
-  return true;
-}
-
-function mergeBucket(currentValues: string[], incomingValues: string[] | undefined, bucket: MemoryFieldKey) {
-  return uniqueMemoryItems(
-    [
-      ...(incomingValues ?? [])
-        .map((value) => normalizeMemoryValue(value))
-        .filter((value): value is string => Boolean(value)),
-      ...currentValues,
-    ],
-    MAX_MEMORY_ITEMS[bucket],
-  );
-}
-
-function profilesEqual(left: MemoryProfile, right: MemoryProfile) {
-  return (
-    left.preferences.join("|") === right.preferences.join("|") &&
-    left.facts.join("|") === right.facts.join("|") &&
-    left.recent_context.join("|") === right.recent_context.join("|")
-  );
-}
-
-export function mergeMemoryProfile(
-  currentProfile: MemoryProfile | null,
-  partialProfile: Partial<Pick<MemoryProfile, "preferences" | "facts" | "recent_context">>,
-): MemoryProfile {
-  const current = normalizeProfile(currentProfile);
-  const nextProfile: MemoryProfile = {
-    preferences: mergeBucket(current.preferences, partialProfile.preferences, "preferences"),
-    facts: mergeBucket(current.facts, partialProfile.facts, "facts"),
-    recent_context: mergeBucket(current.recent_context, partialProfile.recent_context, "recent_context"),
-    updatedAtMs: Date.now(),
+  return {
+    preferences: uniqueValues(nextPreferences, MAX_PREFERENCES),
+    facts: uniqueValues(nextFacts, MAX_FACTS),
   };
-
-  return nextProfile;
 }
 
-export function isMemoryEnabled() {
-  const value = localStorage.getItem(MEMORY_ENABLED_KEY);
-  return value !== "false";
-}
-
-export function setMemoryEnabled(enabled: boolean) {
-  localStorage.setItem(MEMORY_ENABLED_KEY, String(enabled));
-}
-
-export function deriveNextMemoryProfile(currentProfile: MemoryProfile | null, message: string): MemoryProfile | null {
-  const trimmedMessage = message.trim();
-  if (!trimmedMessage) {
-    return normalizeProfile(currentProfile);
-  }
-
-  const factAdditions = [extractNameFact(trimmedMessage), extractFact(trimmedMessage)].filter(
-    (value): value is string => Boolean(value),
-  );
-  const preferenceAdditions = [extractPreference(trimmedMessage)].filter((value): value is string => Boolean(value));
-  const recentContextAdditions =
-    shouldStoreAsRecentContext(trimmedMessage) && factAdditions.length === 0 && preferenceAdditions.length === 0
-      ? [trimmedMessage]
-      : [];
-
-  const nextProfile = mergeMemoryProfile(currentProfile, {
-    preferences: preferenceAdditions,
-    facts: factAdditions,
-    recent_context: recentContextAdditions,
-  });
-
-  const current = normalizeProfile(currentProfile);
-  return profilesEqual(current, nextProfile) ? current : nextProfile;
-}
-
-export async function loadMemoryProfile(user: User | null): Promise<MemoryProfile | null> {
-  if (!user) {
-    return readGuestMemory();
-  }
-
-  const snapshot = await getDoc(getMemoryDocRef(user));
-  if (!snapshot.exists()) {
-    return createEmptyMemoryProfile();
-  }
-
-  return normalizeProfile(snapshot.data());
-}
-
-export async function persistMemoryProfile(user: User | null, profile: MemoryProfile | null): Promise<void> {
-  if (!profile) {
+export async function ensureUserMemoryDoc(user: User) {
+  const ref = getUserDocRef(user);
+  const snapshot = await getDoc(ref);
+  if (snapshot.exists()) {
     return;
   }
 
-  const normalized = {
-    ...normalizeProfile(profile),
-    updatedAtMs: Date.now(),
-  };
-
-  if (!user) {
-    writeGuestMemory(normalized);
-    return;
-  }
-
-  await setDoc(getMemoryDocRef(user), {
-    ...normalized,
+  await setDoc(ref, {
+    preferences: [],
+    facts: [],
+    memoryEnabled: true,
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }
 
-export function deleteMemoryEntry(profile: MemoryProfile | null, field: MemoryFieldKey, value: string): MemoryProfile {
-  const nextProfile = normalizeProfile(profile);
-  nextProfile[field] = nextProfile[field].filter((item) => item.toLowerCase() !== value.toLowerCase());
-  nextProfile.updatedAtMs = Date.now();
-  return nextProfile;
-}
-
-export async function loadMemoryMoments(user: User | null): Promise<MemoryMoment[]> {
+export async function fetchMemory(
+  user: User | null,
+  options?: {
+    chatLimit?: number;
+    imageLimit?: number;
+  },
+): Promise<MemoryProfile> {
   if (!user) {
-    return readGuestMoments().sort((left, right) => right.createdAt - left.createdAt);
+    return {
+      ...createEmptyMemoryProfile(),
+      memoryEnabled: localStorage.getItem(LOCAL_MEMORY_ENABLED_KEY) !== "false",
+    };
   }
 
-  const snapshot = await getDocs(query(getMemoryMomentsCollectionRef(user), orderBy("createdAt", "desc"), limit(MAX_MOMENTS)));
-  return snapshot.docs
-    .map((momentDoc) => {
-      const data = momentDoc.data();
+  await ensureUserMemoryDoc(user);
+  const userSnapshot = await getDoc(getUserDocRef(user));
+  const base = mapMemoryDoc(userSnapshot.data() as MemoryDocShape | undefined);
 
-      return {
-        id: momentDoc.id,
-        imageDataUrl: typeof data.imageDataUrl === "string" ? data.imageDataUrl : "",
-        createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
-      };
-    })
-    .filter((moment) => moment.imageDataUrl);
+  const chatLimit = options?.chatLimit ?? 20;
+  const imageLimit = options?.imageLimit ?? 20;
+
+  const [chatSnapshot, imageSnapshot] = await Promise.all([
+    getDocs(query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(chatLimit))),
+    getDocs(query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(imageLimit))),
+  ]);
+
+  const chatHistory = chatSnapshot.docs
+    .map((entry) => mapChatEntry(entry.id, entry.data()))
+    .filter((entry): entry is MemoryChatEntry => Boolean(entry))
+    .sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp));
+
+  const images = imageSnapshot.docs
+    .map((entry) => mapImageEntry(entry.id, entry.data()))
+    .filter((entry): entry is MemoryImageEntry => Boolean(entry))
+    .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));
+
+  return {
+    ...base,
+    chat_history: chatHistory,
+    images,
+  };
 }
 
-export async function saveMemoryMoment(user: User | null, imageBase64OrDataUrl: string): Promise<void> {
-  const imageDataUrl = imageBase64OrDataUrl.startsWith("data:image")
-    ? imageBase64OrDataUrl
-    : `data:image/jpeg;base64,${imageBase64OrDataUrl}`;
-  const createdAt = Date.now();
-
+export async function setMemoryEnabled(user: User | null, enabled: boolean) {
   if (!user) {
-    const moments = readGuestMoments();
-    const nextMoments = [{ id: String(createdAt), imageDataUrl, createdAt }, ...moments];
-    writeGuestMoments(nextMoments);
+    localStorage.setItem(LOCAL_MEMORY_ENABLED_KEY, String(enabled));
     return;
   }
 
-  await addDoc(getMemoryMomentsCollectionRef(user), {
-    imageDataUrl,
-    createdAt,
-    createdAtServer: serverTimestamp(),
+  await ensureUserMemoryDoc(user);
+  await updateDoc(getUserDocRef(user), {
+    memoryEnabled: enabled,
+    updatedAt: serverTimestamp(),
   });
 }
 
-export async function deleteMemoryMoment(user: User | null, momentId: string): Promise<void> {
+export async function saveMemoryFields(
+  user: User | null,
+  fields: Pick<MemoryProfile, "preferences" | "facts">,
+) {
   if (!user) {
-    const nextMoments = readGuestMoments().filter((moment) => moment.id !== momentId);
-    writeGuestMoments(nextMoments);
     return;
   }
 
-  await deleteDoc(doc(db, MEMORY_COLLECTION, user.uid, MEMORY_MOMENTS_SUBCOLLECTION, momentId));
+  await ensureUserMemoryDoc(user);
+  await updateDoc(getUserDocRef(user), {
+    preferences: uniqueValues(normalizeList(fields.preferences, MAX_PREFERENCES), MAX_PREFERENCES),
+    facts: uniqueValues(normalizeList(fields.facts, MAX_FACTS), MAX_FACTS),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function saveMessage(
+  user: User | null,
+  payload: {
+    role: MemoryMessageRole;
+    content: string;
+  },
+) {
+  if (!user) {
+    return;
+  }
+
+  await ensureUserMemoryDoc(user);
+
+  if (!isMeaningfulMessage(payload.content)) {
+    return;
+  }
+
+  await addDoc(getChatHistoryCollection(user), {
+    role: payload.role,
+    content: payload.content.trim(),
+    timestamp: serverTimestamp(),
+    timestampIso: new Date().toISOString(),
+  });
+
+  const overflowSnapshot = await getDocs(
+    query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(MAX_CHAT_HISTORY + 20)),
+  );
+  const overflowDocs = overflowSnapshot.docs.slice(MAX_CHAT_HISTORY);
+  await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+}
+
+export async function saveImage(
+  user: User | null,
+  payload: {
+    type: MemoryImageType;
+    url: string;
+    prompt?: string;
+    caption?: string;
+    storagePath?: string;
+  },
+) {
+  if (!user) {
+    return;
+  }
+
+  await ensureUserMemoryDoc(user);
+  const cleanedUrl = payload.url.trim();
+  if (!cleanedUrl) {
+    return;
+  }
+
+  await addDoc(getImagesCollection(user), {
+    type: payload.type,
+    url: cleanedUrl,
+    prompt: payload.prompt?.trim() || null,
+    caption: payload.caption?.trim() || null,
+    storagePath: payload.storagePath || null,
+    timestamp: serverTimestamp(),
+    timestampIso: new Date().toISOString(),
+  });
+
+  const overflowSnapshot = await getDocs(
+    query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(MAX_IMAGE_HISTORY + 20)),
+  );
+  const overflowDocs = overflowSnapshot.docs.slice(MAX_IMAGE_HISTORY);
+  await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+}
+
+export async function deleteMemoryChat(user: User | null, messageId: string) {
+  if (!user || !messageId) {
+    return;
+  }
+
+  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, CHAT_HISTORY_COLLECTION, messageId));
+}
+
+export async function deleteMemoryImage(user: User | null, imageId: string) {
+  if (!user || !imageId) {
+    return;
+  }
+
+  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION, imageId));
+}
+
+export async function clearAllMemory(user: User | null) {
+  if (!user) {
+    localStorage.setItem(LOCAL_MEMORY_ENABLED_KEY, "true");
+    return;
+  }
+
+  await ensureUserMemoryDoc(user);
+
+  const [chatSnapshot, imageSnapshot] = await Promise.all([
+    getDocs(query(getChatHistoryCollection(user), limit(500))),
+    getDocs(query(getImagesCollection(user), limit(500))),
+  ]);
+
+  await Promise.all([
+    ...chatSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
+    ...imageSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
+  ]);
+
+  await updateDoc(getUserDocRef(user), {
+    preferences: [],
+    facts: [],
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export function buildPromptMemoryContext(memory: MemoryProfile) {
+  return {
+    preferences: memory.preferences.slice(0, 10),
+    facts: memory.facts.slice(0, 10),
+    memoryEnabled: memory.memoryEnabled,
+    chat_history: memory.chat_history.slice(-20),
+    images: memory.images.slice(0, 12),
+  };
 }

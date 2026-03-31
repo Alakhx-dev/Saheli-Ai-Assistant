@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState, memo } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import {
   Settings,
   Menu,
@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { auth, storage } from "@/lib/firebase";
-import { sendPasswordResetEmail, signOut, updateProfile } from "firebase/auth";
+import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
 import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -30,25 +30,24 @@ import { detectEmotionFromImage } from "@/lib/emotion-service";
 import { formatText, getLang, getStoredLanguage, UI_LANGUAGE_STORAGE_KEY } from "@/lib/useLanguage";
 import {
   CREATOR_NAME,
+  buildPromptMemoryContext,
+  clearAllMemory,
   createEmptyMemoryProfile,
-  deleteMemoryEntry,
-  deleteMemoryMoment,
-  deriveNextMemoryProfile,
-  isMemoryEnabled,
-  loadMemoryProfile,
-  loadMemoryMoments,
-  mergeMemoryProfile,
-  persistMemoryProfile,
-  saveMemoryMoment,
+  deleteMemoryChat,
+  deleteMemoryImage,
+  deriveMemoryFields,
+  fetchMemory,
+  saveImage,
+  saveMemoryFields,
+  saveMessage,
   setMemoryEnabled,
-  type MemoryFieldKey,
-  type MemoryMoment,
   type MemoryProfile,
 } from "@/lib/memory";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
-import SettingsPanel from "@/components/settings/SettingsPanel";
-import MemoryManagerModal from "@/components/settings/MemoryManagerModal";
+import MemoryModal from "@/components/memory/MemoryModal";
+
+const SettingsPanel = lazy(() => import("@/components/settings/SettingsPanel"));
 
 const VISION_TRIGGER_PATTERNS = [
   /\bdekho\b/i,
@@ -71,12 +70,6 @@ const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = "auto" | LanguageOption;
 type SettingsSectionId = "general" | "personalization" | "account";
-type MemoryEntryDescriptor = {
-  id: string;
-  label: string;
-  value: string;
-  field: MemoryFieldKey;
-};
 
 interface ProfileImageMeta {
   width: number;
@@ -102,20 +95,6 @@ function readGuestProfileName() {
 
 function readGuestProfilePhoto() {
   return localStorage.getItem(GUEST_PROFILE_PHOTO_KEY) || "";
-}
-
-function hasExplicitMemoryInstruction(text: string) {
-  return /yaad\s+rakhna|mera\s+naam|my\s+name\s+is|mujhe\s+pasand\s+hai|i\s+like|mai\s+aise\s+hu|main\s+aisa\s+hu|main\s+aisi\s+hu/i.test(text);
-}
-
-function hasVisibleMemoryChange(previousProfile: MemoryProfile | null, nextProfile: MemoryProfile | null) {
-  const normalizeList = (values?: string[]) => (values ?? []).slice().sort().join("|");
-
-  return (
-    normalizeList(previousProfile?.preferences) !== normalizeList(nextProfile?.preferences) ||
-    normalizeList(previousProfile?.facts) !== normalizeList(nextProfile?.facts) ||
-    normalizeList(previousProfile?.recent_context) !== normalizeList(nextProfile?.recent_context)
-  );
 }
 
 async function loadImageMeta(dataUrl: string): Promise<ProfileImageMeta> {
@@ -718,8 +697,8 @@ export default function Chat() {
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [memoryEnabled, setMemoryEnabledState] = useState(() => isMemoryEnabled());
-  const [memoryMoments, setMemoryMoments] = useState<MemoryMoment[]>([]);
+  const [memoryEnabled, setMemoryEnabledState] = useState(true);
+  const [memoryHydrated, setMemoryHydrated] = useState(false);
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
@@ -733,7 +712,7 @@ export default function Chat() {
   };
   const inputPlaceholder = t.composer.messagePlaceholder;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(null);
+  const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -763,6 +742,10 @@ export default function Chat() {
   );
 
   useEffect(() => {
+    void import("@/components/settings/SettingsPanel");
+  }, []);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -785,8 +768,14 @@ export default function Chat() {
   }, [replyLanguageMode]);
 
   useEffect(() => {
-    setMemoryEnabled(memoryEnabled);
-  }, [memoryEnabled]);
+    if (!memoryHydrated) {
+      return;
+    }
+
+    void setMemoryEnabled(user, memoryEnabled).catch((error) => {
+      console.warn("Failed to persist memory toggle", error);
+    });
+  }, [memoryEnabled, memoryHydrated, user]);
 
   useEffect(() => {
     const nextName = user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User");
@@ -843,40 +832,19 @@ export default function Chat() {
   useEffect(() => {
     let cancelled = false;
 
-    const bootstrapMemoryMoments = async () => {
-      try {
-        const moments = await loadMemoryMoments(user);
-        if (!cancelled) {
-          setMemoryMoments(moments);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.warn("Failed to load memory moments", error);
-          setMemoryMoments([]);
-        }
-      }
-    };
-
-    void bootstrapMemoryMoments();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    let cancelled = false;
-
     const bootstrapMemory = async () => {
       try {
-        const profile = await loadMemoryProfile(user);
+        const profile = await fetchMemory(user);
         if (!cancelled) {
           setMemoryProfile(profile);
+          setMemoryEnabledState(profile.memoryEnabled);
+          setMemoryHydrated(true);
         }
       } catch (error) {
         if (!cancelled) {
-          console.warn("Failed to load memory profile", error);
-          setMemoryProfile(null);
+          console.warn("Failed to load memory", error);
+          setMemoryProfile(createEmptyMemoryProfile());
+          setMemoryHydrated(true);
         }
       }
     };
@@ -916,56 +884,97 @@ export default function Chat() {
 
   const handleMemoryToggle = (enabled: boolean) => {
     setMemoryEnabledState(enabled);
+    setMemoryProfile((prev) => ({
+      ...(prev ?? createEmptyMemoryProfile()),
+      memoryEnabled: enabled,
+    }));
     setMemoryStatus(enabled ? t.statuses.memoryOn : t.statuses.memoryOff);
   };
 
-  const handleDeleteMemoryEntry = async (entry: MemoryEntryDescriptor) => {
-    const nextProfile = deleteMemoryEntry(memoryProfile, entry.field, entry.value);
-    setMemoryProfile(nextProfile);
+  const refreshMemoryState = useCallback(async () => {
+    try {
+      const nextMemory = await fetchMemory(user);
+      setMemoryProfile(nextMemory);
+      setMemoryEnabledState(nextMemory.memoryEnabled);
+    } catch (error) {
+      console.warn("Failed to refresh memory", error);
+    }
+  }, [user]);
+
+  const handleDeleteMemoryChat = async (messageId: string) => {
+    if (!window.confirm("Delete this chat memory?")) {
+      return;
+    }
 
     try {
-      await persistMemoryProfile(user, nextProfile);
-      setMemoryStatus(formatText(t.statuses.memoryEntryDeleted, { label: entry.label }));
+      await deleteMemoryChat(user, messageId);
+      await refreshMemoryState();
+      setMemoryStatus("Chat memory deleted.");
     } catch (error) {
-      console.warn("Failed to delete memory entry", error);
-      setMemoryStatus(t.statuses.memoryEntryDeleteFailed);
+      console.warn("Failed to delete chat memory", error);
+      setMemoryStatus("Could not delete chat memory.");
     }
   };
 
-  const handleDeleteMemoryMoment = async (momentId: string) => {
+  const handleDeleteMemoryImage = async (imageId: string) => {
+    if (!window.confirm("Delete this image memory?")) {
+      return;
+    }
+
     try {
-      const deletedMoment = memoryMoments.find((moment) => moment.id === momentId);
-      await deleteMemoryMoment(user, momentId);
-      setMemoryMoments((prev) => prev.filter((moment) => moment.id !== momentId));
-      if (selectedMemoryImage && deletedMoment?.imageDataUrl === selectedMemoryImage) {
+      const deletedImage = memoryProfile?.images.find((image) => image.id === imageId);
+      await deleteMemoryImage(user, imageId);
+      if (selectedMemoryImage && deletedImage?.url === selectedMemoryImage) {
         setSelectedMemoryImage(null);
       }
-      setMemoryStatus(t.statuses.savedMomentDeleted);
+      await refreshMemoryState();
+      setMemoryStatus("Image memory deleted.");
     } catch (error) {
-      console.warn("Failed to delete memory moment", error);
-      setMemoryStatus(t.statuses.savedMomentDeleteFailed);
+      console.warn("Failed to delete image memory", error);
+      setMemoryStatus("Could not delete image memory.");
     }
   };
 
   const handleClearAllMemory = async () => {
-    if (!window.confirm("Clear all saved memory and captures?")) {
+    if (!window.confirm("Clear all memory (chats + images + facts + preferences)?")) {
       return;
     }
 
-    const emptyMemory = createEmptyMemoryProfile();
-    setMemoryProfile(emptyMemory);
-    setSelectedMemoryImage(null);
-
     try {
-      await persistMemoryProfile(user, emptyMemory);
-      await Promise.all(memoryMoments.map((moment) => deleteMemoryMoment(user, moment.id)));
-      setMemoryMoments([]);
+      await clearAllMemory(user);
+      await refreshMemoryState();
+      setSelectedMemoryImage(null);
       setMemoryStatus("All memory cleared.");
     } catch (error) {
       console.warn("Failed to clear memory", error);
       setMemoryStatus("Couldn't clear memory right now.");
     }
   };
+
+  const uploadMemoryImage = useCallback(async (
+    base64OrDataUrl: string,
+    type: "upload" | "generated",
+    prompt?: string,
+  ) => {
+    if (!user || !memoryEnabled) {
+      return;
+    }
+
+    const imageDataUrl = base64OrDataUrl.startsWith("data:image")
+      ? base64OrDataUrl
+      : `data:image/jpeg;base64,${base64OrDataUrl}`;
+    const path = `memory/${user.uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+    const imageRef = storageRef(storage, path);
+
+    await uploadString(imageRef, imageDataUrl, "data_url");
+    const url = await getDownloadURL(imageRef);
+    await saveImage(user, {
+      type,
+      url,
+      prompt,
+      storagePath: path,
+    });
+  }, [memoryEnabled, user]);
 
   const handleProfileImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1020,6 +1029,31 @@ export default function Chat() {
     }
   };
 
+  const handleChangePassword = useCallback(async () => {
+    if (!user) {
+      setMemoryStatus("Please log in to change password.");
+      return;
+    }
+
+    const nextPassword = window.prompt("Enter new password (minimum 6 characters):", "");
+    if (!nextPassword) {
+      return;
+    }
+
+    if (nextPassword.trim().length < 6) {
+      setMemoryStatus("Password must be at least 6 characters.");
+      return;
+    }
+
+    try {
+      await updatePassword(user, nextPassword.trim());
+      setMemoryStatus("Password updated.");
+    } catch (error) {
+      console.warn("Password update failed", error);
+      setMemoryStatus("Could not change password. Please re-login and try again.");
+    }
+  }, [user]);
+
   const handleSaveProfile = async () => {
     const trimmedName = profileDraftName.trim() || (isGuest ? CREATOR_NAME : "User");
 
@@ -1067,14 +1101,19 @@ export default function Chat() {
       setProfileCropX(0);
       setProfileCropY(0);
 
-      const nextMemoryProfile = mergeMemoryProfile(memoryProfile, {
-        facts: [`Name: ${trimmedName}`],
-      });
-      setMemoryProfile(nextMemoryProfile);
       if (memoryEnabled) {
-        void persistMemoryProfile(user, nextMemoryProfile).catch((error) => {
-          console.warn("Failed to sync memory name with profile", error);
-        });
+        const nextMemoryFields = deriveMemoryFields(
+          {
+            preferences: memoryProfile?.preferences ?? [],
+            facts: memoryProfile?.facts ?? [],
+          },
+          `my name is ${trimmedName}`,
+        );
+        void saveMemoryFields(user, nextMemoryFields)
+          .then(() => refreshMemoryState())
+          .catch((error) => {
+            console.warn("Failed to sync memory name with profile", error);
+          });
       }
 
       setProfileStatus(t.statuses.profileSaved);
@@ -1231,6 +1270,37 @@ export default function Chat() {
     await refreshChatSessions(currentChatId === chatId ? null : currentChatId);
   };
 
+  const handleRenameChat = useCallback(async (chatId: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    await updateChatSessionTitle(chatId, trimmed, user);
+    await refreshChatSessions(currentChatId === chatId ? chatId : currentChatId);
+  }, [currentChatId, refreshChatSessions, user]);
+
+  const generateTitle = useCallback(async (message: string) => {
+    const response = await fetch("/api/title", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Title API failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as { title?: string };
+    const title = (data.title ?? "").trim();
+    return title
+      .split(/\s+/)
+      .slice(0, 6)
+      .join(" ");
+  }, []);
+
   const syncSmartChatTitle = useCallback(async (chatId: string, history: ChatMessage[]) => {
     const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
     if (!shouldRefreshGeneratedTitle(history.length, currentTitle, language)) {
@@ -1287,13 +1357,10 @@ export default function Chat() {
       if (imageBase64) {
         detectedEmotion = await detectEmotionFromImage(imageBase64);
         if (memoryEnabled) {
-          void saveMemoryMoment(user, imageBase64)
-            .then(async () => {
-              const nextMoments = await loadMemoryMoments(user);
-              setMemoryMoments(nextMoments);
-            })
+          void uploadMemoryImage(imageBase64, "upload")
+            .then(() => refreshMemoryState())
             .catch((error) => {
-              console.warn("Failed to save memory moment", error);
+              console.warn("Failed to save memory image", error);
             });
         }
       }
@@ -1303,7 +1370,7 @@ export default function Chat() {
         request.history,
         imageBase64,
         detectedEmotion,
-        memoryEnabled ? request.memoryProfile : null,
+        memoryEnabled && request.memoryProfile ? buildPromptMemoryContext(request.memoryProfile) : null,
         requestIdentity,
         memoryEnabled ? "enabled" : "disabled",
       );
@@ -1313,6 +1380,14 @@ export default function Chat() {
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
       setMessages(nextHistory);
+      if (memoryEnabled) {
+        void saveMessage(user, {
+          role: "assistant",
+          content: responseText,
+        }).catch((error) => {
+          console.warn("Failed to persist assistant memory message", error);
+        });
+      }
       void persistChatMessage(request.chatId, {
         role: "model",
         content: responseText,
@@ -1426,20 +1501,60 @@ export default function Chat() {
 
     const nextHistory: ChatMessage[] = [...messages, { role: userMessage.role, content: userMessage.content }];
     setMessages(nextHistory);
+
+    if (nextHistory.length === 1) {
+      void generateTitle(userText)
+        .then(async (title) => {
+          if (!title) {
+            return;
+          }
+
+          await updateChatSessionTitle(chatId, title, user);
+          await refreshChatSessions(chatId);
+        })
+        .catch(() => {
+          void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
+            console.warn("Failed to update fallback smart chat title", error);
+          });
+        });
+    }
+
     void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
       console.warn("Failed to update smart chat title", error);
     });
 
-    let nextMemoryProfile = memoryProfile;
+    let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
     if (memoryEnabled) {
-      nextMemoryProfile = deriveNextMemoryProfile(memoryProfile, userText);
-      const shouldPersistMemory = hasExplicitMemoryInstruction(userText) || hasVisibleMemoryChange(memoryProfile, nextMemoryProfile);
+      const nextMemoryFields = deriveMemoryFields(
+        {
+          preferences: nextMemoryProfile.preferences,
+          facts: nextMemoryProfile.facts,
+        },
+        userText,
+      );
+      nextMemoryProfile = {
+        ...nextMemoryProfile,
+        ...nextMemoryFields,
+        memoryEnabled: true,
+      };
       setMemoryProfile(nextMemoryProfile);
 
-      if (shouldPersistMemory) {
-        void persistMemoryProfile(user, nextMemoryProfile).catch((error) => {
-          console.warn("Failed to persist memory profile", error);
-        });
+      void saveMemoryFields(user, nextMemoryFields).catch((error) => {
+        console.warn("Failed to persist memory fields", error);
+      });
+      void saveMessage(user, {
+        role: "user",
+        content: userText,
+      }).catch((error) => {
+        console.warn("Failed to persist user memory message", error);
+      });
+
+      try {
+        const freshMemory = await fetchMemory(user, { chatLimit: 20, imageLimit: 12 });
+        nextMemoryProfile = freshMemory;
+        setMemoryProfile(freshMemory);
+      } catch (error) {
+        console.warn("Failed to fetch fresh memory for prompt context", error);
       }
     }
 
@@ -1463,20 +1578,17 @@ export default function Chat() {
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
       if (base64Image && memoryEnabled) {
-        void saveMemoryMoment(user, base64Image)
-          .then(async () => {
-            const nextMoments = await loadMemoryMoments(user);
-            setMemoryMoments(nextMoments);
-          })
+        void uploadMemoryImage(base64Image, "upload", userText)
+          .then(() => refreshMemoryState())
           .catch((error) => {
-            console.warn("Failed to save memory moment", error);
+            console.warn("Failed to save memory image", error);
           });
       }
       const responseText = await sendMessage(
         nextHistory,
         base64Image,
         detectedEmotion,
-        memoryEnabled ? nextMemoryProfile : null,
+        memoryEnabled ? buildPromptMemoryContext(nextMemoryProfile) : null,
         requestIdentity,
         memoryEnabled ? "enabled" : "disabled",
       );
@@ -1486,6 +1598,14 @@ export default function Chat() {
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
       setMessages(finalHistory);
+      if (memoryEnabled) {
+        void saveMessage(user, {
+          role: "assistant",
+          content: responseText,
+        }).catch((error) => {
+          console.warn("Failed to persist assistant memory message", error);
+        });
+      }
       void persistChatMessage(chatId, {
         role: "model",
         content: responseText,
@@ -1503,6 +1623,20 @@ export default function Chat() {
   };
 
   const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
+  const profileSubtext = useMemo(() => user?.email || t.profileMenu.guestMode, [t.profileMenu.guestMode, user?.email]);
+  const handleOpenMemoryFromSettings = useCallback(() => {
+    setActiveSettingsSection("personalization");
+    setSettingsPanelOpen(false);
+    setMemoryModalOpen(true);
+  }, []);
+  const handleOpenProfileFromSettings = useCallback(() => {
+    setActiveSettingsSection("account");
+    setSettingsPanelOpen(false);
+    setProfileModalOpen(true);
+  }, []);
+  const handleSettingsOpenChange = useCallback((open: boolean) => {
+    setSettingsPanelOpen(open);
+  }, []);
   const headerTooltipClass =
     "pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-full border border-white/12 bg-[#12091f]/92 px-2.5 py-1 text-[10px] font-medium tracking-[0.16em] text-white/78 opacity-0 shadow-[0_12px_28px_rgba(4,2,12,0.45)] transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100";
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
@@ -1515,26 +1649,26 @@ export default function Chat() {
     >
       {/* Animated Drifting Mesh Gradient Background + White Premium Glow */}
       <BackgroundComponent mood={mood} />
-      <AnimatePresence>
-        <Sidebar
-          isOpen={isSidebarOpen}
-          chatSessions={chatSessions}
-          currentChatId={currentChatId}
-          isGuest={isGuest}
-          newChatLabel={t.sidebar.newChat}
-          recentChatsLabel={t.sidebar.recentChats}
-          noChatsGuestLabel={t.sidebar.noChatsGuest}
-          noChatsAccountLabel={t.sidebar.noChatsAccount}
-          signOutLabel={t.sidebar.signOut}
-          resolveChatTitle={(title) => (isDefaultChatTitle(title) ? t.chatTitles.newChat : title)}
-          onCreateChat={() => void handleCreateChat()}
-          onSelectChat={(chatId) => void handleSelectChat(chatId)}
-          onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
-          onLogout={() => void handleLogout()}
-        />
-      </AnimatePresence>
+      <Sidebar
+        isOpen={isSidebarOpen}
+        chatSessions={chatSessions}
+        currentChatId={currentChatId}
+        isGuest={isGuest}
+        newChatLabel={t.sidebar.newChat}
+        recentChatsLabel={t.sidebar.recentChats}
+        noChatsGuestLabel={t.sidebar.noChatsGuest}
+        noChatsAccountLabel={t.sidebar.noChatsAccount}
+        signOutLabel={t.sidebar.signOut}
+        resolveChatTitle={(title) => (isDefaultChatTitle(title) ? t.chatTitles.newChat : title)}
+        onCreateChat={() => void handleCreateChat()}
+        onSelectChat={(chatId) => void handleSelectChat(chatId)}
+        onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
+        onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
+        onCloseSidebar={() => setIsSidebarOpen(false)}
+        onLogout={() => void handleLogout()}
+      />
 
-      <div className="flex-1 flex flex-col h-full relative z-10" style={{ isolation: 'isolate' }}>
+      <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-64" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
         <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none">
           <div className="flex items-center gap-4 pointer-events-auto">
             <button
@@ -1676,42 +1810,45 @@ export default function Chat() {
             </div>
           </div>
 
-        <SettingsPanel
-          open={settingsPanelOpen}
-          onOpenChange={setSettingsPanelOpen}
-          activeSection={activeSettingsSection}
-          onSectionChange={setActiveSettingsSection}
-          languageMode={replyLanguageMode}
-          onLanguageModeChange={handleLanguageModeChange}
-          memoryEnabled={memoryEnabled}
-          onMemoryToggle={handleMemoryToggle}
-          onManageMemory={() => {
-            setActiveSettingsSection("personalization");
-            setSettingsPanelOpen(false);
-            setMemoryModalOpen(true);
-          }}
-          profileName={effectiveUserName}
-          profileSubtext={user?.email || t.profileMenu.guestMode}
-          profileImageUrl={profileDraftPhotoUrl}
-          profileInitial={profileInitial}
-          onEditProfile={() => {
-            setActiveSettingsSection("account");
-            setSettingsPanelOpen(false);
-            setProfileModalOpen(true);
-          }}
-          onLogout={() => void handleLogout()}
-        />
+        <Suspense
+          fallback={
+            settingsPanelOpen ? (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 text-sm text-white/80">Loading...</div>
+            ) : null
+          }
+        >
+          {settingsPanelOpen ? (
+            <SettingsPanel
+              open={settingsPanelOpen}
+              onOpenChange={handleSettingsOpenChange}
+              activeSection={activeSettingsSection}
+              onSectionChange={setActiveSettingsSection}
+              languageMode={replyLanguageMode}
+              onLanguageModeChange={handleLanguageModeChange}
+              memoryEnabled={memoryEnabled}
+              onMemoryToggle={handleMemoryToggle}
+              onManageMemory={handleOpenMemoryFromSettings}
+              profileName={effectiveUserName}
+              profileSubtext={profileSubtext}
+              profileImageUrl={profileDraftPhotoUrl}
+              profileInitial={profileInitial}
+              onEditProfile={handleOpenProfileFromSettings}
+              onChangePassword={() => void handleChangePassword()}
+              onLogout={() => void handleLogout()}
+            />
+          ) : null}
+        </Suspense>
 
-        <MemoryManagerModal
+        <MemoryModal
           open={memoryModalOpen}
           onOpenChange={setMemoryModalOpen}
           memory={memoryProfile}
-          moments={memoryMoments}
           status={memoryStatus}
-          onDeleteEntry={(entry) => void handleDeleteMemoryEntry(entry)}
-          onDeleteMoment={(momentId) => void handleDeleteMemoryMoment(momentId)}
+          onToggleMemory={(enabled) => handleMemoryToggle(enabled)}
+          onDeleteChat={(messageId) => void handleDeleteMemoryChat(messageId)}
+          onDeleteImage={(imageId) => void handleDeleteMemoryImage(imageId)}
           onClearAll={() => void handleClearAllMemory()}
-          onPreviewMoment={(imageDataUrl) => setSelectedMemoryImage(imageDataUrl)}
+          onPreviewImage={(url) => setSelectedMemoryImage(url)}
         />
 
         <Profile

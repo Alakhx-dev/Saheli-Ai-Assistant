@@ -142,16 +142,28 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
 
   const lines: string[] = [];
 
-  if (memoryProfile.facts.length) {
+  if (memoryProfile.facts?.length) {
     lines.push(`- Facts: ${memoryProfile.facts.join("; ")}`);
   }
 
-  if (memoryProfile.preferences.length) {
+  if (memoryProfile.preferences?.length) {
     lines.push(`- Preferences: ${memoryProfile.preferences.join("; ")}`);
   }
 
-  if (memoryProfile.recent_context.length) {
-    lines.push(`- Recent context: ${memoryProfile.recent_context.join("; ")}`);
+  if (memoryProfile.chat_history?.length) {
+    const recentHistory = memoryProfile.chat_history
+      .slice(-10)
+      .map((entry) => `${entry.role}: ${entry.content}`)
+      .join(" | ");
+    lines.push(`- Recent chat history: ${recentHistory}`);
+  }
+
+  if (memoryProfile.images?.length) {
+    const imageContext = memoryProfile.images
+      .slice(0, 8)
+      .map((image) => `${image.type}${image.prompt ? ` (${image.prompt})` : ""}`)
+      .join("; ");
+    lines.push(`- Related images: ${imageContext}`);
   }
 
   if (!lines.length) {

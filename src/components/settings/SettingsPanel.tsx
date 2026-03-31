@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { LogOut, UserPen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -18,7 +18,6 @@ import {
 import type { AppLanguage } from "@/lib/ai-service";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
-import ToggleSwitch from "@/components/settings/ToggleSwitch";
 
 type SettingsSectionId = "general" | "personalization" | "account";
 type ReplyLanguageMode = "auto" | AppLanguage;
@@ -38,6 +37,7 @@ interface SettingsPanelProps {
   profileImageUrl?: string;
   profileInitial: string;
   onEditProfile: () => void;
+  onChangePassword: () => void;
   onLogout: () => void;
 }
 
@@ -54,7 +54,7 @@ const LANGUAGE_OPTIONS: Array<{ value: ReplyLanguageMode; label: string }> = [
   { value: "hinglish", label: "Hinglish" },
 ];
 
-export default function SettingsPanel({
+function SettingsPanel({
   open,
   onOpenChange,
   activeSection,
@@ -69,9 +69,10 @@ export default function SettingsPanel({
   profileImageUrl,
   profileInitial,
   onEditProfile,
+  onChangePassword,
   onLogout,
 }: SettingsPanelProps) {
-  const content = {
+  const content = useMemo(() => ({
     general: (
       <SettingsSection
         label="General"
@@ -112,11 +113,20 @@ export default function SettingsPanel({
           title="Reference saved memory"
           description="When enabled, replies can use stored memory that is relevant to the current conversation."
         >
-          <ToggleSwitch
-            checked={memoryEnabled}
-            onCheckedChange={onMemoryToggle}
-            ariaLabel="Toggle memory"
-          />
+          <button
+            type="button"
+            onClick={() => onMemoryToggle(!memoryEnabled)}
+            className={`h-6 w-10 rounded-full p-1 transition duration-200 ${
+              memoryEnabled ? "bg-purple-500" : "bg-gray-600"
+            }`}
+            aria-label="Toggle memory"
+          >
+            <div
+              className={`h-4 w-4 rounded-full bg-white shadow-md transition duration-200 ${
+                memoryEnabled ? "translate-x-4" : ""
+              }`}
+            />
+          </button>
         </SettingsRow>
         <SettingsRow
           title="Manage memory"
@@ -164,6 +174,18 @@ export default function SettingsPanel({
           </div>
         </SettingsRow>
         <SettingsRow
+          title="Change Password"
+          description="Update your account password."
+        >
+          <button
+            type="button"
+            onClick={onChangePassword}
+            className="rounded-md border border-white/10 bg-white/10 px-3 py-1 text-sm text-white transition duration-200 hover:bg-white/20"
+          >
+            Change
+          </button>
+        </SettingsRow>
+        <SettingsRow
           title="Logout"
           description="Sign out of the current account and return to the landing page."
           border={false}
@@ -179,11 +201,24 @@ export default function SettingsPanel({
         </SettingsRow>
       </SettingsSection>
     ),
-  } satisfies Record<SettingsSectionId, React.ReactNode>;
+  }) satisfies Record<SettingsSectionId, React.ReactNode>, [
+    languageMode,
+    onLanguageModeChange,
+    memoryEnabled,
+    onMemoryToggle,
+    onManageMemory,
+    profileSubtext,
+    profileName,
+    profileImageUrl,
+    profileInitial,
+    onEditProfile,
+    onChangePassword,
+    onLogout,
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-[#1e1e1e] p-0 text-white shadow-2xl">
+      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-[#1e1e1e] p-0 text-white shadow-[0_8px_24px_rgba(0,0,0,0.32)]">
         <div className="grid h-full min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="border-b border-white/10 bg-[#171717] px-4 py-5 md:border-b-0 md:border-r">
             <DialogHeader className="space-y-2 px-2 text-left">
@@ -199,7 +234,7 @@ export default function SettingsPanel({
                   key={section.id}
                   type="button"
                   onClick={() => onSectionChange(section.id)}
-                  className={`flex w-full items-center rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition ${
+                  className={`flex w-full items-center rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition duration-200 ${
                     activeSection === section.id
                       ? "bg-white/10 text-white"
                       : "text-white/55 hover:bg-white/5 hover:text-white"
@@ -219,3 +254,5 @@ export default function SettingsPanel({
     </Dialog>
   );
 }
+
+export default React.memo(SettingsPanel);
