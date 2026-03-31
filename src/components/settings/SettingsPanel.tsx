@@ -59,7 +59,7 @@ function SettingsPanel({
 }: SettingsPanelProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-2xl border border-white/10 bg-[#1e1e1e] p-0 text-white shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
+      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-0 text-white">
         <div className="grid h-full min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="border-b border-white/10 bg-[#171717] px-4 py-5 md:border-b-0 md:border-r">
             <DialogHeader className="space-y-2 px-2 text-left">

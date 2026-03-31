@@ -10,9 +10,10 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { auth, storage } from "@/lib/firebase";
+import { auth, storage, db } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
-import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
+import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
+import { addDoc, collection, serverTimestamp, deleteDoc, doc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { FALLBACK_MESSAGE, sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
@@ -243,33 +244,55 @@ function useVoice(isMuted: boolean) {
   };
 
   const speak = (text: string) => {
-    if (isMuted || !unlockedRef.current) {
+    if (isMuted || !unlockedRef.current || !window.speechSynthesis) {
       return;
     }
 
-    const cleanText = normalizeTextForTts(text);
-
-    if (!cleanText) {
-      return;
-    }
-
+    // Clear any previous robotic echo
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "hi-IN";
-    utterance.pitch = 1.2;
-    utterance.rate = 1.1;
-    utterance.volume = 1.0;
+    let attempts = 0;
+    const maxAttempts = 10; // Try for 2 seconds to find premium voice
 
-    if (!preferredVoiceRef.current) {
-      primePreferredVoice();
-    }
+    const executeSpeech = () => {
+      const voices = window.speechSynthesis.getVoices();
+      
+      // 1. BEST: Swara/Google Online Female
+      let selectedVoice = 
+        voices.find((v) => v.name.includes("Swara")) || 
+        voices.find((v) => v.name.includes("Google \u0939\u093f\u0928\u094d\u0926\u0940"));
 
-    if (preferredVoiceRef.current) {
-      utterance.voice = preferredVoiceRef.current;
-    }
+      // 2. SECOND BEST: Any Hindi Female
+      if (!selectedVoice) {
+        selectedVoice = voices.find((v) => v.lang.includes("hi") && v.name.toLowerCase().includes("female"));
+      }
 
-    window.speechSynthesis.speak(utterance);
+      // 3. FALLBACK (No Silence): If still nothing after 2 secs, take the first available
+      if (!selectedVoice && attempts >= maxAttempts) {
+        selectedVoice = voices.find((v) => v.lang.includes("hi")) || voices[0];
+      }
+
+      if (selectedVoice) {
+        // CLEAN TEXT: Lowercase stops spelling reading
+        const cleanText = normalizeTextForTts(text).toLowerCase().replace(/alakh/g, "alukh");
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        
+        utterance.voice = selectedVoice;
+        utterance.lang = "hi-IN";
+        // CRITICAL: Even if it's a male voice, high pitch makes it sound female/soft
+        utterance.pitch = 1.6; 
+        utterance.rate = 0.9;
+        
+        window.speechSynthesis.resume(); 
+        window.speechSynthesis.speak(utterance);
+      } else {
+        // Retry loop
+        attempts++;
+        setTimeout(executeSpeech, 200);
+      }
+    };
+    
+    executeSpeech();
   };
 
   const stop = () => {
@@ -677,6 +700,90 @@ const BackgroundComponent = memo(function BackgroundComponent({ mood }: { mood: 
   );
 });
 
+// --- NEW CHAT SAVE SYSTEM ---
+async function saveMessageToDB(content: string, role: string, userId?: string) {
+  if (!userId) return;
+  try {
+    await addDoc(collection(db, "chats"), {
+      userId,
+      content,
+      role,
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.warn("Failed to save message to new DB structure", err);
+  }
+}
+
+function saveLocal(message: { content: string, role: string }) {
+  try {
+    const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+    chats.push(message);
+    localStorage.setItem("chats", JSON.stringify(chats));
+  } catch (err) {
+    console.warn("Failed to save local chat", err);
+  }
+}
+
+// --- NEW MEMORY EXTRACT SYSTEM ---
+function autoMemoryExtract(text: string) {
+  const memory: Array<{ type: string, value: string }> = [];
+  const lowerText = text.toLowerCase();
+
+  // Name extraction
+  const nameMatch = lowerText.match(/(?:mera naam|my name is)\s+([^.!?\n]+)/i);
+  if (nameMatch) {
+    memory.push({ type: "name", value: nameMatch[1].trim() });
+  }
+
+  // Preference extraction
+  if (lowerText.includes("mujhe pasand")) {
+    memory.push({ type: "preference", value: text });
+  }
+  
+  // Custom manual memory
+  if (lowerText.includes("yaad rakh")) {
+    memory.push({ type: "custom", value: text });
+  }
+
+  return memory;
+}
+
+async function saveMemoryToDB(memoryItem: { type: string, value: string }, userId?: string) {
+  if (!userId) return;
+  try {
+    await addDoc(collection(db, "memory"), {
+      userId,
+      ...memoryItem,
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.warn("Failed to save auto memory", err);
+  }
+}
+
+// --- IMAGE MEMORY SAVE ---
+async function saveImageMemoryDB(imageUrl: string, userId?: string) {
+  if (!userId) return;
+  try {
+    await addDoc(collection(db, "imageMemory"), {
+      userId,
+      imageUrl,
+      createdAt: serverTimestamp()
+    });
+  } catch (err) {
+    console.warn("Failed to save image memory", err);
+  }
+}
+
+export async function deleteChatDoc(id: string) {
+  await deleteDoc(doc(db, "chats", id));
+}
+
+export async function deleteImageMemoryDoc(id: string) {
+  await deleteDoc(doc(db, "imageMemory", id));
+}
+
 export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
@@ -971,12 +1078,58 @@ export default function Chat() {
     }
   };
 
+  const persistMemoryMessage = useCallback(async (message: { role: "user" | "assistant"; content: string }) => {
+    if (!memoryEnabled) {
+      return;
+    }
+
+    if (!user) {
+      return;
+    }
+
+    console.log("Saving message...", message);
+
+    try {
+      await saveMessage(user, message);
+    } catch (error) {
+      console.error("Memory save failed:", error);
+    }
+  }, [memoryEnabled, user]);
+
+  const persistMemoryImage = useCallback(async (payload: {
+    type: "upload" | "generated";
+    url: string;
+    prompt?: string;
+    storagePath?: string;
+  }) => {
+    if (!memoryEnabled) {
+      return;
+    }
+
+    if (!user) {
+      return;
+    }
+
+    console.log("Saving image...", payload.url);
+
+    try {
+      await saveImage(user, payload);
+      await saveImageMemoryDB(payload.url, user.uid);
+    } catch (error) {
+      console.error("Memory image save failed:", error);
+    }
+  }, [memoryEnabled, user]);
+
   const uploadMemoryImage = useCallback(async (
     base64OrDataUrl: string,
     type: "upload" | "generated",
     prompt?: string,
   ) => {
-    if (!user || !memoryEnabled) {
+    if (!memoryEnabled) {
+      return;
+    }
+
+    if (!user) {
       return;
     }
 
@@ -988,13 +1141,13 @@ export default function Chat() {
 
     await uploadString(imageRef, imageDataUrl, "data_url");
     const url = await getDownloadURL(imageRef);
-    await saveImage(user, {
+    await persistMemoryImage({
       type,
       url,
       prompt,
       storagePath: path,
     });
-  }, [memoryEnabled, user]);
+  }, [memoryEnabled, persistMemoryImage, user]);
 
   const handleProfileImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1477,11 +1630,12 @@ export default function Chat() {
       if (imageBase64) {
         detectedEmotion = await detectEmotionFromImage(imageBase64);
         if (memoryEnabled) {
-          void uploadMemoryImage(imageBase64, "upload")
-            .then(() => refreshMemoryState())
-            .catch((error) => {
-              console.warn("Failed to save memory image", error);
-            });
+          try {
+            await uploadMemoryImage(imageBase64, "upload");
+            await refreshMemoryState();
+          } catch (error) {
+            console.warn("Failed to save memory image", error);
+          }
         }
       }
 
@@ -1501,14 +1655,17 @@ export default function Chat() {
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
-      if (memoryEnabled) {
-        void saveMessage(user, {
-          role: "assistant",
-          content: responseText,
-        }).catch((error) => {
-          console.warn("Failed to persist assistant memory message", error);
-        });
+      await persistMemoryMessage({
+        role: "assistant",
+        content: responseText,
+      });
+
+      if (isGuest) {
+        saveLocal({ role: "assistant", content: responseText });
+      } else {
+        void saveMessageToDB(responseText, "assistant", user?.uid);
       }
+
       void persistChatMessage(request.chatId, {
         role: "model",
         content: responseText,
@@ -1663,11 +1820,9 @@ export default function Chat() {
       void saveMemoryFields(user, nextMemoryFields).catch((error) => {
         console.warn("Failed to persist memory fields", error);
       });
-      void saveMessage(user, {
+      await persistMemoryMessage({
         role: "user",
         content: userText,
-      }).catch((error) => {
-        console.warn("Failed to persist user memory message", error);
       });
 
       try {
@@ -1699,11 +1854,12 @@ export default function Chat() {
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
       if (base64Image && memoryEnabled) {
-        void uploadMemoryImage(base64Image, "upload", userText)
-          .then(() => refreshMemoryState())
-          .catch((error) => {
-            console.warn("Failed to save memory image", error);
-          });
+        try {
+          await uploadMemoryImage(base64Image, "upload", userText);
+          await refreshMemoryState();
+        } catch (error) {
+          console.warn("Failed to save memory image", error);
+        }
       }
       const responseText = await streamResponse(
         userText,
@@ -1720,14 +1876,17 @@ export default function Chat() {
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
-      if (memoryEnabled) {
-        void saveMessage(user, {
-          role: "assistant",
-          content: responseText,
-        }).catch((error) => {
-          console.warn("Failed to persist assistant memory message", error);
-        });
+      await persistMemoryMessage({
+        role: "assistant",
+        content: responseText,
+      });
+
+      if (isGuest) {
+        saveLocal({ role: "assistant", content: responseText });
+      } else {
+        void saveMessageToDB(responseText, "assistant", user?.uid);
       }
+
       void persistChatMessage(chatId, {
         role: "model",
         content: responseText,

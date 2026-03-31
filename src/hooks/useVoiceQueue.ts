@@ -41,25 +41,7 @@ function normalizeTextForTts(text: string) {
     .trim();
 }
 
-function pickVoice(utterance: SpeechSynthesisUtterance) {
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice = voices.find(
-    (voice) =>
-      (voice.name.includes(VOICE_NAME) && voice.name.includes("Online")) ||
-      (voice.name.includes("Google") && voice.lang.includes("hi-IN")) ||
-      (voice.lang === "hi-IN" && voice.name.includes("Female")),
-  );
 
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-    return;
-  }
-
-  const hindiVoice = voices.find((voice) => voice.lang.includes("hi-IN"));
-  if (hindiVoice) {
-    utterance.voice = hindiVoice;
-  }
-}
 
 export function useVoiceQueue() {
   const queueRef = useRef<string[]>([]);
@@ -68,7 +50,7 @@ export function useVoiceQueue() {
   const playNextRef = useRef<() => void>(() => {});
 
   playNextRef.current = () => {
-    if (speakingRef.current) {
+    if (speakingRef.current || !window.speechSynthesis) {
       return;
     }
 
@@ -77,32 +59,62 @@ export function useVoiceQueue() {
       return;
     }
 
-    const cleanText = normalizeTextForTts(nextText);
-    if (!cleanText) {
-      playNextRef.current();
-      return;
-    }
+    // Clear any previous robotic echo
+    window.speechSynthesis.cancel();
 
-    speakingRef.current = true;
+    let attempts = 0;
+    const maxAttempts = 10; // Try for 2 seconds to find Swara
 
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.pitch = 1.15;
-    utterance.rate = 0.85;
-    utterance.volume = 1;
+    const executeSpeech = () => {
+      const voices = window.speechSynthesis.getVoices();
+      
+      // 1. BEST: Swara/Google Online Female
+      let selectedVoice = 
+        voices.find((v) => v.name.includes("Swara")) || 
+        voices.find((v) => v.name.includes("Google \u0939\u093f\u0928\u094d\u0926\u0940"));
 
-    pickVoice(utterance);
+      // 2. SECOND BEST: Any Hindi Female
+      if (!selectedVoice) {
+        selectedVoice = voices.find((v) => v.lang.includes("hi") && v.name.toLowerCase().includes("female"));
+      }
 
-    utterance.onend = () => {
-      speakingRef.current = false;
-      playNextRef.current();
+      // 3. FALLBACK (No Silence): If still nothing after 2 secs, take the first available
+      if (!selectedVoice && attempts >= maxAttempts) {
+        selectedVoice = voices.find((v) => v.lang.includes("hi")) || voices[0];
+      }
+
+      if (selectedVoice) {
+        // CLEAN TEXT: Lowercase stops spelling reading
+        const cleanText = normalizeTextForTts(nextText).toLowerCase().replace(/alakh/g, "alukh");
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        
+        speakingRef.current = true;
+        utterance.voice = selectedVoice;
+        utterance.lang = "hi-IN";
+        // CRITICAL: Even if it's a male voice, high pitch makes it sound female/soft
+        utterance.pitch = 1.6; 
+        utterance.rate = 0.9;
+        
+        utterance.onend = () => {
+          speakingRef.current = false;
+          playNextRef.current();
+        };
+
+        utterance.onerror = () => {
+          speakingRef.current = false;
+          playNextRef.current();
+        };
+        
+        window.speechSynthesis.resume(); 
+        window.speechSynthesis.speak(utterance);
+      } else {
+        // Retry loop
+        attempts++;
+        setTimeout(executeSpeech, 200);
+      }
     };
 
-    utterance.onerror = () => {
-      speakingRef.current = false;
-      playNextRef.current();
-    };
-
-    window.speechSynthesis.speak(utterance);
+    executeSpeech();
   };
 
   useEffect(() => {

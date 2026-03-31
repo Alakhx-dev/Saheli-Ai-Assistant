@@ -396,24 +396,31 @@ export async function saveMessage(
     return;
   }
 
-  await ensureUserMemoryDoc(user);
-
-  if (!isMeaningfulMessage(payload.content)) {
+  const content = payload.content.trim();
+  if (!content) {
     return;
   }
 
-  await addDoc(getChatHistoryCollection(user), {
-    role: payload.role,
-    content: payload.content.trim(),
-    timestamp: serverTimestamp(),
-    timestampIso: new Date().toISOString(),
-  });
+  console.log("Saving message...", { role: payload.role, content });
 
-  const overflowSnapshot = await getDocs(
-    query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(MAX_CHAT_HISTORY + 20)),
-  );
-  const overflowDocs = overflowSnapshot.docs.slice(MAX_CHAT_HISTORY);
-  await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+  try {
+    await ensureUserMemoryDoc(user);
+    await addDoc(getChatHistoryCollection(user), {
+      role: payload.role,
+      content,
+      timestamp: serverTimestamp(),
+      timestampIso: new Date().toISOString(),
+    });
+
+    const overflowSnapshot = await getDocs(
+      query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(MAX_CHAT_HISTORY + 20)),
+    );
+    const overflowDocs = overflowSnapshot.docs.slice(MAX_CHAT_HISTORY);
+    await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+  } catch (error) {
+    console.error("Memory save failed:", error);
+    throw error;
+  }
 }
 
 export async function saveImage(
@@ -430,27 +437,34 @@ export async function saveImage(
     return;
   }
 
-  await ensureUserMemoryDoc(user);
   const cleanedUrl = payload.url.trim();
   if (!cleanedUrl) {
     return;
   }
 
-  await addDoc(getImagesCollection(user), {
-    type: payload.type,
-    url: cleanedUrl,
-    prompt: payload.prompt?.trim() || null,
-    caption: payload.caption?.trim() || null,
-    storagePath: payload.storagePath || null,
-    timestamp: serverTimestamp(),
-    timestampIso: new Date().toISOString(),
-  });
+  console.log("Saving image...", cleanedUrl);
 
-  const overflowSnapshot = await getDocs(
-    query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(MAX_IMAGE_HISTORY + 20)),
-  );
-  const overflowDocs = overflowSnapshot.docs.slice(MAX_IMAGE_HISTORY);
-  await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+  try {
+    await ensureUserMemoryDoc(user);
+    await addDoc(getImagesCollection(user), {
+      type: payload.type,
+      url: cleanedUrl,
+      prompt: payload.prompt?.trim() || null,
+      caption: payload.caption?.trim() || null,
+      storagePath: payload.storagePath || null,
+      timestamp: serverTimestamp(),
+      timestampIso: new Date().toISOString(),
+    });
+
+    const overflowSnapshot = await getDocs(
+      query(getImagesCollection(user), orderBy("timestamp", "desc"), limit(MAX_IMAGE_HISTORY + 20)),
+    );
+    const overflowDocs = overflowSnapshot.docs.slice(MAX_IMAGE_HISTORY);
+    await Promise.all(overflowDocs.map((entry) => deleteDoc(entry.ref)));
+  } catch (error) {
+    console.error("Memory image save failed:", error);
+    throw error;
+  }
 }
 
 export async function deleteMemoryChat(user: User | null, messageId: string) {
@@ -458,7 +472,7 @@ export async function deleteMemoryChat(user: User | null, messageId: string) {
     return;
   }
 
-  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, CHAT_HISTORY_COLLECTION, messageId));
+  await deleteDoc(doc(db, 'users', user.uid, 'memory', messageId));
 }
 
 export async function deleteMemoryImage(user: User | null, imageId: string) {
@@ -466,7 +480,7 @@ export async function deleteMemoryImage(user: User | null, imageId: string) {
     return;
   }
 
-  await deleteDoc(doc(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION, imageId));
+  await deleteDoc(doc(db, 'users', user.uid, 'memory_images', imageId));
 }
 
 export async function clearAllMemory(user: User | null) {
@@ -503,3 +517,54 @@ export function buildPromptMemoryContext(memory: MemoryProfile) {
     images: memory.images.slice(0, 12),
   };
 }
+
+export const shouldSaveMemory = (text: string) => {
+  const triggers = [
+    'remember',
+    'yaad rakh',
+    'save this',
+    'important',
+  ];
+
+  return triggers.some(t =>
+    text.toLowerCase().includes(t)
+  );
+};
+
+export const isImportant = (text: string) => {
+  return text.length > 40;
+};
+
+export const saveChatMemory = async (userId: string, content: string) => {
+  if (!userId) return;
+
+  try {
+    await addDoc(
+      collection(db, 'users', userId, 'memory'),
+      {
+        role: 'user',
+        content,
+        timestamp: serverTimestamp(),
+      }
+    );
+  } catch (err) {
+    console.error('Save memory failed:', err);
+  }
+};
+
+export const saveImageMemory = async (userId: string, imageUrl: string) => {
+  if (!userId || !imageUrl) return;
+
+  try {
+    await addDoc(
+      collection(db, 'users', userId, 'memory_images'),
+      {
+        url: imageUrl,
+        type: 'camera',
+        timestamp: serverTimestamp(),
+      }
+    );
+  } catch (err) {
+    console.error('Save image memory failed:', err);
+  }
+};
