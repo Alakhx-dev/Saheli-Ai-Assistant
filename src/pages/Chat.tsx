@@ -185,33 +185,58 @@ function normalizeTextForTts(text: string) {
     .trim();
 }
 
+function cleanTextForNaturalTts(text: string) {
+  return normalizeTextForTts(text)
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
+    .replace(/[^\p{L}\p{N}\s.,?!]/gu, "")
+    .replace(/([a-zA-Z])\1{2,}/g, "$1")
+    .replace(/\b[a-zA-Z]\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function splitSentencesForTts(text: string) {
+  return text
+    .split(/[.?!]/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 2);
+}
+
 function useVoice(isMuted: boolean) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const unlockedRef = useRef(false);
   const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const speakSequenceRef = useRef(0);
 
   const primePreferredVoice = () => {
     const voices = window.speechSynthesis.getVoices();
     preferredVoiceRef.current =
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi") && voice.name.toLowerCase().includes("female")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google") && voice.name.toLowerCase().includes("hindi")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("google")) ||
-      voices.find((voice) => voice.lang === "hi-IN" && voice.name.toLowerCase().includes("swara")) ||
       voices.find((voice) => voice.lang === "hi-IN") ||
+      voices.find((voice) => voice.name.toLowerCase().includes("google")) ||
+      voices.find((voice) => voice.lang.includes("hi")) ||
+      voices.find((voice) => voice.name.toLowerCase().includes("female")) ||
       null;
   };
 
   useEffect(() => {
+    if (!("speechSynthesis" in window)) {
+      return;
+    }
+
+    window.speechSynthesis.getVoices();
     primePreferredVoice();
 
     const handleVoicesChanged = () => {
+      window.speechSynthesis.getVoices();
       primePreferredVoice();
     };
 
     window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
+    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
 
     return () => {
       window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
+      window.speechSynthesis.onvoiceschanged = null;
     };
   }, []);
 
@@ -249,54 +274,73 @@ function useVoice(isMuted: boolean) {
       return;
     }
 
-    // Clear any previous robotic echo
-    window.speechSynthesis.cancel();
+    speakSequenceRef.current += 1;
+    const activeSequence = speakSequenceRef.current;
 
-    let attempts = 0;
-    const maxAttempts = 10; // Try for 2 seconds to find premium voice
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
 
-    const executeSpeech = () => {
-      const voices = window.speechSynthesis.getVoices();
-      
-      // 1. BEST: Swara/Google Online Female
-      let selectedVoice = 
-        voices.find((v) => v.name.includes("Swara")) || 
-        voices.find((v) => v.name.includes("Google \u0939\u093f\u0928\u094d\u0926\u0940"));
+    const cleanText = cleanTextForNaturalTts(text);
+    if (!cleanText) {
+      return;
+    }
 
-      // 2. SECOND BEST: Any Hindi Female
-      if (!selectedVoice) {
-        selectedVoice = voices.find((v) => v.lang.includes("hi") && v.name.toLowerCase().includes("female"));
+    const sentenceChunks = splitSentencesForTts(cleanText);
+
+    if (!sentenceChunks.length) {
+      return;
+    }
+
+    const voices = window.speechSynthesis.getVoices();
+    const selectedVoice = preferredVoiceRef.current
+      || voices.find((v) => v.lang === "hi-IN")
+      || voices.find((v) => v.name.toLowerCase().includes("google"))
+      || voices.find((v) => v.lang.includes("hi"))
+      || voices.find((v) => v.name.toLowerCase().includes("female"))
+      || voices[0]
+      || null;
+
+    let index = 0;
+    const speakNext = () => {
+      if (activeSequence !== speakSequenceRef.current || index >= sentenceChunks.length) {
+        return;
       }
 
-      // 3. FALLBACK (No Silence): If still nothing after 2 secs, take the first available
-      if (!selectedVoice && attempts >= maxAttempts) {
-        selectedVoice = voices.find((v) => v.lang.includes("hi")) || voices[0];
-      }
-
+      const utterance = new SpeechSynthesisUtterance(sentenceChunks[index]);
       if (selectedVoice) {
-        // CLEAN TEXT: Lowercase stops spelling reading
-        const cleanText = normalizeTextForTts(text).toLowerCase().replace(/alakh/g, "alukh");
-        const utterance = new SpeechSynthesisUtterance(cleanText);
-        
         utterance.voice = selectedVoice;
-        utterance.lang = "hi-IN";
-        // CRITICAL: Even if it's a male voice, high pitch makes it sound female/soft
-        utterance.pitch = 1.6; 
-        utterance.rate = 0.9;
-        
-        window.speechSynthesis.resume(); 
-        window.speechSynthesis.speak(utterance);
-      } else {
-        // Retry loop
-        attempts++;
-        setTimeout(executeSpeech, 200);
       }
+      utterance.lang = "hi-IN";
+      utterance.rate = 0.93;
+      utterance.pitch = 1.08;
+      utterance.volume = 1;
+
+      utterance.onend = () => {
+        index += 1;
+        if (activeSequence !== speakSequenceRef.current) {
+          return;
+        }
+        window.setTimeout(speakNext, 180);
+      };
+
+      utterance.onerror = () => {
+        index += 1;
+        if (activeSequence !== speakSequenceRef.current) {
+          return;
+        }
+        window.setTimeout(speakNext, 180);
+      };
+
+      window.speechSynthesis.resume();
+      window.speechSynthesis.speak(utterance);
     };
-    
-    executeSpeech();
+
+    speakNext();
   };
 
   const stop = () => {
+    speakSequenceRef.current += 1;
     window.speechSynthesis.cancel();
   };
 
@@ -819,6 +863,30 @@ export default function Chat() {
   const storeUpdateStreamingMessage = useAppStore((state) => state.updateStreamingMessage);
   const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
   const { unlock, speak, stop } = useVoice(isMuted);
+
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      void unlock();
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+    };
+
+    window.addEventListener("pointerdown", handleFirstInteraction, { once: true });
+    window.addEventListener("keydown", handleFirstInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", handleFirstInteraction);
+      window.removeEventListener("keydown", handleFirstInteraction);
+    };
+  }, [unlock]);
+
+  const speakAfterRender = useCallback((text: string) => {
+    requestAnimationFrame(() => {
+      window.setTimeout(() => {
+        speak(text);
+      }, 120);
+    });
+  }, [speak]);
 
   // Speech-to-text: appends recognized speech to current input
   const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
@@ -1762,7 +1830,7 @@ export default function Chat() {
       );
       saveFinalMessage(request.chatId, responseText);
       setIsLoading(false);
-      speak(responseText);
+      speakAfterRender(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
@@ -1782,6 +1850,8 @@ export default function Chat() {
       void syncSmartChatTitle(request.chatId, nextHistory).catch((error) => {
         console.error("Failed to update smart chat title (mobile vision)", error);
       });
+    } catch (error) {
+      console.error("Failed to complete pending vision request", error);
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
@@ -1822,6 +1892,7 @@ export default function Chat() {
 
     const userText = input.trim();
     setInput("");
+    void unlock();
 
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
@@ -1952,7 +2023,7 @@ export default function Chat() {
 
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
-      speak(responseText);
+      speakAfterRender(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
@@ -1973,6 +2044,8 @@ export default function Chat() {
       void syncSmartChatTitle(chatId, finalHistory).catch((error) => {
         console.error("Failed to update smart chat title", error);
       });
+    } catch (error) {
+      console.error("Failed to complete chat response", error);
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
