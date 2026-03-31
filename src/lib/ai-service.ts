@@ -80,6 +80,7 @@ EXPRESSION FORMAT RULES:
 - Never write stage directions or action narration in brackets or parentheses.
 - Show emotions using natural words plus light emoji usage instead of descriptive actions.
 - Keep replies like real texting, not movie script or roleplay narration.
+- Detect the user's input language dynamically. If the user asks a question in Hindi, reply in Hindi. If they use Hinglish (Roman Hindi), reply in Hinglish. If they use English, reply in English. Do not be restricted by the UI language setting for chat responses.
 
 GOAL: Do not act like an AI. Feel like a real best friend who adapts to the current user naturally while staying globally loyal to ${CREATOR_NAME}.`;
 
@@ -109,15 +110,9 @@ function getSelectedLanguage(identity?: UserIdentityContext): AppLanguage {
 }
 
 function buildLanguageInstruction(language: AppLanguage): string {
-  if (language === "english") {
-    return "STRICT RULE: Reply ONLY in English. No Hindi words.";
-  }
-
-  if (language === "hindi") {
-    return "सख्त नियम: केवल हिंदी (देवनागरी) में उत्तर दो। कोई English नहीं।";
-  }
-
-  return "STRICT RULE: Reply ONLY in Hinglish using English letters. No Hindi script.";
+  // We emphasize auto-detect in the primary prompt, but we can give a small hint here if needed.
+  // However, per instructions, we follow user's input language dynamically.
+  return `Preferred UI Language: ${language}. Reminder: Follow the user's input language style (Hindi/English/Hinglish) regardless of this setting.`;
 }
 
 function buildEmotionContext(emotion?: EmotionLabel): string {

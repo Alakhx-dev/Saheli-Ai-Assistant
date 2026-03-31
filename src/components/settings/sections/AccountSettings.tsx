@@ -3,6 +3,7 @@ import { LogOut, UserPen } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
+import { getLang } from "@/lib/useLanguage";
 
 interface AccountSettingsProps {
   profileName: string;
@@ -23,13 +24,15 @@ function AccountSettings({
   onChangePassword,
   onLogout,
 }: AccountSettingsProps) {
+  const t = getLang();
+
   return (
     <SettingsSection
-      label="Account"
-      title="Profile"
-      description="Update your identity details and manage the current session."
+      label={t.settings.account}
+      title={t.settings.profile}
+      description={t.settings.profileDescription}
     >
-      <SettingsRow title="Profile" description={profileSubtext}>
+      <SettingsRow title={t.settings.profile} description={profileSubtext}>
         <div className="flex items-center gap-3">
           <div className="hidden text-right sm:block">
             <p className="text-sm font-medium text-white">{profileName}</p>
@@ -46,22 +49,22 @@ function AccountSettings({
             className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
           >
             <UserPen className="h-4 w-4" />
-            Edit
+            {t.settings.edit}
           </button>
         </div>
       </SettingsRow>
-      <SettingsRow title="Change Password" description="Update your account password.">
+      <SettingsRow title={t.settings.changePassword} description={t.settings.changePasswordDescription}>
         <button
           type="button"
           onClick={onChangePassword}
           className="rounded-md border border-white/10 bg-white/10 px-3 py-1 text-sm text-white transition duration-200 hover:bg-white/20"
         >
-          Change
+          {t.settings.change}
         </button>
       </SettingsRow>
       <SettingsRow
-        title="Logout"
-        description="Sign out of the current account and return to the landing page."
+        title={t.settings.logout}
+        description={t.settings.logoutDescription}
         border={false}
       >
         <button
@@ -70,7 +73,7 @@ function AccountSettings({
           className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
         >
           <LogOut className="h-4 w-4" />
-          Logout
+          {t.settings.logoutButton}
         </button>
       </SettingsRow>
     </SettingsSection>

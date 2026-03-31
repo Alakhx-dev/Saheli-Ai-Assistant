@@ -9,36 +9,38 @@ import {
 import type { AppLanguage } from "@/lib/ai-service";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
+import { getLang } from "@/lib/useLanguage";
 
-type ReplyLanguageMode = "auto" | AppLanguage;
+type ReplyLanguageMode = AppLanguage;
 
 interface GeneralSettingsProps {
   languageMode: ReplyLanguageMode;
   onLanguageModeChange: (mode: ReplyLanguageMode) => void;
 }
 
-const LANGUAGE_OPTIONS: Array<{ value: ReplyLanguageMode; label: string }> = [
-  { value: "auto", label: "Auto" },
-  { value: "english", label: "English" },
-  { value: "hindi", label: "Hindi" },
-  { value: "hinglish", label: "Hinglish" },
-];
-
 function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettingsProps) {
+  const t = getLang();
+
+  const LANGUAGE_OPTIONS: Array<{ value: ReplyLanguageMode; label: string }> = [
+    { value: "english", label: "English" },
+    { value: "hindi", label: "Hindi" },
+    { value: "hinglish", label: "Hinglish" },
+  ];
+
   return (
     <SettingsSection
-      label="General"
-      title="Language"
-      description="Choose a fixed reply language or let the app detect Hindi, English, or Hinglish from each message."
+      label={t.settings.general}
+      title={t.settings.language}
+      description={t.settings.languageDescription}
     >
       <SettingsRow
-        title="Response language"
-        description="Auto will mirror the language style used in the current prompt."
+        title={t.settings.responseLanguage}
+        description={t.settings.responseLanguageDescription}
         border={false}
       >
         <Select value={languageMode} onValueChange={(value) => onLanguageModeChange(value as ReplyLanguageMode)}>
           <SelectTrigger className="w-[180px] rounded-xl border-white/10 bg-[#1e1e1e] text-white ring-0 focus:ring-0 focus:ring-offset-0">
-            <SelectValue placeholder="Select language" />
+            <SelectValue placeholder={t.settings.selectLanguage} />
           </SelectTrigger>
           <SelectContent className="rounded-xl border-white/10 bg-[#1e1e1e] text-white">
             {LANGUAGE_OPTIONS.map((option) => (

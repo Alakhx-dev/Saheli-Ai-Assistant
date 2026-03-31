@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { AppLanguage } from "@/lib/ai-service";
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
 import GeneralSettings from "@/components/settings/sections/GeneralSettings";
 import MemorySettings from "@/components/settings/sections/MemorySettings";
 import AccountSettings from "@/components/settings/sections/AccountSettings";
+import { getLang } from "@/lib/useLanguage";
 
 type SettingsSectionId = "general" | "personalization" | "account";
 type ReplyLanguageMode = "auto" | AppLanguage;
@@ -33,12 +34,6 @@ interface SettingsPanelProps {
   onLogout: () => void;
 }
 
-const SECTIONS: Array<{ id: SettingsSectionId; label: string }> = [
-  { id: "general", label: "General" },
-  { id: "personalization", label: "Personalization" },
-  { id: "account", label: "Account" },
-];
-
 function SettingsPanel({
   open,
   onOpenChange,
@@ -57,20 +52,26 @@ function SettingsPanel({
   onChangePassword,
   onLogout,
 }: SettingsPanelProps) {
+  const t = getLang();
+  const sections: Array<{ id: SettingsSectionId; label: string }> = useMemo(() => [
+    { id: "general", label: t.settings.general },
+    { id: "personalization", label: t.settings.personalization },
+    { id: "account", label: t.settings.account },
+  ], [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-0 text-white">
         <div className="grid h-full min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="border-b border-white/10 bg-[#171717] px-4 py-5 md:border-b-0 md:border-r">
             <DialogHeader className="space-y-2 px-2 text-left">
-              <DialogTitle className="text-xl font-semibold text-white">Settings</DialogTitle>
+              <DialogTitle className="text-xl font-semibold text-white">{t.settings.title}</DialogTitle>
               <DialogDescription className="text-sm text-white/50">
-                Preferences for language, memory, and account.
+                {t.settings.description}
               </DialogDescription>
             </DialogHeader>
 
             <nav className="mt-6 space-y-1">
-              {SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <button
                   key={section.id}
                   type="button"

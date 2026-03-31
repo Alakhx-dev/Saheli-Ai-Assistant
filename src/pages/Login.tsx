@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, GithubAuthProvider, OAuthProvider, signInWithPopup } from "firebase/auth";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, GithubAuthProvider, FacebookAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
-import { Sparkles, Github, Gamepad2 } from "lucide-react";
+import { Sparkles, Github } from "lucide-react";
 import { motion } from "framer-motion";
 
 // Star Dust Cursor Particle System
@@ -90,23 +90,14 @@ export default function Login() {
     }
   };
 
-  const onPlayGamesSignIn = async () => {
+  const onFacebookSignIn = async () => {
     setError("");
     try {
-      // NOTE: `firebase.auth.PlayGamesAuthProvider` is ONLY available for Android/Unity/C++. 
-      // For the React Web SDK, we MUST initialize the Play Games OAuthProvider and pass the Web Client ID explicitly if required.
-      const provider = new OAuthProvider('playgames.google.com');
-      
-      // Setup Web Client ID here (Firebase Console -> Web App settings)
-      provider.setCustomParameters({
-        // PUT YOUR WEB CLIENT ID HERE:
-        client_id: "REPLACE_ME_WITH_YOUR_WEB_CLIENT_ID.apps.googleusercontent.com" 
-      });
-
+      const provider = new FacebookAuthProvider();
       await signInWithPopup(auth, provider);
       navigate("/chat");
     } catch (err: any) {
-      setError(err instanceof Error ? err.message : "Play Games authentication failed.");
+      setError(err instanceof Error ? err.message : "Facebook authentication failed.");
     }
   };
 
@@ -220,11 +211,13 @@ export default function Login() {
             </button>
             <button
               type="button"
-              onClick={onPlayGamesSignIn}
-              className="flex items-center justify-center w-12 h-12 rounded-full border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 hover:border-green-500/50 transition-all group backdrop-blur-md"
-              aria-label="Continue with Google Play Games"
+              onClick={onFacebookSignIn}
+              className="flex items-center justify-center w-12 h-12 rounded-full border border-blue-500/30 bg-[#1877F2]/10 hover:bg-[#1877F2]/20 hover:border-blue-400/50 transition-all group backdrop-blur-md"
+              aria-label="Continue with Facebook"
             >
-              <Gamepad2 className="w-5 h-5 text-green-400 group-hover:text-green-300 transition-colors" />
+              <svg className="w-5 h-5 text-[#1877F2] group-hover:text-blue-300 transition-colors" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>
             </button>
           </div>
         </div>

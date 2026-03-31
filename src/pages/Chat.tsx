@@ -70,7 +70,7 @@ const TITLE_UPDATE_INTERVAL = 3;
 const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
 type LanguageOption = AppLanguage;
-type ReplyLanguageMode = "auto" | LanguageOption;
+type ReplyLanguageMode = LanguageOption;
 type SettingsSectionId = "general" | "personalization" | "account";
 
 interface ProfileImageMeta {
@@ -80,15 +80,15 @@ interface ProfileImageMeta {
 
 function getStoredReplyLanguageMode(): ReplyLanguageMode {
   if (typeof window === "undefined") {
-    return "auto";
+    return "hinglish";
   }
 
   const storedValue = window.localStorage.getItem(REPLY_LANGUAGE_MODE_STORAGE_KEY);
-  if (storedValue === "auto" || storedValue === "english" || storedValue === "hindi" || storedValue === "hinglish") {
-    return storedValue;
+  if (storedValue === "english" || storedValue === "hindi" || storedValue === "hinglish") {
+    return storedValue as ReplyLanguageMode;
   }
 
-  return "auto";
+  return "hinglish";
 }
 
 function readGuestProfileName() {
@@ -878,9 +878,7 @@ export default function Chat() {
   }, [replyLanguageMode]);
 
   useEffect(() => {
-    if (replyLanguageMode !== "auto") {
-      chatLanguageRef.current = replyLanguageMode;
-    }
+    chatLanguageRef.current = replyLanguageMode;
   }, [replyLanguageMode]);
 
   useEffect(() => {
@@ -998,11 +996,6 @@ export default function Chat() {
 
   const handleLanguageModeChange = (nextMode: ReplyLanguageMode) => {
     setReplyLanguageMode(nextMode);
-
-    if (nextMode === "auto") {
-      return;
-    }
-
     setLanguage(nextMode);
     chatLanguageRef.current = nextMode;
   };
@@ -1387,7 +1380,7 @@ export default function Chat() {
     const sessions = await loadChatSessions(user);
     chatSessionsRef.current = sessions;
     setChatSessions(sessions);
-    setStoreChats(sessions.map((chat) => ({ ...chat, messages: [] })));
+    setStoreChats(sessions.map((chat: any) => ({ ...chat, messages: [] })));
 
     if (nextChatId !== undefined) {
       setCurrentChatId(nextChatId);
@@ -1413,7 +1406,7 @@ export default function Chat() {
     const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
     setCurrentChatId(chatId);
     setMessages(normalizedMessages);
-    setStoreChats(chatSessionsRef.current.map((chat) => (
+    setStoreChats(chatSessionsRef.current.map((chat: any) => (
       chat.id === chatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] }
     )));
     setPendingMobileVisionRequest(null);
@@ -1622,10 +1615,7 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
-      const requestIdentity = {
-        ...request.identity,
-        language: chatLanguageRef.current,
-      };
+      const requestIdentity = getRequestIdentityContext();
 
       if (imageBase64) {
         detectedEmotion = await detectEmotionFromImage(imageBase64);
@@ -1646,7 +1636,7 @@ export default function Chat() {
         request.history,
         imageBase64,
         detectedEmotion,
-        requestIdentity,
+        requestIdentity as any,
         request.memoryProfile,
       );
       saveFinalMessage(request.chatId, responseText);
@@ -1671,105 +1661,63 @@ export default function Chat() {
         content: responseText,
         createdAt: Date.now(),
       }).catch((error) => {
-        console.warn("Failed to persist model reply", error);
+        console.warn("Failed to persist model reply (mobile vision)", error);
       });
+
       void syncSmartChatTitle(request.chatId, nextHistory).catch((error) => {
-        console.warn("Failed to update smart chat title", error);
+        console.warn("Failed to update smart chat title (mobile vision)", error);
       });
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
-      mobileVisionProcessingRequestIdRef.current = null;
-
-      if (mobileCameraInputRef.current) {
-        mobileCameraInputRef.current.value = "";
-      }
     }
   };
 
   const handleMobileCameraOpen = () => {
-    if (!pendingMobileVisionRequest || !mobileCameraInputRef.current) {
-      return;
-    }
-
-    mobileCameraInputRef.current.value = "";
-
-    const pendingRequest = pendingMobileVisionRequest;
-    const handleFocus = () => {
-      mobileCameraCancelTimeoutRef.current = window.setTimeout(() => {
-        const hasSelectedFile = Boolean(mobileCameraInputRef.current?.files?.length);
-        if (!hasSelectedFile) {
-          void completePendingVisionRequest(pendingRequest);
-        }
-      }, 350);
-    };
-
-    window.addEventListener("focus", handleFocus, { once: true });
-    mobileCameraInputRef.current.click();
+    mobileCameraInputRef.current?.click();
   };
 
   const handleMobileCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (mobileCameraCancelTimeoutRef.current) {
-      window.clearTimeout(mobileCameraCancelTimeoutRef.current);
-      mobileCameraCancelTimeoutRef.current = null;
-    }
-
-    const request = pendingMobileVisionRequest;
     const file = event.target.files?.[0];
-
-    if (!request) {
-      event.target.value = "";
-      return;
-    }
-
-    if (!file) {
-      await completePendingVisionRequest(request);
+    if (!file || !pendingMobileVisionRequest) {
       return;
     }
 
     try {
-      const base64Image = await fileToBase64(file);
-      await completePendingVisionRequest(request, base64Image);
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      await completePendingVisionRequest(pendingMobileVisionRequest, base64);
     } catch (error) {
-      console.warn("Mobile camera image processing failed", error);
-      await completePendingVisionRequest(request);
+      console.warn("Mobile camera capture failed", error);
+      setIsLoading(false);
+      submitLockRef.current = false;
     }
   };
 
-  const containsVisionTrigger = (text: string) => {
-    return VISION_TRIGGER_PATTERNS.some((pattern) => pattern.test(text));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const userText = input.trim();
-    if (!userText || submitLockRef.current) {
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() || isLoading || submitLockRef.current) {
       return;
     }
 
-    const mobile = isMobileDevice();
-    const shouldUseVision = containsVisionTrigger(userText);
-
-    await unlock();
-    stop();
-    stopListening();
-
-    submitLockRef.current = true;
+    const userText = input.trim();
     setInput("");
 
-    // ── Auto language detection (chat only, does NOT touch UI language) ──
-    const detected = detectChatLanguage(userText);
-    if (replyLanguageMode === "auto") {
-      if (detected) {
-        chatLanguageRef.current = detected; // update only if text is long enough
-      }
-    } else {
-      chatLanguageRef.current = replyLanguageMode;
+    const { chatId } = await ensureActiveChat();
+
+    // Auto-detect chat language
+    const detectedLang = detectChatLanguage(userText);
+    if (detectedLang) {
+      chatLanguageRef.current = detectedLang;
     }
 
-    const requestIdentity = getRequestIdentityContext(chatLanguageRef.current);
-    const { chatId } = await ensureActiveChat();
+    const requestIdentity = getRequestIdentityContext(detectedLang);
+
     const userMessage: StoredChatMessage = {
       role: "user",
       content: userText,
@@ -1781,12 +1729,12 @@ export default function Chat() {
     setMessages(nextHistory);
 
     if (nextHistory.length === 1) {
+      // First message — generate title
       void generateTitle(userText)
         .then(async (title) => {
           if (!title) {
             return;
           }
-
           await updateChatSessionTitle(chatId, title, user);
           await refreshChatSessions(chatId);
         })
@@ -1834,13 +1782,16 @@ export default function Chat() {
       }
     }
 
+    const mobile = isMobileDevice();
+    const shouldUseVision = VISION_TRIGGER_PATTERNS.some((pattern) => pattern.test(userText));
+
     if (mobile && shouldUseVision) {
-      const pendingRequest = {
+      const pendingRequest: PendingMobileVisionRequest = {
         id: ++mobileVisionRequestIdRef.current,
         chatId,
         history: nextHistory,
         memoryProfile: memoryEnabled ? nextMemoryProfile : null,
-        identity: requestIdentity,
+        identity: requestIdentity as any,
       };
       pendingMobileVisionRequestRef.current = pendingRequest;
       setPendingMobileVisionRequest(pendingRequest);
@@ -1853,6 +1804,7 @@ export default function Chat() {
       lastMsgCountRef.current = nextHistory.length;
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
+
       if (base64Image && memoryEnabled) {
         try {
           await uploadMemoryImage(base64Image, "upload", userText);
@@ -1861,21 +1813,24 @@ export default function Chat() {
           console.warn("Failed to save memory image", error);
         }
       }
+
       const responseText = await streamResponse(
         userText,
         chatId,
         nextHistory,
         base64Image,
         detectedEmotion,
-        requestIdentity,
+        requestIdentity as any,
         nextMemoryProfile,
       );
+
       saveFinalMessage(chatId, responseText);
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
+
       await persistMemoryMessage({
         role: "assistant",
         content: responseText,
@@ -1894,6 +1849,7 @@ export default function Chat() {
       }).catch((error) => {
         console.warn("Failed to persist model reply", error);
       });
+
       void syncSmartChatTitle(chatId, finalHistory).catch((error) => {
         console.warn("Failed to update smart chat title", error);
       });

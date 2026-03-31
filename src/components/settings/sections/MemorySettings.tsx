@@ -1,6 +1,7 @@
 import React from "react";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
+import { getLang } from "@/lib/useLanguage";
 
 interface MemorySettingsProps {
   memoryEnabled: boolean;
@@ -9,15 +10,17 @@ interface MemorySettingsProps {
 }
 
 function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: MemorySettingsProps) {
+  const t = getLang();
+
   return (
     <SettingsSection
-      label="Personalization"
-      title="Memory"
-      description="Control whether the assistant saves durable preferences, facts, and recent context."
+      label={t.settings.personalization}
+      title={t.settings.memory}
+      description={t.settings.memoryDescription}
     >
       <SettingsRow
-        title="Reference saved memory"
-        description="When enabled, replies can use stored memory that is relevant to the current conversation."
+        title={t.settings.referenceSavedMemory}
+        description={t.settings.referenceSavedMemoryDescription}
       >
         <button
           type="button"
@@ -35,8 +38,8 @@ function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: Memor
         </button>
       </SettingsRow>
       <SettingsRow
-        title="Manage memory"
-        description="Review saved entries, delete individual items, or clear everything."
+        title={t.settings.manageMemory}
+        description={t.settings.manageMemoryDescription}
         border={false}
       >
         <button
@@ -44,7 +47,7 @@ function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: Memor
           onClick={onManageMemory}
           className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
         >
-          Manage Memory
+          {t.settings.manageMemoryButton}
         </button>
       </SettingsRow>
     </SettingsSection>
