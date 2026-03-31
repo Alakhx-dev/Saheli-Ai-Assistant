@@ -38,6 +38,7 @@ import {
   deleteMemoryImage,
   deriveMemoryFields,
   fetchMemory,
+  pruneLowValueMemories,
   saveImage,
   saveMemoryFields,
   saveMessage,
@@ -601,7 +602,7 @@ function getMessageKey(msg: ChatMessage, index: number) {
   if (possibleId) {
     return possibleId;
   }
-  return `${msg.role}-${index}-${msg.content.length}`;
+  return `${msg.role}-${index}`;
 }
 
 // Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
@@ -655,31 +656,37 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
 
   return (
     <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" style={{ overflowAnchor: "none", scrollBehavior: "smooth" }}>
-      <AnimatePresence mode="popLayout">
+      <AnimatePresence initial={false} mode="sync">
         {messages.map((msg, idx) => (
           <ScrollFadeMessageItem key={getMessageKey(msg, idx)} msg={msg} isNew={idx >= lastMsgCount} />
         ))}
 
-        {isLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            className="flex justify-start min-h-[76px]"
-            style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
-          >
-            <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-400/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] animate-pulse-slow">
-              <div className="flex items-center gap-2 mb-1.5 px-1">
-                <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0s' }}></div>
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.2s' }}></div>
-                <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.4s' }}></div>
-              </div>
-              <p className="text-white/60 text-xs font-medium">{typingLabel}</p>
-            </div>
-          </motion.div>
-        )}
       </AnimatePresence>
+
+      <div className="min-h-[76px]">
+        <AnimatePresence initial={false} mode="wait">
+          {isLoading ? (
+            <motion.div
+              key="typing-indicator"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="flex justify-start h-[76px] items-start"
+              style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
+            >
+              <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-400/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] animate-pulse-slow">
+                <div className="flex items-center gap-2 mb-1.5 px-1">
+                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0s' }}></div>
+                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <p className="text-white/60 text-xs font-medium">{typingLabel}</p>
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
 
       <div ref={messagesEndRef} />
     </div>
@@ -787,6 +794,7 @@ export default function Chat() {
   const pendingMobileVisionRequestRef = useRef<PendingMobileVisionRequest | null>(null);
   const mobileVisionRequestIdRef = useRef(0);
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
+  const memoryCleanupDoneRef = useRef(false);
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const messagesRef = useRef<ChatMessage[]>([]);
@@ -810,8 +818,8 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length, isLoading]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -1011,6 +1019,12 @@ export default function Chat() {
 
     const bootstrapMemory = async () => {
       try {
+        if (user && !memoryCleanupDoneRef.current) {
+          memoryCleanupDoneRef.current = true;
+          void pruneLowValueMemories(user).catch((error) => {
+            console.warn("Failed to prune low-value memories", error);
+          });
+        }
         const profile = await fetchMemory(user);
         if (!cancelled) {
           setMemoryProfile(profile);
@@ -1561,7 +1575,6 @@ export default function Chat() {
     try {
       await saveChatMessage(chatId, message, user);
       storeAddMessage(chatId, message);
-      await refreshChatSessions(chatId);
       setDbStatus(null);
     } catch (error) {
       if (isFirestoreConnectivityError(error)) {
@@ -1569,7 +1582,7 @@ export default function Chat() {
       }
       throw error;
     }
-  }, [refreshChatSessions, storeAddMessage, user]);
+  }, [storeAddMessage, user]);
 
   const updateStreamingMessage = useCallback((chatId: string, content: string) => {
     setMessages((prev) => {
@@ -1636,6 +1649,7 @@ export default function Chat() {
       }
 
       let fullText = "";
+      let firstTokenReceived = false;
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       updateStreamingMessage(chatId, "");
@@ -1648,6 +1662,10 @@ export default function Chat() {
 
         const chunk = decoder.decode(value, { stream: true });
         fullText += chunk;
+        if (!firstTokenReceived && fullText.trim().length > 0) {
+          firstTokenReceived = true;
+          setIsLoading(false);
+        }
         updateStreamingMessage(chatId, fullText);
       }
 
@@ -1689,7 +1707,6 @@ export default function Chat() {
         if (memoryEnabled) {
           try {
             await uploadMemoryImage(imageBase64, "upload");
-            await refreshMemoryState();
           } catch (error) {
             console.warn("Failed to save memory image", error);
           }
@@ -1707,6 +1724,7 @@ export default function Chat() {
         request.memoryProfile,
       );
       saveFinalMessage(request.chatId, responseText);
+      setIsLoading(false);
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -1794,14 +1812,13 @@ export default function Chat() {
     const nextHistory: ChatMessage[] = [...messagesRef.current, optimisticUserMessage];
     setMessages((prev) => [...prev, optimisticUserMessage]);
     messagesRef.current = nextHistory;
-    try {
-      await persistChatMessage(chatId, userMessage);
-    } catch (error) {
+    setIsLoading(true);
+    void persistChatMessage(chatId, userMessage).catch((error) => {
       console.error("Failed to persist user message", error);
       if (isFirestoreConnectivityError(error)) {
         setDbStatus("Connecting to database...");
       }
-    }
+    });
     if (routeChatId !== chatId) {
       navigate(`/chat/${chatId}`);
     }
@@ -1850,14 +1867,6 @@ export default function Chat() {
         role: "user",
         content: userText,
       });
-
-      try {
-        const freshMemory = await fetchMemory(user, { chatLimit: 20, imageLimit: 12 });
-        nextMemoryProfile = freshMemory;
-        setMemoryProfile(freshMemory);
-      } catch (error) {
-        console.warn("Failed to fetch fresh memory for prompt context", error);
-      }
     }
 
     const mobile = isMobileDevice();
@@ -1874,11 +1883,11 @@ export default function Chat() {
       pendingMobileVisionRequestRef.current = pendingRequest;
       setPendingMobileVisionRequest(pendingRequest);
       submitLockRef.current = true;
+      setIsLoading(false);
       return;
     }
 
     try {
-      setIsLoading(true);
       lastMsgCountRef.current = nextHistory.length;
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
@@ -1886,7 +1895,6 @@ export default function Chat() {
       if (base64Image && memoryEnabled) {
         try {
           await uploadMemoryImage(base64Image, "upload", userText);
-          await refreshMemoryState();
         } catch (error) {
           console.warn("Failed to save memory image", error);
         }
@@ -1903,6 +1911,7 @@ export default function Chat() {
       );
 
       saveFinalMessage(chatId, responseText);
+      setIsLoading(false);
       speak(responseText);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -2041,7 +2050,7 @@ export default function Chat() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
+        <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6">
           {messages.length === 0 && !isLoading && !submitLockRef.current ? (
             <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
               <motion.div

@@ -25,6 +25,19 @@ const MAX_CHAT_HISTORY = 30;
 const MAX_IMAGE_HISTORY = 60;
 const MAX_PREFERENCES = 20;
 const MAX_FACTS = 20;
+const MAX_MEMORY_WORDS = 4;
+const MAX_MEMORY_KEYWORDS = 4;
+const MIN_MEMORY_WORDS = 2;
+
+const GREETING_PATTERN =
+  /^(hi|hello|hey|hii|heyy|yo|ok|okay|hmm|hmmm|thik|theek|fine|good|nice|thanks|thank you|sup|kya haal|kaise ho)$/i;
+const STATUS_PATTERN =
+  /\b(thik hu|theek hu|i am fine|i'm fine|all good|sab thik|bas thik|just fine|okay hu)\b/i;
+const EXPLICIT_MEMORY_PATTERN =
+  /\b(yaad rakh|yaad rakhna|remember this|remember that|save this|important)\b/i;
+
+export const STRICT_MEMORY_EXTRACTION_INSTRUCTION =
+  "Extract facts ONLY if they are identity (name/age), preferences (likes/dislikes), habits, or explicit remember commands. Ignore greetings, small talk, and temporary status.";
 
 export const CREATOR_NAME = "Alakh";
 
@@ -83,6 +96,109 @@ function normalizeText(value: string, min = 2, max = 280) {
   return cleaned;
 }
 
+function toShortPhrase(input: string, maxWords = MAX_MEMORY_WORDS) {
+  const cleaned = sanitizeText(input);
+  const words = cleaned.split(/\s+/).filter(Boolean).slice(0, maxWords);
+  if (!words.length) {
+    return undefined;
+  }
+  return words.join(" ");
+}
+
+function wordCount(text: string) {
+  return sanitizeText(text).split(/\s+/).filter(Boolean).length;
+}
+
+function isLowValueText(text: string) {
+  const cleaned = sanitizeText(text).toLowerCase();
+  if (!cleaned) {
+    return true;
+  }
+
+  if (GREETING_PATTERN.test(cleaned) || STATUS_PATTERN.test(cleaned)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isAllowedMemoryShape(value: string) {
+  return /^(Name|Age|Likes|Dislikes|Habit|Remember):/i.test(value.trim());
+}
+
+function passesMemoryValidation(value: string) {
+  if (isLowValueText(value)) {
+    return false;
+  }
+
+  if (!isAllowedMemoryShape(value)) {
+    return false;
+  }
+
+  const count = wordCount(value);
+  if (/^(Name|Age):/i.test(value.trim())) {
+    return count >= 2;
+  }
+
+  return count >= 3;
+}
+
+function summarizeToKeywords(content: string) {
+  // Strict instruction equivalent:
+  // "Extract facts ONLY if Identity, Preferences, Habits, or Explicit Commands.
+  // Ignore greetings, small talk, temporary status. Return 3-4 keywords."
+  const text = sanitizeText(content);
+  const lower = text.toLowerCase();
+
+  if (isLowValueText(text) || wordCount(text) < MIN_MEMORY_WORDS) {
+    return undefined;
+  }
+
+  const nameMatch = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,60})/i);
+  if (nameMatch) {
+    const name = toShortPhrase(nameMatch[1], 2);
+    return name ? `Name: ${name}` : undefined;
+  }
+
+  const ageMatch = lower.match(/\b(?:i am|i'm|age|umr)\s*(\d{1,2})\b/i);
+  if (ageMatch) {
+    return `Age: ${ageMatch[1]}`;
+  }
+
+  const likesMatch = text.match(/(?:i\s+like|mujhe\s+pasand\s+hai|mujhe)\s+([^.!?\n]{1,120})(?:\s+pasand\s+hai)?/i);
+  if (likesMatch) {
+    const likes = toShortPhrase(likesMatch[1], MAX_MEMORY_WORDS);
+    return likes ? `Likes: ${likes}` : undefined;
+  }
+
+  const dislikesMatch = text.match(/(?:i\s+don't\s+like|i\s+dislike|mujhe\s+pasand\s+nahi)\s+([^.!?\n]{1,120})/i);
+  if (dislikesMatch) {
+    const dislikes = toShortPhrase(dislikesMatch[1], MAX_MEMORY_WORDS);
+    return dislikes ? `Dislikes: ${dislikes}` : undefined;
+  }
+
+  const habitMatch = text.match(/(?:i\s+usually|i\s+always|i\s+often|har\s+roz|daily)\s+([^.!?\n]{1,120})/i);
+  if (habitMatch) {
+    const habit = toShortPhrase(habitMatch[1], MAX_MEMORY_WORDS);
+    return habit ? `Habit: ${habit}` : undefined;
+  }
+
+  if (EXPLICIT_MEMORY_PATTERN.test(lower)) {
+    const remembered = toShortPhrase(
+      text
+        .replace(EXPLICIT_MEMORY_PATTERN, "")
+        .replace(/[:\-]/g, " ")
+        .trim(),
+      MAX_MEMORY_WORDS,
+    );
+    if (remembered) {
+      return `Remember: ${remembered}`;
+    }
+  }
+
+  return undefined;
+}
+
 function uniqueValues(values: string[], max: number) {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -112,7 +228,8 @@ function normalizeList(values: unknown, max: number) {
   return uniqueValues(
     values
       .filter((value): value is string => typeof value === "string")
-      .map((value) => normalizeText(value))
+      .map((value) => toShortPhrase(value, MAX_MEMORY_WORDS))
+      .map((value) => (value ? normalizeText(value, 2, 80) : undefined))
       .filter((value): value is string => Boolean(value)),
     max,
   );
@@ -157,13 +274,13 @@ function mapChatEntry(id: string, raw: unknown): MemoryChatEntry | null {
   }
 
   const role = raw.role === "assistant" ? "assistant" : raw.role === "user" ? "user" : null;
-  const content = typeof raw.content === "string" ? raw.content.trim() : "";
+  const content = typeof raw.content === "string" ? toShortPhrase(raw.content, MAX_MEMORY_WORDS) ?? "" : "";
   const timestamp =
     raw.timestamp && isRecord(raw.timestamp) && typeof raw.timestamp.toDate === "function"
       ? raw.timestamp.toDate().toISOString()
       : normalizeIsoTimestamp(raw.timestampIso);
 
-  if (!role || !content) {
+  if (!role || !content || !passesMemoryValidation(content)) {
     return null;
   }
 
@@ -222,7 +339,10 @@ export function isMeaningfulMessage(content: string) {
 function extractNameFact(text: string) {
   const match = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,60})/i);
   const name = match ? normalizeText(match[1], 2, 60) : undefined;
-  return name ? `Name: ${name}` : undefined;
+  if (!name) {
+    return undefined;
+  }
+  return `Name: ${toShortPhrase(name, 2)}`;
 }
 
 function extractPreference(text: string) {
@@ -240,7 +360,8 @@ function extractPreference(text: string) {
 
     const value = normalizeText(match[1], 2, 120);
     if (value) {
-      return value;
+      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
+      return short ? `Likes: ${short}` : undefined;
     }
   }
 
@@ -249,10 +370,19 @@ function extractPreference(text: string) {
 
 function extractFact(text: string) {
   const patterns: Array<[RegExp, (value: string) => string | undefined]> = [
-    [/\bi\s+am\s+from\s+([^.!?\n]{1,120})/i, (value) => normalizeText(`From ${value}`, 4, 140)],
-    [/\bmain\s+([^.!?\n]{1,120})\s+se\s+hu/i, (value) => normalizeText(`From ${value}`, 4, 140)],
-    [/\bi\s+work\s+as\s+([^.!?\n]{1,120})/i, (value) => normalizeText(`Works as ${value}`, 4, 140)],
-    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => normalizeText(`Age ${value}`, 4, 140)],
+    [/\bi\s+am\s+from\s+([^.!?\n]{1,120})/i, (value) => {
+      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
+      return short ? `Remember: from ${short}` : undefined;
+    }],
+    [/\bmain\s+([^.!?\n]{1,120})\s+se\s+hu/i, (value) => {
+      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
+      return short ? `Remember: from ${short}` : undefined;
+    }],
+    [/\bi\s+work\s+as\s+([^.!?\n]{1,120})/i, (value) => {
+      const short = toShortPhrase(value, MAX_MEMORY_WORDS);
+      return short ? `Habit: work ${short}` : undefined;
+    }],
+    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => `Age: ${value}`],
   ];
 
   for (const [pattern, formatter] of patterns) {
@@ -400,14 +530,16 @@ export async function saveMessage(
   if (!content) {
     return;
   }
-
-  console.log("Saving message...", { role: payload.role, content });
+  const summarized = summarizeToKeywords(content);
+  if (!summarized || !passesMemoryValidation(summarized)) {
+    return;
+  }
 
   try {
     await ensureUserMemoryDoc(user);
     await addDoc(getChatHistoryCollection(user), {
       role: payload.role,
-      content,
+      content: summarized,
       timestamp: serverTimestamp(),
       timestampIso: new Date().toISOString(),
     });
@@ -441,8 +573,6 @@ export async function saveImage(
   if (!cleanedUrl) {
     return;
   }
-
-  console.log("Saving image...", cleanedUrl);
 
   try {
     await ensureUserMemoryDoc(user);
@@ -506,6 +636,29 @@ export async function clearAllMemory(user: User | null) {
     facts: [],
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function pruneLowValueMemories(user: User | null, scanLimit = 500) {
+  if (!user) {
+    return 0;
+  }
+
+  const snapshot = await getDocs(
+    query(getChatHistoryCollection(user), orderBy("timestamp", "desc"), limit(scanLimit)),
+  );
+
+  const trashDocs = snapshot.docs.filter((entry) => {
+    const raw = entry.data();
+    const content = typeof raw.content === "string" ? raw.content : "";
+    return !passesMemoryValidation(content);
+  });
+
+  if (!trashDocs.length) {
+    return 0;
+  }
+
+  await Promise.all(trashDocs.map((entry) => deleteDoc(entry.ref)));
+  return trashDocs.length;
 }
 
 export function buildPromptMemoryContext(memory: MemoryProfile) {
