@@ -74,8 +74,8 @@ export default function Login() {
         await signInWithEmailAndPassword(auth, email, password);
       }
       navigate("/chat");
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     }
   };
 

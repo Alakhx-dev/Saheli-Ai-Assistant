@@ -12,6 +12,25 @@
   }
 }
 
+.ultra-white-nebula {
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 55%),
+    radial-gradient(900px 620px at 84% 0%, rgba(209, 231, 255, 0.16) 0%, rgba(209, 231, 255, 0) 60%),
+    radial-gradient(800px 520px at 52% 100%, rgba(255, 214, 232, 0.14) 0%, rgba(255, 214, 232, 0) 58%),
+    linear-gradient(160deg, #090314 0%, #100821 52%, #0d0419 100%);
+  position: relative;
+}
+
+.ultra-white-nebula::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 0.7px, transparent 0.7px);
+  background-size: 3px 3px;
+  opacity: 0.08;
+}
+
 /* Animated Mesh Gradient Background */
 .animated-gradient {
   position: fixed;

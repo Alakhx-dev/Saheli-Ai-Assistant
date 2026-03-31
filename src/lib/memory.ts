@@ -21,29 +21,19 @@ const MEMORY_MOMENTS_SUBCOLLECTION = "moments";
 const LOCAL_GUEST_MEMORY_KEY = "memory_guest";
 const LOCAL_GUEST_MOMENTS_KEY = "memory_guest_moments";
 const MEMORY_ENABLED_KEY = "memory_enabled";
-const MIN_OBSERVATIONS_FOR_ADAPTATION = 5;
-const MAX_PREFERENCES = 6;
 const MAX_MOMENTS = 12;
+const MAX_MEMORY_ITEMS = {
+  preferences: 16,
+  facts: 16,
+  recent_context: 10,
+} as const;
+
 export const CREATOR_NAME = "Alakh";
 
-type MemoryTone = "hindi" | "english" | "hinglish";
-type LengthBucket = "short" | "medium" | "long";
-type MoodBucket = "serious" | "funny" | "flirty" | "playful";
-
-interface MemoryLearningState {
-  sampleCount: number;
-  toneCounts: Record<MemoryTone, number>;
-  lengthCounts: Record<LengthBucket, number>;
-  moodCounts: Record<MoodBucket, number>;
-}
-
 export interface MemoryProfile {
-  name?: string;
-  tone?: MemoryTone;
-  style?: string;
-  moodPattern?: string;
-  preferences?: string[];
-  learning?: MemoryLearningState;
+  preferences: string[];
+  facts: string[];
+  recent_context: string[];
   updatedAtMs?: number;
 }
 
@@ -53,23 +43,179 @@ export interface MemoryMoment {
   createdAt: number;
 }
 
-export type MemoryFieldKey = "name" | "tone" | "style" | "moodPattern" | "preference";
+export type MemoryFieldKey = keyof Pick<MemoryProfile, "preferences" | "facts" | "recent_context">;
 
 type FirestoreMemoryProfile = Partial<MemoryProfile> & {
-  learning?: Partial<MemoryLearningState>;
+  name?: string;
+  tone?: string;
+  style?: string;
+  moodPattern?: string;
 };
 
-function readGuestMemory(): MemoryProfile | null {
+function getMemoryDocRef(user: User) {
+  return doc(db, MEMORY_COLLECTION, user.uid, PROFILE_SUBCOLLECTION, PROFILE_DOC_ID);
+}
+
+function getMemoryMomentsCollectionRef(user: User) {
+  return collection(db, MEMORY_COLLECTION, user.uid, MEMORY_MOMENTS_SUBCOLLECTION);
+}
+
+export function createEmptyMemoryProfile(): MemoryProfile {
+  return {
+    preferences: [],
+    facts: [],
+    recent_context: [],
+    updatedAtMs: Date.now(),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function sanitizeMemoryValue(value: string) {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/[<>{}\[\]]/g, "")
+    .trim()
+    .replace(/[.,!?]+$/g, "")
+    .trim();
+}
+
+function capitalizeSentence(value: string) {
+  if (!value) {
+    return value;
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function normalizeMemoryValue(value: string, minLength = 3, maxLength = 160) {
+  const cleaned = capitalizeSentence(sanitizeMemoryValue(value));
+
+  if (!cleaned || cleaned.length < minLength || cleaned.length > maxLength) {
+    return undefined;
+  }
+
+  return cleaned;
+}
+
+function normalizeName(rawName: string): string | undefined {
+  const cleaned = sanitizeMemoryValue(rawName)
+    .replace(/\b(hai|hoon|hu|hun|ho)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned || cleaned.length > 40 || cleaned.split(" ").length > 4) {
+    return undefined;
+  }
+
+  return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function uniqueMemoryItems(values: string[], maxItems: number) {
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+
+  for (const value of values) {
+    const normalized = value.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    deduped.push(value);
+
+    if (deduped.length >= maxItems) {
+      break;
+    }
+  }
+
+  return deduped;
+}
+
+function normalizeBucket(values: unknown, bucket: MemoryFieldKey): string[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return uniqueMemoryItems(
+    values
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => normalizeMemoryValue(value))
+      .filter((value): value is string => Boolean(value)),
+    MAX_MEMORY_ITEMS[bucket],
+  );
+}
+
+function legacyFacts(profile: FirestoreMemoryProfile) {
+  const facts: string[] = [];
+
+  if (typeof profile.name === "string") {
+    const name = normalizeName(profile.name);
+    if (name) {
+      facts.push(`Name: ${name}`);
+    }
+  }
+
+  if (typeof profile.tone === "string") {
+    const tone = normalizeMemoryValue(`Preferred tone: ${profile.tone}`);
+    if (tone) {
+      facts.push(tone);
+    }
+  }
+
+  if (typeof profile.style === "string") {
+    const style = normalizeMemoryValue(`Preferred response style: ${profile.style}`);
+    if (style) {
+      facts.push(style);
+    }
+  }
+
+  if (typeof profile.moodPattern === "string") {
+    const moodPattern = normalizeMemoryValue(`Conversation mood: ${profile.moodPattern}`);
+    if (moodPattern) {
+      facts.push(moodPattern);
+    }
+  }
+
+  return facts;
+}
+
+function normalizeProfile(profile: unknown): MemoryProfile {
+  const empty = createEmptyMemoryProfile();
+
+  if (!isRecord(profile)) {
+    return empty;
+  }
+
+  const storedProfile = profile as FirestoreMemoryProfile;
+  const preferences = normalizeBucket(storedProfile.preferences, "preferences");
+  const facts = uniqueMemoryItems(
+    [...normalizeBucket(storedProfile.facts, "facts"), ...legacyFacts(storedProfile)],
+    MAX_MEMORY_ITEMS.facts,
+  );
+  const recentContext = normalizeBucket(storedProfile.recent_context, "recent_context");
+
+  return {
+    preferences,
+    facts,
+    recent_context: recentContext,
+    updatedAtMs: typeof storedProfile.updatedAtMs === "number" ? storedProfile.updatedAtMs : empty.updatedAtMs,
+  };
+}
+
+function readGuestMemory(): MemoryProfile {
   try {
     const raw = localStorage.getItem(LOCAL_GUEST_MEMORY_KEY);
     if (!raw) {
-      return null;
+      return createEmptyMemoryProfile();
     }
 
-    return JSON.parse(raw) as MemoryProfile;
+    return normalizeProfile(JSON.parse(raw));
   } catch (error) {
     console.warn("Failed to read guest memory", error);
-    return null;
+    return createEmptyMemoryProfile();
   }
 }
 
@@ -104,164 +250,75 @@ function writeGuestMoments(moments: MemoryMoment[]) {
   }
 }
 
-const ROMAN_HINDI_HINTS = [
-  "main",
-  "mera",
-  "meri",
-  "mujhe",
-  "tum",
-  "tujhe",
-  "kaisa",
-  "lag",
-  "raha",
-  "rahi",
-  "nahi",
-  "kyun",
-  "acha",
-  "yaar",
-  "thoda",
-  "baat",
-  "pasand",
-  "hoon",
-  "hai",
-];
-
-const FLIRTY_HINTS = ["love", "miss", "baby", "cutie", "jaan", "romantic", "cute", "kiss", "date", "sexy"];
-const FUNNY_HINTS = ["haha", "hehe", "lol", "lmao", "roast", "masti", "joke", "funny", "meme"];
-const SERIOUS_HINTS = ["help", "problem", "issue", "tension", "sad", "upset", "anxious", "important", "serious", "worried"];
-const PLAYFUL_HINTS = ["tease", "pagal", "drama", "chal", "oye", "acha ji", "huh", "hehe", "na", "uff"];
-
-function getMemoryDocRef(user: User) {
-  return doc(db, MEMORY_COLLECTION, user.uid, PROFILE_SUBCOLLECTION, PROFILE_DOC_ID);
+function extractNameFact(text: string) {
+  const match = text.match(/(?:my\s+name\s+is|mera\s+naam)\s+([^.!?\n]{1,40})/i);
+  const name = match ? normalizeName(match[1]) : undefined;
+  return name ? `Name: ${name}` : undefined;
 }
 
-function getMemoryMomentsCollectionRef(user: User) {
-  return collection(db, MEMORY_COLLECTION, user.uid, MEMORY_MOMENTS_SUBCOLLECTION);
-}
-
-function createEmptyLearningState(): MemoryLearningState {
-  return {
-    sampleCount: 0,
-    toneCounts: {
-      hindi: 0,
-      english: 0,
-      hinglish: 0,
-    },
-    lengthCounts: {
-      short: 0,
-      medium: 0,
-      long: 0,
-    },
-    moodCounts: {
-      serious: 0,
-      funny: 0,
-      flirty: 0,
-      playful: 0,
-    },
-  };
-}
-
-function normalizeLearningState(learning?: Partial<MemoryLearningState>): MemoryLearningState {
-  const fallback = createEmptyLearningState();
-
-  return {
-    sampleCount: typeof learning?.sampleCount === "number" ? learning.sampleCount : 0,
-    toneCounts: {
-      hindi: typeof learning?.toneCounts?.hindi === "number" ? learning.toneCounts.hindi : fallback.toneCounts.hindi,
-      english: typeof learning?.toneCounts?.english === "number" ? learning.toneCounts.english : fallback.toneCounts.english,
-      hinglish: typeof learning?.toneCounts?.hinglish === "number" ? learning.toneCounts.hinglish : fallback.toneCounts.hinglish,
-    },
-    lengthCounts: {
-      short: typeof learning?.lengthCounts?.short === "number" ? learning.lengthCounts.short : fallback.lengthCounts.short,
-      medium: typeof learning?.lengthCounts?.medium === "number" ? learning.lengthCounts.medium : fallback.lengthCounts.medium,
-      long: typeof learning?.lengthCounts?.long === "number" ? learning.lengthCounts.long : fallback.lengthCounts.long,
-    },
-    moodCounts: {
-      serious: typeof learning?.moodCounts?.serious === "number" ? learning.moodCounts.serious : fallback.moodCounts.serious,
-      funny: typeof learning?.moodCounts?.funny === "number" ? learning.moodCounts.funny : fallback.moodCounts.funny,
-      flirty: typeof learning?.moodCounts?.flirty === "number" ? learning.moodCounts.flirty : fallback.moodCounts.flirty,
-      playful: typeof learning?.moodCounts?.playful === "number" ? learning.moodCounts.playful : fallback.moodCounts.playful,
-    },
-  };
-}
-
-function sanitizeFragment(value: string): string {
-  return value
-    .replace(/\s+/g, " ")
-    .replace(/[<>{}[\]]/g, "")
-    .trim()
-    .replace(/[.,!?]+$/g, "")
-    .trim();
-}
-
-function normalizeName(rawName: string): string | undefined {
-  const cleaned = sanitizeFragment(rawName)
-    .replace(/\b(hai|hoon|hu|hun|h|ho)\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleaned || cleaned.length > 40 || cleaned.split(" ").length > 4) {
-    return undefined;
-  }
-
-  return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function normalizePreference(rawPreference: string): string | undefined {
-  const cleaned = sanitizeFragment(rawPreference)
+function normalizePreference(rawPreference: string) {
+  const cleaned = sanitizeMemoryValue(rawPreference)
     .replace(/\b(bahut|bohot|bahot|really|very)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!cleaned || cleaned.length < 2 || cleaned.length > 60) {
+  if (!cleaned || cleaned.length < 2 || cleaned.length > 80) {
     return undefined;
   }
 
-  return cleaned;
+  return capitalizeSentence(cleaned);
 }
 
-function extractName(text: string): string | undefined {
-  const match = text.match(/(?:mera\s+naam|my\s+name\s+is)\s+([^.!?\n]{1,40})/i);
-  return match ? normalizeName(match[1]) : undefined;
-}
-
-function extractPreference(text: string): string | undefined {
-  const trailingPreferenceMatch = text.match(/mujhe\s+pasand\s+hai\s+([^.!?\n]{1,60})/i);
+function extractPreference(text: string) {
+  const trailingPreferenceMatch = text.match(/mujhe\s+pasand\s+hai\s+([^.!?\n]{1,80})/i);
   if (trailingPreferenceMatch) {
-    return normalizePreference(trailingPreferenceMatch[1]);
+    const preference = normalizePreference(trailingPreferenceMatch[1]);
+    return preference ? `Likes ${preference}` : undefined;
   }
 
-  const leadingPreferenceMatch = text.match(/mujhe\s+([^.!?\n]{1,60})\s+pasand\s+hai/i);
+  const leadingPreferenceMatch = text.match(/mujhe\s+([^.!?\n]{1,80})\s+pasand\s+hai/i);
   if (leadingPreferenceMatch) {
-    return normalizePreference(leadingPreferenceMatch[1]);
+    const preference = normalizePreference(leadingPreferenceMatch[1]);
+    return preference ? `Likes ${preference}` : undefined;
   }
 
-  const englishMatch = text.match(/i\s+like\s+([^.!?\n]{1,60})/i);
-  return englishMatch ? normalizePreference(englishMatch[1]) : undefined;
-}
-
-function extractExplicitMoodPattern(text: string): string | undefined {
-  const lowered = text.toLowerCase();
-
-  if (/(romantic|flirty|ishq|pyaar)/i.test(lowered)) {
-    return "romantic + playful";
-  }
-
-  if (/(funny|masti|mazaak|mazak|playful)/i.test(lowered)) {
-    return "playful + teasing";
-  }
-
-  if (/(serious|calm|sorted|simple|introvert|shy)/i.test(lowered)) {
-    return "calm + thoughtful";
+  const englishMatch = text.match(/i\s+like\s+([^.!?\n]{1,80})/i);
+  if (englishMatch) {
+    const preference = normalizePreference(englishMatch[1]);
+    return preference ? `Likes ${preference}` : undefined;
   }
 
   return undefined;
 }
 
-function shouldObserveMessage(text: string): boolean {
+function extractFact(text: string) {
+  const matchers: Array<[RegExp, (value: string) => string | undefined]> = [
+    [/\bi\s+am\s+from\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`From ${value}`)],
+    [/\bmain\s+([^.!?\n]{1,80})\s+se\s+hu/i, (value) => normalizeMemoryValue(`From ${value}`)],
+    [/\bi\s+work\s+as\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`Works as ${value}`)],
+    [/\bi\s+study\s+([^.!?\n]{1,80})/i, (value) => normalizeMemoryValue(`Studies ${value}`)],
+    [/\bi\s+am\s+(\d{1,2})\s+years?\s+old/i, (value) => normalizeMemoryValue(`Age: ${value}`)],
+  ];
+
+  for (const [pattern, formatter] of matchers) {
+    const match = text.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const fact = formatter(match[1]);
+    if (fact) {
+      return fact;
+    }
+  }
+
+  return undefined;
+}
+
+function shouldStoreAsRecentContext(text: string) {
   const trimmed = text.trim();
 
-  if (!trimmed || trimmed.length < 3 || trimmed.length > 240) {
+  if (!trimmed || trimmed.length < 8 || trimmed.length > 180) {
     return false;
   }
 
@@ -273,164 +330,42 @@ function shouldObserveMessage(text: string): boolean {
     return false;
   }
 
-  if (/^([a-z])\1{5,}$/i.test(trimmed.replace(/\s+/g, ""))) {
-    return false;
-  }
-
   return true;
 }
 
-function detectTone(text: string): MemoryTone {
-  const lowered = text.toLowerCase();
-  const latinWords = lowered.match(/\b[a-z]{2,}\b/g) ?? [];
-  const hindiHintMatches = ROMAN_HINDI_HINTS.filter((hint) => lowered.includes(hint)).length;
-  const hasHindiScript = /[\u0900-\u097f]/.test(text);
-  const englishWordCount = latinWords.filter((word) => !ROMAN_HINDI_HINTS.includes(word)).length;
-
-  if ((hasHindiScript || hindiHintMatches >= 2) && englishWordCount >= 2) {
-    return "hinglish";
-  }
-
-  if (hasHindiScript || hindiHintMatches >= 2) {
-    return "hindi";
-  }
-
-  return "english";
+function mergeBucket(currentValues: string[], incomingValues: string[] | undefined, bucket: MemoryFieldKey) {
+  return uniqueMemoryItems(
+    [
+      ...(incomingValues ?? [])
+        .map((value) => normalizeMemoryValue(value))
+        .filter((value): value is string => Boolean(value)),
+      ...currentValues,
+    ],
+    MAX_MEMORY_ITEMS[bucket],
+  );
 }
 
-function detectLength(text: string): LengthBucket {
-  const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
-
-  if (wordCount <= 8) {
-    return "short";
-  }
-
-  if (wordCount >= 20) {
-    return "long";
-  }
-
-  return "medium";
+function profilesEqual(left: MemoryProfile, right: MemoryProfile) {
+  return (
+    left.preferences.join("|") === right.preferences.join("|") &&
+    left.facts.join("|") === right.facts.join("|") &&
+    left.recent_context.join("|") === right.recent_context.join("|")
+  );
 }
 
-function detectMood(text: string): MoodBucket {
-  const lowered = text.toLowerCase();
-  const scores: Record<MoodBucket, number> = {
-    serious: 0,
-    funny: 0,
-    flirty: 0,
-    playful: 0,
+export function mergeMemoryProfile(
+  currentProfile: MemoryProfile | null,
+  partialProfile: Partial<Pick<MemoryProfile, "preferences" | "facts" | "recent_context">>,
+): MemoryProfile {
+  const current = normalizeProfile(currentProfile);
+  const nextProfile: MemoryProfile = {
+    preferences: mergeBucket(current.preferences, partialProfile.preferences, "preferences"),
+    facts: mergeBucket(current.facts, partialProfile.facts, "facts"),
+    recent_context: mergeBucket(current.recent_context, partialProfile.recent_context, "recent_context"),
+    updatedAtMs: Date.now(),
   };
 
-  for (const hint of SERIOUS_HINTS) {
-    if (lowered.includes(hint)) {
-      scores.serious += 1;
-    }
-  }
-
-  for (const hint of FUNNY_HINTS) {
-    if (lowered.includes(hint)) {
-      scores.funny += 1;
-    }
-  }
-
-  for (const hint of FLIRTY_HINTS) {
-    if (lowered.includes(hint)) {
-      scores.flirty += 1;
-    }
-  }
-
-  for (const hint of PLAYFUL_HINTS) {
-    if (lowered.includes(hint)) {
-      scores.playful += 1;
-    }
-  }
-
-  const highestScore = Math.max(...Object.values(scores));
-  if (highestScore === 0) {
-    return "playful";
-  }
-
-  return (Object.entries(scores).find(([, score]) => score === highestScore)?.[0] as MoodBucket) ?? "playful";
-}
-
-function pickDominantBucket<TBucket extends string>(counts: Record<TBucket, number>): TBucket {
-  return (Object.entries(counts).sort((left, right) => right[1] - left[1])[0]?.[0] as TBucket) ?? Object.keys(counts)[0] as TBucket;
-}
-
-function deriveStyle(length: LengthBucket, mood: MoodBucket): string {
-  if (length === "short" && (mood === "flirty" || mood === "playful")) {
-    return "short + teasing";
-  }
-
-  if (length === "short" && mood === "serious") {
-    return "short + direct";
-  }
-
-  if (length === "long" && mood === "serious") {
-    return "detailed + thoughtful";
-  }
-
-  if (length === "long" && (mood === "flirty" || mood === "funny" || mood === "playful")) {
-    return "expressive + playful";
-  }
-
-  if (mood === "serious") {
-    return "calm + thoughtful";
-  }
-
-  if (mood === "funny") {
-    return "casual + witty";
-  }
-
-  if (mood === "flirty") {
-    return "short + teasing";
-  }
-
-  return "casual + playful";
-}
-
-function deriveMoodPattern(moodCounts: Record<MoodBucket, number>): string {
-  const sortedMoods = Object.entries(moodCounts).sort((left, right) => right[1] - left[1]);
-  const primaryMood = (sortedMoods[0]?.[0] as MoodBucket | undefined) ?? "playful";
-  const secondaryMood = (sortedMoods[1]?.[0] as MoodBucket | undefined) ?? primaryMood;
-
-  if (primaryMood === "flirty") {
-    return secondaryMood === "serious" ? "romantic + caring" : "romantic + playful";
-  }
-
-  if (primaryMood === "serious") {
-    return secondaryMood === "flirty" ? "calm + caring" : "calm + thoughtful";
-  }
-
-  if (primaryMood === "funny") {
-    return "funny + light";
-  }
-
-  return secondaryMood === "flirty" ? "romantic + playful" : "playful + teasing";
-}
-
-function addPreference(preferences: string[] | undefined, preference: string): string[] {
-  const nextPreferences = [...(preferences ?? [])];
-
-  if (!nextPreferences.some((item) => item.toLowerCase() === preference.toLowerCase())) {
-    nextPreferences.unshift(preference);
-  }
-
-  return nextPreferences.slice(0, MAX_PREFERENCES);
-}
-
-function normalizeProfile(profile: FirestoreMemoryProfile): MemoryProfile {
-  return {
-    name: typeof profile.name === "string" ? profile.name : undefined,
-    tone: profile.tone === "hindi" || profile.tone === "english" || profile.tone === "hinglish" ? profile.tone : undefined,
-    style: typeof profile.style === "string" ? profile.style : undefined,
-    moodPattern: typeof profile.moodPattern === "string" ? profile.moodPattern : undefined,
-    preferences: Array.isArray(profile.preferences)
-      ? profile.preferences.filter((value): value is string => typeof value === "string").slice(0, MAX_PREFERENCES)
-      : [],
-    learning: normalizeLearningState(profile.learning),
-    updatedAtMs: typeof profile.updatedAtMs === "number" ? profile.updatedAtMs : undefined,
-  };
+  return nextProfile;
 }
 
 export function isMemoryEnabled() {
@@ -442,108 +377,42 @@ export function setMemoryEnabled(enabled: boolean) {
   localStorage.setItem(MEMORY_ENABLED_KEY, String(enabled));
 }
 
-function getDefaultProfile(user: User | null): MemoryProfile {
-  if (!user) {
-    return {
-      name: CREATOR_NAME,
-      tone: "hinglish",
-      style: "short + teasing",
-      moodPattern: "romantic + playful",
-      preferences: [],
-      learning: createEmptyLearningState(),
-      updatedAtMs: Date.now(),
-    };
-  }
-
-  return {
-    name: sanitizeFragment(user.displayName || "User") || "User",
-    preferences: [],
-    learning: createEmptyLearningState(),
-  };
-}
-
 export function deriveNextMemoryProfile(currentProfile: MemoryProfile | null, message: string): MemoryProfile | null {
   const trimmedMessage = message.trim();
   if (!trimmedMessage) {
-    return currentProfile;
+    return normalizeProfile(currentProfile);
   }
 
-  const nextProfile = normalizeProfile(currentProfile ?? {});
-  let hasChanges = false;
+  const factAdditions = [extractNameFact(trimmedMessage), extractFact(trimmedMessage)].filter(
+    (value): value is string => Boolean(value),
+  );
+  const preferenceAdditions = [extractPreference(trimmedMessage)].filter((value): value is string => Boolean(value));
+  const recentContextAdditions =
+    shouldStoreAsRecentContext(trimmedMessage) && factAdditions.length === 0 && preferenceAdditions.length === 0
+      ? [trimmedMessage]
+      : [];
 
-  const explicitName = extractName(trimmedMessage);
-  if (explicitName && explicitName !== nextProfile.name) {
-    nextProfile.name = explicitName;
-    hasChanges = true;
-  }
+  const nextProfile = mergeMemoryProfile(currentProfile, {
+    preferences: preferenceAdditions,
+    facts: factAdditions,
+    recent_context: recentContextAdditions,
+  });
 
-  const explicitPreference = extractPreference(trimmedMessage);
-  if (explicitPreference) {
-    const nextPreferences = addPreference(nextProfile.preferences, explicitPreference);
-    if (nextPreferences.join("|") !== (nextProfile.preferences ?? []).join("|")) {
-      nextProfile.preferences = nextPreferences;
-      hasChanges = true;
-    }
-  }
-
-  const explicitMoodPattern = extractExplicitMoodPattern(trimmedMessage);
-  if (explicitMoodPattern && explicitMoodPattern !== nextProfile.moodPattern) {
-    nextProfile.moodPattern = explicitMoodPattern;
-    hasChanges = true;
-  }
-
-  if (shouldObserveMessage(trimmedMessage)) {
-    const learning = normalizeLearningState(nextProfile.learning);
-    const tone = detectTone(trimmedMessage);
-    const length = detectLength(trimmedMessage);
-    const mood = detectMood(trimmedMessage);
-
-    learning.sampleCount += 1;
-    learning.toneCounts[tone] += 1;
-    learning.lengthCounts[length] += 1;
-    learning.moodCounts[mood] += 1;
-    nextProfile.learning = learning;
-    hasChanges = true;
-
-    if (learning.sampleCount >= MIN_OBSERVATIONS_FOR_ADAPTATION) {
-      nextProfile.tone = pickDominantBucket(learning.toneCounts);
-      nextProfile.style = deriveStyle(
-        pickDominantBucket(learning.lengthCounts),
-        pickDominantBucket(learning.moodCounts),
-      );
-
-      if (!explicitMoodPattern) {
-        nextProfile.moodPattern = deriveMoodPattern(learning.moodCounts);
-      }
-    }
-  }
-
-  if (!hasChanges) {
-    return currentProfile;
-  }
-
-  nextProfile.updatedAtMs = Date.now();
-  return nextProfile;
+  const current = normalizeProfile(currentProfile);
+  return profilesEqual(current, nextProfile) ? current : nextProfile;
 }
 
 export async function loadMemoryProfile(user: User | null): Promise<MemoryProfile | null> {
   if (!user) {
-    const guestProfile = readGuestMemory();
-    return normalizeProfile(guestProfile ?? getDefaultProfile(null));
+    return readGuestMemory();
   }
 
   const snapshot = await getDoc(getMemoryDocRef(user));
   if (!snapshot.exists()) {
-    return normalizeProfile(getDefaultProfile(user));
+    return createEmptyMemoryProfile();
   }
 
-  const storedProfile = normalizeProfile(snapshot.data() as FirestoreMemoryProfile);
-  return normalizeProfile({
-    ...getDefaultProfile(user),
-    ...storedProfile,
-    learning: storedProfile.learning,
-    preferences: storedProfile.preferences,
-  });
+  return normalizeProfile(snapshot.data());
 }
 
 export async function persistMemoryProfile(user: User | null, profile: MemoryProfile | null): Promise<void> {
@@ -551,38 +420,25 @@ export async function persistMemoryProfile(user: User | null, profile: MemoryPro
     return;
   }
 
-  const normalized = normalizeProfile(profile);
+  const normalized = {
+    ...normalizeProfile(profile),
+    updatedAtMs: Date.now(),
+  };
 
   if (!user) {
     writeGuestMemory(normalized);
     return;
   }
 
-  await setDoc(
-    getMemoryDocRef(user),
-    {
-      ...normalized,
-      updatedAt: serverTimestamp(),
-      updatedAtMs: normalized.updatedAtMs ?? Date.now(),
-    },
-  );
+  await setDoc(getMemoryDocRef(user), {
+    ...normalized,
+    updatedAt: serverTimestamp(),
+  });
 }
 
-export function deleteMemoryEntry(profile: MemoryProfile | null, field: MemoryFieldKey, preferenceValue?: string): MemoryProfile | null {
-  const nextProfile = normalizeProfile(profile ?? {});
-
-  if (field === "preference" && preferenceValue) {
-    nextProfile.preferences = (nextProfile.preferences ?? []).filter(
-      (item) => item.toLowerCase() !== preferenceValue.toLowerCase(),
-    );
-  } else {
-    delete nextProfile[field];
-  }
-
-  if (field === "tone" || field === "style" || field === "moodPattern") {
-    nextProfile.learning = createEmptyLearningState();
-  }
-
+export function deleteMemoryEntry(profile: MemoryProfile | null, field: MemoryFieldKey, value: string): MemoryProfile {
+  const nextProfile = normalizeProfile(profile);
+  nextProfile[field] = nextProfile[field].filter((item) => item.toLowerCase() !== value.toLowerCase());
   nextProfile.updatedAtMs = Date.now();
   return nextProfile;
 }
@@ -593,15 +449,17 @@ export async function loadMemoryMoments(user: User | null): Promise<MemoryMoment
   }
 
   const snapshot = await getDocs(query(getMemoryMomentsCollectionRef(user), orderBy("createdAt", "desc"), limit(MAX_MOMENTS)));
-  return snapshot.docs.map((momentDoc) => {
-    const data = momentDoc.data();
+  return snapshot.docs
+    .map((momentDoc) => {
+      const data = momentDoc.data();
 
-    return {
-      id: momentDoc.id,
-      imageDataUrl: typeof data.imageDataUrl === "string" ? data.imageDataUrl : "",
-      createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
-    };
-  }).filter((moment) => moment.imageDataUrl);
+      return {
+        id: momentDoc.id,
+        imageDataUrl: typeof data.imageDataUrl === "string" ? data.imageDataUrl : "",
+        createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+      };
+    })
+    .filter((moment) => moment.imageDataUrl);
 }
 
 export async function saveMemoryMoment(user: User | null, imageBase64OrDataUrl: string): Promise<void> {

@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   orderBy,
@@ -185,4 +186,19 @@ export async function loadChatMessages(chatId: string, user: User | null): Promi
       createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
     };
   });
+}
+
+export async function deleteChatSession(chatId: string, user: User | null) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    if (chats[chatId]) {
+      delete chats[chatId];
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  const snapshot = await getDocs(collection(db, "chats", chatId, "messages"));
+  await Promise.all(snapshot.docs.map((messageDoc) => deleteDoc(messageDoc.ref)));
+  await deleteDoc(doc(db, "chats", chatId));
 }

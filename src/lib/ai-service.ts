@@ -17,6 +17,7 @@ export interface UserIdentityContext {
 }
 
 export type AppLanguage = "english" | "hindi" | "hinglish";
+export type MemoryMode = "enabled" | "disabled";
 
 interface GroqTextContentPart {
   type: "text";
@@ -141,31 +142,35 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
 
   const lines: string[] = [];
 
-  if (memoryProfile.name) {
-    lines.push(`- Name: ${memoryProfile.name}`);
+  if (memoryProfile.facts.length) {
+    lines.push(`- Facts: ${memoryProfile.facts.join("; ")}`);
   }
 
-  if (memoryProfile.tone) {
-    lines.push(`- Tone: ${memoryProfile.tone}`);
+  if (memoryProfile.preferences.length) {
+    lines.push(`- Preferences: ${memoryProfile.preferences.join("; ")}`);
   }
 
-  if (memoryProfile.style) {
-    lines.push(`- Style: ${memoryProfile.style}`);
-  }
-
-  if (memoryProfile.moodPattern) {
-    lines.push(`- Mood pattern: ${memoryProfile.moodPattern}`);
-  }
-
-  if (memoryProfile.preferences?.length) {
-    lines.push(`- Likes: ${memoryProfile.preferences.join(", ")}`);
+  if (memoryProfile.recent_context.length) {
+    lines.push(`- Recent context: ${memoryProfile.recent_context.join("; ")}`);
   }
 
   if (!lines.length) {
     return "";
   }
 
-  return `\n\nUSER MEMORY:\n${lines.join("\n")}\n- Adapt your reply length, tone, and teasing level to this memory.\n- If the user is short, keep it compact. If the user sounds serious, become calmer. If the user is playful or flirty, mirror that naturally.\n- Do not mention stored memory unless it is relevant to the user's message.`;
+  return `\n\nUSER MEMORY:\n${lines.join("\n")}\n- Use this as durable structured memory for the current user.\n- Adapt naturally when the memory is relevant, but do not mention stored memory unless it helps the conversation.\n- Treat recent context as lightweight continuity, not a permanent identity trait.`;
+}
+
+function buildMemoryModeContext(memoryMode?: MemoryMode): string {
+  if (memoryMode === "enabled") {
+    return "\n\nMEMORY MODE: enabled. You can adapt using stored memory context when available.";
+  }
+
+  if (memoryMode === "disabled") {
+    return "\n\nMEMORY MODE: disabled. Ignore any historical/stored preference assumptions and answer only from current conversation context.";
+  }
+
+  return "";
 }
 
 function buildIdentityContext(identity: UserIdentityContext): string {
@@ -178,10 +183,11 @@ function buildMessages(
   emotion?: EmotionLabel,
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
+  memoryMode?: MemoryMode,
 ): GroqMessage[] {
   const language = getSelectedLanguage(identity);
   const sanitizedMessages = messages.filter((message) => message.content.trim());
-  const finalPrompt = `${PERSONALITY_PROMPT}${identity ? buildIdentityContext({ ...identity, language }) : ""}${buildMemoryContext(memoryProfile)}\n\nIMPORTANT:\n${buildLanguageInstruction(language)}`;
+  const finalPrompt = `${PERSONALITY_PROMPT}${identity ? buildIdentityContext({ ...identity, language }) : ""}${buildMemoryModeContext(memoryMode)}${buildMemoryContext(memoryProfile)}\n\nIMPORTANT:\n${buildLanguageInstruction(language)}`;
   const history = sanitizedMessages.map<GroqMessage>((message, index) => {
     const isLatestUserMessage = index === sanitizedMessages.length - 1 && message.role === "user";
     const trimmedContent = message.content.trim();
@@ -239,6 +245,7 @@ async function requestGroq(
   emotion?: EmotionLabel,
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
+  memoryMode?: MemoryMode,
 ): Promise<string> {
   if (!GROQ_API_KEY) {
     return FALLBACK_MESSAGE;
@@ -246,7 +253,7 @@ async function requestGroq(
 
   const language = getSelectedLanguage(identity);
   console.log("LANG:", language);
-  const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity);
+  const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
   const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
   if (payloadMessages.length <= 1) {
     return FALLBACK_MESSAGE;
@@ -309,12 +316,13 @@ export async function sendMessage(
   emotion?: EmotionLabel,
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
+  memoryMode?: MemoryMode,
 ): Promise<string> {
   if (activeRequest) {
     return activeRequest;
   }
 
-  activeRequest = requestGroq(messages, imageBase64, emotion, memoryProfile, identity);
+  activeRequest = requestGroq(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
 
   try {
     return await activeRequest;
