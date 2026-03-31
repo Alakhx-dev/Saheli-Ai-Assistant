@@ -610,11 +610,11 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
     return (
       <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      layout={false}
+      initial={isNew ? { opacity: 0, y: 20 } : false}
+      animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      viewport={{ once: false, amount: 0.3, margin: "50px" }}
       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
       style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
     >
@@ -654,7 +654,17 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   const containerRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div ref={containerRef} className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden" style={{ overflowAnchor: "none", scrollBehavior: "smooth" }}>
+    <div
+      ref={containerRef}
+      className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      style={{
+        overflowAnchor: "none",
+        scrollBehavior: "auto",
+        contain: "content",
+        WebkitOverflowScrolling: "touch",
+      }}
+    >
+      <div className="h-4" />
       <AnimatePresence initial={false} mode="sync">
         {messages.map((msg, idx) => (
           <ScrollFadeMessageItem key={getMessageKey(msg, idx)} msg={msg} isNew={idx >= lastMsgCount} />
@@ -687,6 +697,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
         </AnimatePresence>
       </div>
 
+      <div className="h-4" />
       <div ref={messagesEndRef} />
     </div>
   );
@@ -819,7 +830,7 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
   }, [messages.length, isLoading]);
 
   useEffect(() => {
