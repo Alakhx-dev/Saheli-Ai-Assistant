@@ -205,7 +205,7 @@ export default function Sidebar({
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
   const sidebarTone = isLightMode
     ? "border-neutral-300/70 bg-[#f5f6f8]/92 text-neutral-900"
-    : "border-white/5 bg-[#0d0d0d]/92 text-white";
+    : "border-white/10 bg-neutral-950 text-white";
   const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-white/10 bg-white/[0.02]";
   const rowTone = isLightMode
     ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"

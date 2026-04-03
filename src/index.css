@@ -452,3 +452,16 @@
   pointer-events: none !important;
 }
 
+.chat-spline-bg canvas + a {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.chat-spline-bg canvas + a,
+.chat-spline-bg .spline-watermark,
+.chat-spline-bg [class*="spline"] a {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+

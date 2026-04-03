@@ -1,10 +1,10 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import Spline from "@splinetool/react-spline";
 import {
   Settings,
   Menu,
   Mic,
   Send,
-  Sparkles,
   Heart,
   X,
 } from "lucide-react";
@@ -653,24 +653,24 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
       <motion.div
       ref={ref}
       layout={false}
-      initial={isNew ? { opacity: 0, y: 20 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.4, ease: "easeOut" }}
+      initial={isNew ? { opacity: 0, y: 10, scale: 0.96 } : false}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -12, scale: 0.98 }}
+      transition={{ duration: 0.28, ease: "easeOut" }}
       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
       style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
     >
       <div
         className={`
-        max-w-[86%] md:max-w-[74%] px-4 py-3.5 rounded-[22px] text-sm leading-relaxed font-medium relative
+        max-w-[84%] md:max-w-[72%] px-5 py-3 text-sm leading-relaxed font-medium relative text-neutral-50
         bubble-hover transition-all duration-300
         ${isNew ? "msg-sheen" : ""}
         ${msg.role === "user"
-          ? "bg-gradient-to-br from-[#f5f7ff26] via-[#e8eeff2e] to-[#fcecff33] backdrop-blur-3xl border border-white/35 text-white rounded-[22px] rounded-tr-[8px] shadow-[0_8px_32px_rgba(255,255,255,0.08),0_14px_36px_rgba(0,0,0,0.35)]"
-          : "bg-white/[0.07] backdrop-blur-3xl border border-white/20 text-white/90 rounded-[22px] rounded-tl-[8px] shadow-[0_10px_34px_rgba(2,6,23,0.45)]"
+          ? "bg-gradient-to-r from-purple-600 to-indigo-600 border border-white/10 rounded-xl rounded-br-none shadow-[0_10px_26px_rgba(79,70,229,0.35)]"
+          : "bg-neutral-800/60 backdrop-blur-md border border-white/5 rounded-xl rounded-bl-none shadow-[0_8px_22px_rgba(3,7,18,0.45)]"
         }
       `}
-        style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: "15px", fontWeight: 500, letterSpacing: "0.01em" }}
+        style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
       >
         {msg.content}
       </div>
@@ -698,7 +698,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   return (
     <div
       ref={containerRef}
-      className="max-w-3xl mx-auto space-y-6 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="max-w-3xl mx-auto space-y-3 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       style={{
         overflowAnchor: "none",
         scrollBehavior: "auto",
@@ -745,23 +745,19 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   );
 });
 
-const BackgroundComponent = memo(function BackgroundComponent({ mood }: { mood: string }) {
+const BackgroundComponent = memo(function BackgroundComponent({ isSidebarOpen }: { isSidebarOpen: boolean }) {
   return (
-    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
-      {/* White Radial Glow for Airy Premium Feel */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle,_rgba(255,255,255,0.05)_0%,_transparent_70%)] mix-blend-screen" style={{ transform: 'translateZ(0)' }} />
-      
-      <div
-        className="absolute top-[-15%] left-[-20%] w-[75vw] h-[75vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-1"
-        style={{ background: 'var(--mood-blob-1)', transform: 'translateZ(0)' }}
-      />
-      <div
-        className="absolute bottom-[-20%] right-[-15%] w-[65vw] h-[65vw] rounded-full mix-blend-screen filter blur-[120px] blob-drift-2"
-        style={{ background: 'var(--mood-blob-2)', transform: 'translateZ(0)' }}
-      />
-      <div
-        className="absolute top-[30%] left-[40%] w-[50vw] h-[50vw] rounded-full mix-blend-screen filter blur-[140px] blob-drift-3"
-        style={{ background: 'var(--mood-blob-3)', transform: 'translateZ(0)' }}
+    <div
+      className={`absolute inset-y-0 right-0 z-0 flex items-center justify-center overflow-hidden bg-[#050505] transition-all duration-300 ${
+        isSidebarOpen ? "md:left-72" : "left-0"
+      }`}
+    >
+      <Spline
+        scene="https://prod.spline.design/hvkm7wWU5NhlhhNo/scene.splinecode"
+        onLoad={(app) => {
+          app.setGlobalEvents(true);
+        }}
+        className="absolute left-1/2 top-1/2 z-0 h-[90vh] w-[95vw] -translate-x-1/2 -translate-y-1/2 scale-[1.2] opacity-95"
       />
     </div>
   );
@@ -2081,12 +2077,11 @@ export default function Chat() {
 
   return (
     <div
-      className="ultra-white-nebula flex h-screen text-white overflow-hidden selection:bg-pink-500/30 relative"
+      className="chat-spline-bg relative flex h-screen w-full overflow-hidden bg-[#050505] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
-      {/* Animated Drifting Mesh Gradient Background + White Premium Glow */}
-      <BackgroundComponent mood={mood} />
+      <BackgroundComponent isSidebarOpen={isSidebarOpen} />
       <Sidebar
         isOpen={isSidebarOpen}
         chatSessions={chatSessions}
@@ -2121,7 +2116,7 @@ export default function Chat() {
       />
 
       <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-72" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
-        <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none">
+        <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none backdrop-blur-md">
           <div className="flex items-center gap-4 pointer-events-auto">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -2155,18 +2150,7 @@ export default function Chat() {
 
         <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6">
           {messages.length === 0 && !isLoading && !submitLockRef.current ? (
-            <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.8, type: "spring" }}
-                className="w-20 h-20 bg-gradient-to-tr from-purple-500/20 to-pink-500/20 rounded-full flex items-center justify-center mb-6 border border-pink-500/20 shadow-[0_0_30px_rgba(236,72,153,0.15)]"
-              >
-                <Sparkles className="w-10 h-10 text-pink-400" />
-              </motion.div>
-              <h2 className="text-2xl font-light mb-2">{formatText(t.emptyState.greeting, { name: effectiveUserName })}</h2>
-              <p className="text-white/50 text-base font-light">{t.emptyState.description}</p>
-            </div>
+            <div className="h-full" />
           ) : (
             <ScrollFadeMessageList
               messages={messages}
@@ -2186,7 +2170,7 @@ export default function Chat() {
             ) : null}
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-white/[0.09] border border-white/35 backdrop-blur-[28px] rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(2,6,23,0.55),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-300"
+              className="relative flex items-center bg-white/[0.09] border border-white/35 backdrop-blur-md rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(2,6,23,0.55),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-300"
             >
               <input
                 type="text"
