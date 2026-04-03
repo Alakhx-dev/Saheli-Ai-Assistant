@@ -430,3 +430,25 @@
   animation: profile-save-shimmer 3s ease-in-out infinite;
 }
 
+/* Landing page Spline cleanup */
+.landing-page .spline-stage canvas + a,
+.landing-page .spline-stage .spline-watermark,
+.landing-page .spline-stage a[href*="spline.design"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.landing-page .spline-stage button,
+.landing-page .spline-stage [role="button"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.landing-page .spline-stage canvas ~ a {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+

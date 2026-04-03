@@ -3,6 +3,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from "@/lib/firebase";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
+import LandingPage from "./pages/LandingPage";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [user, loading] = useAuthState(auth);
@@ -13,14 +14,15 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       <div className="animate-pulse">Loading Saheli AI...</div>
     </div>
   );
-  if (!user && !devMode) return <Navigate to="/" replace />;
+  if (!user && !devMode) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
 const App = () => (
   <BrowserRouter>
     <Routes>
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
       <Route path="/chat/:chatId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />

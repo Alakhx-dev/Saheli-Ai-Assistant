@@ -6,8 +6,6 @@ import {
   Send,
   Sparkles,
   Heart,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
@@ -830,6 +828,7 @@ export default function Chat() {
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [mood, setMood] = useState("neutral");
@@ -1146,7 +1145,7 @@ export default function Chat() {
     stop();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
-    navigate("/");
+    navigate("/login");
   };
 
   const handleLanguageModeChange = (nextMode: ReplyLanguageMode) => {
@@ -2070,6 +2069,15 @@ export default function Chat() {
   const headerTooltipClass =
     "pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-full border border-white/12 bg-[#12091f]/92 px-2.5 py-1 text-[10px] font-medium tracking-[0.16em] text-white/78 opacity-0 shadow-[0_12px_28px_rgba(4,2,12,0.45)] transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100";
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
+  const handleSidebarMuteToggle = useCallback(() => {
+    setIsMuted((previous) => {
+      const nextMuted = !previous;
+      if (nextMuted) {
+        stop();
+      }
+      return nextMuted;
+    });
+  }, [stop]);
 
   return (
     <div
@@ -2084,10 +2092,19 @@ export default function Chat() {
         chatSessions={chatSessions}
         currentChatId={currentChatId}
         isGuest={isGuest}
+        isMuted={isMuted}
+        isLightMode={isSidebarLightMode}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}
         noChatsGuestLabel={t.sidebar.noChatsGuest}
         noChatsAccountLabel={t.sidebar.noChatsAccount}
+        muteLabel={t.header.muteVoice}
+        unmuteLabel={t.header.unmuteVoice}
+        settingsLabel={t.settings.title}
+        logoutLabel={t.settings.logout}
+        themeLabel="Theme"
+        lightModeLabel="Light"
+        darkModeLabel="Dark"
         userName={effectiveUserName}
         userPhotoUrl={profileDraftPhotoUrl || profilePhotoUrl}
         userEmail={user?.email || undefined}
@@ -2097,10 +2114,13 @@ export default function Chat() {
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
         onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
+        onToggleMute={handleSidebarMuteToggle}
+        onOpenSettings={() => setSettingsPanelOpen(true)}
+        onToggleThemeMode={() => setIsSidebarLightMode((previous) => !previous)}
         onLogout={() => void handleLogout()}
       />
 
-      <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-64" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
+      <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-72" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
         <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none">
           <div className="flex items-center gap-4 pointer-events-auto">
             <button
@@ -2118,29 +2138,6 @@ export default function Chat() {
           </div>
 
           <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-2 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => {
-                const nextMuted = !isMuted;
-                setIsMuted(nextMuted);
-                if (nextMuted) {
-                  stop();
-                }
-              }}
-              aria-label={isMuted ? t.header.unmuteVoice : t.header.muteVoice}
-              className="group relative flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-all hover:text-white"
-            >
-              <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                <span className="absolute h-6 w-6 rounded-full bg-white/5 blur-sm" />
-              </span>
-              {isMuted ? (
-                <VolumeX className="h-[18px] w-[18px] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" />
-              ) : (
-                <Volume2 className="h-[18px] w-[18px] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]" />
-              )}
-              <span className={headerTooltipClass}>{isMuted ? t.header.voiceOff : t.header.voiceOn}</span>
-            </button>
-
             <button
               type="button"
               aria-label="Settings"

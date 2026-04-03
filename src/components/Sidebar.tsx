@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { DoorOpen, Heart, Pencil, Trash2 } from "lucide-react";
+import { LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -11,10 +11,19 @@ interface SidebarProps {
   chatSessions: ChatSessionListItem[];
   currentChatId: string | null;
   isGuest: boolean;
+  isMuted: boolean;
+  isLightMode: boolean;
   newChatLabel: string;
   recentChatsLabel: string;
   noChatsGuestLabel: string;
   noChatsAccountLabel: string;
+  muteLabel: string;
+  unmuteLabel: string;
+  settingsLabel: string;
+  logoutLabel: string;
+  themeLabel: string;
+  lightModeLabel: string;
+  darkModeLabel: string;
   userName: string;
   userPhotoUrl?: string;
   userEmail?: string;
@@ -24,6 +33,9 @@ interface SidebarProps {
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
+  onToggleMute: () => void;
+  onOpenSettings: () => void;
+  onToggleThemeMode: () => void;
   onLogout: () => void | Promise<void>;
 }
 
@@ -69,7 +81,9 @@ const ChatItem = memo(function ChatItem({
   return (
     <div
       className={`group flex items-center justify-between rounded-lg px-3 py-2 transition duration-200 ${
-        isActive ? "bg-white/10 text-white" : "text-white/70 hover:bg-white/5 hover:text-white"
+        isActive
+          ? "bg-white/10 text-white"
+          : "text-white/70 hover:bg-gradient-to-r hover:from-white/8 hover:to-fuchsia-300/10 hover:text-white"
       }`}
     >
       {isEditing ? (
@@ -137,10 +151,19 @@ export default function Sidebar({
   chatSessions,
   currentChatId,
   isGuest,
+  isMuted,
+  isLightMode,
   newChatLabel,
   recentChatsLabel,
   noChatsGuestLabel,
   noChatsAccountLabel,
+  muteLabel,
+  unmuteLabel,
+  settingsLabel,
+  logoutLabel,
+  themeLabel,
+  lightModeLabel,
+  darkModeLabel,
   userName,
   userPhotoUrl,
   userEmail,
@@ -150,6 +173,9 @@ export default function Sidebar({
   onDeleteChat,
   onRenameChat,
   onCloseSidebar,
+  onToggleMute,
+  onOpenSettings,
+  onToggleThemeMode,
   onLogout,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -177,6 +203,17 @@ export default function Sidebar({
   };
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
+  const sidebarTone = isLightMode
+    ? "border-neutral-300/70 bg-[#f5f6f8]/92 text-neutral-900"
+    : "border-white/5 bg-[#0d0d0d]/92 text-white";
+  const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-white/10 bg-white/[0.02]";
+  const rowTone = isLightMode
+    ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"
+    : "text-white/70 hover:bg-gradient-to-r hover:from-white/8 hover:to-fuchsia-300/10 hover:text-white";
+  const subtleTextTone = isLightMode ? "text-neutral-500" : "text-white/45";
+  const defaultTextTone = isLightMode ? "text-neutral-900" : "text-white";
+  const profileBorderTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
+  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
 
   return (
     <>
@@ -187,82 +224,119 @@ export default function Sidebar({
         }`}
       />
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-full w-64 flex-col border-r border-white/10 bg-[#1e1e1e] transition-transform duration-300 ${
+        className={`fixed left-0 top-0 z-40 flex h-full w-72 flex-col border-r backdrop-blur-xl transition-transform duration-300 ${sidebarTone} ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
-        <div className="flex items-center gap-2 text-white/80">
-          <Heart className="h-5 w-5" />
-          <span className="text-sm font-semibold tracking-[0.14em] uppercase">Saheli AI</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => void onCreateChat()}
-          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/80 transition hover:border-white/20 hover:bg-white/10"
-        >
-          {newChatLabel}
-        </button>
-      </div>
-
-      <div className="scrollbar-hide flex-1 overflow-y-auto scroll-smooth p-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-        <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">{recentChatsLabel}</div>
-        {chatSessions.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-white/45">{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
-        ) : (
-          <div className="space-y-1.5">
-            {chatSessions.map((chat) => (
-              <ChatItem
-                key={chat.id}
-                chat={chat}
-                isActive={currentChatId === chat.id}
-                title={resolveChatTitle(chat.title)}
-                editingId={editingId}
-                editingTitle={editingTitle}
-                onSelectChat={onSelectChat}
-                onStartEdit={handleStartEdit}
-                onEditingTitleChange={setEditingTitle}
-                onCancelEdit={handleCancelEdit}
-                onCommitEdit={handleCommitEdit}
-                onDeleteChat={onDeleteChat}
-              />
-            ))}
+        <div className="border-b border-white/5 p-4">
+          <div className="mb-4 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={onToggleMute}
+              aria-label={isMuted ? unmuteLabel : muteLabel}
+              className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${
+                isLightMode
+                  ? "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
           </div>
-        )}
-      </div>
 
-      <div className="mt-auto border-t border-white/10 p-3">
-        <div
-          className="flex cursor-pointer items-center justify-between rounded-lg px-2 py-2 transition hover:bg-white/5"
-          title={userEmail || ""}
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            {userPhotoUrl ? (
-              <img
-                src={userPhotoUrl}
-                alt="avatar"
-                className="h-8 w-8 rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">
-                {profileInitial}
-              </div>
-            )}
-            <span className="max-w-[120px] truncate text-sm font-medium text-white/85">
-              {userName || "User"}
-            </span>
-          </div>
           <button
             type="button"
-            onClick={() => void onLogout()}
-            className="rounded-md p-1 text-red-400 transition hover:bg-white/5 hover:text-red-500"
-            title="Sign out"
-            aria-label="Sign out"
+            onClick={() => void onCreateChat()}
+            className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+              isLightMode
+                ? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100"
+                : "border-white/10 bg-white/6 text-white hover:bg-white/10"
+            }`}
           >
-            <DoorOpen className="h-4 w-4" />
+            {newChatLabel}
           </button>
         </div>
-      </div>
+
+        <div className="scrollbar-hide flex-1 overflow-y-auto scroll-smooth px-3 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className={`px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${subtleTextTone}`}>
+            {recentChatsLabel}
+          </div>
+          {chatSessions.length === 0 ? (
+            <p className={`px-2 py-3 text-sm ${subtleTextTone}`}>{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
+          ) : (
+            <div className="space-y-1.5">
+              {chatSessions.map((chat) => (
+                <ChatItem
+                  key={chat.id}
+                  chat={chat}
+                  isActive={currentChatId === chat.id}
+                  title={resolveChatTitle(chat.title)}
+                  editingId={editingId}
+                  editingTitle={editingTitle}
+                  onSelectChat={onSelectChat}
+                  onStartEdit={handleStartEdit}
+                  onEditingTitleChange={setEditingTitle}
+                  onCancelEdit={handleCancelEdit}
+                  onCommitEdit={handleCommitEdit}
+                  onDeleteChat={onDeleteChat}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className={`mt-auto border-t p-3 ${dividerTone}`}>
+          <div className={`rounded-2xl border p-3 backdrop-blur-md ${surfaceTone}`}>
+            <div className="flex items-center gap-3" title={userEmail || ""}>
+              {userPhotoUrl ? (
+                <img
+                  src={userPhotoUrl}
+                  alt="avatar"
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
+                    isLightMode ? "bg-neutral-200 text-neutral-800" : "bg-white/10 text-white"
+                  }`}
+                >
+                  {profileInitial}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className={`truncate text-sm font-semibold ${defaultTextTone}`}>{userName || "User"}</p>
+                <p className={`truncate text-xs ${subtleTextTone}`}>{userEmail || "guest@saheli.ai"}</p>
+              </div>
+            </div>
+
+            <div className={`mt-3 space-y-1 border-t pt-3 ${profileBorderTone}`}>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
+              >
+                <Settings className="h-4 w-4" />
+                <span>{settingsLabel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onToggleThemeMode}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
+              >
+                {isLightMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                <span>{themeLabel}: {isLightMode ? lightModeLabel : darkModeLabel}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void onLogout()}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>{logoutLabel}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </aside>
     </>
   );
