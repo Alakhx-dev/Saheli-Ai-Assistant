@@ -1,7 +1,6 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import Spline from "@splinetool/react-spline";
 import {
-  Settings,
   Menu,
   Mic,
   Send,
@@ -667,7 +666,7 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
         ${isNew ? "msg-sheen" : ""}
         ${msg.role === "user"
           ? "bg-gradient-to-r from-purple-600 to-indigo-600 border border-white/10 rounded-xl rounded-br-none shadow-[0_10px_26px_rgba(79,70,229,0.35)]"
-          : "bg-neutral-800/60 backdrop-blur-md border border-white/5 rounded-xl rounded-bl-none shadow-[0_8px_22px_rgba(3,7,18,0.45)]"
+          : "bg-neutral-800/40 backdrop-blur-md border border-white/10 rounded-xl rounded-bl-none shadow-[0_8px_22px_rgba(3,7,18,0.45)]"
         }
       `}
         style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
@@ -2062,8 +2061,6 @@ export default function Chat() {
   const handleSettingsOpenChange = useCallback((open: boolean) => {
     setSettingsPanelOpen(open);
   }, []);
-  const headerTooltipClass =
-    "pointer-events-none absolute left-1/2 top-full z-30 mt-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-full border border-white/12 bg-[#12091f]/92 px-2.5 py-1 text-[10px] font-medium tracking-[0.16em] text-white/78 opacity-0 shadow-[0_12px_28px_rgba(4,2,12,0.45)] transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100";
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
   const handleSidebarMuteToggle = useCallback(() => {
     setIsMuted((previous) => {
@@ -2116,7 +2113,7 @@ export default function Chat() {
       />
 
       <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-72" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
-        <header className="absolute top-4 w-full flex items-center justify-between px-6 z-30 pointer-events-none backdrop-blur-md">
+        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none backdrop-blur-md">
           <div className="flex items-center gap-4 pointer-events-auto">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -2130,21 +2127,6 @@ export default function Chat() {
               <Heart className="w-5 h-5 fill-current" />
               Saheli AI
             </div>
-          </div>
-
-          <div className="flex items-center gap-1 rounded-full border border-white/20 bg-white/10 px-3 py-2 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] pointer-events-auto">
-            <button
-              type="button"
-              aria-label="Settings"
-              onClick={() => setSettingsPanelOpen(true)}
-              className="group relative flex h-8 w-8 items-center justify-center rounded-full text-white/60 transition-all hover:text-white"
-            >
-              <span className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                <span className="absolute h-6 w-6 rounded-full bg-white/5 blur-sm" />
-              </span>
-              <Settings className="h-[18px] w-[18px] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]" />
-              <span className={headerTooltipClass}>Settings</span>
-            </button>
           </div>
         </header>
 

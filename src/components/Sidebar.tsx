@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
+import { Heart, LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -205,11 +205,11 @@ export default function Sidebar({
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
   const sidebarTone = isLightMode
     ? "border-neutral-300/70 bg-[#f5f6f8]/92 text-neutral-900"
-    : "border-white/10 bg-neutral-950 text-white";
+    : "border-white/5 bg-neutral-950 text-white";
   const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-white/10 bg-white/[0.02]";
   const rowTone = isLightMode
     ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"
-    : "text-white/70 hover:bg-gradient-to-r hover:from-white/8 hover:to-fuchsia-300/10 hover:text-white";
+    : "text-neutral-300 hover:bg-white/5 hover:text-white";
   const subtleTextTone = isLightMode ? "text-neutral-500" : "text-white/45";
   const defaultTextTone = isLightMode ? "text-neutral-900" : "text-white";
   const profileBorderTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
@@ -228,29 +228,28 @@ export default function Sidebar({
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="border-b border-white/5 p-4">
-          <div className="mb-4 flex items-center justify-end">
-            <button
-              type="button"
-              onClick={onToggleMute}
-              aria-label={isMuted ? unmuteLabel : muteLabel}
-              className={`flex h-9 w-9 items-center justify-center rounded-full border transition ${
+        <div className="border-b border-white/5 px-6 pb-4 pt-6">
+          <div className="mb-5 flex items-center justify-start gap-2">
+            <Heart className="h-4 w-4 shrink-0 text-[#FF69B4]" fill="currentColor" />
+            <div
+              className={`text-base font-bold tracking-tight ${
                 isLightMode
-                  ? "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
-                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "text-neutral-900"
+                  : "text-white drop-shadow-[0_0_8px_rgba(255,140,255,0.3)]"
               }`}
+              style={{ fontFamily: "'Lexend', 'Outfit', system-ui, sans-serif" }}
             >
-              {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </button>
+              Saheli Ai
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => void onCreateChat()}
-            className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+            className={`w-full rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
               isLightMode
                 ? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100"
-                : "border-white/10 bg-white/6 text-white hover:bg-white/10"
+                : "border-white/10 bg-white/5 text-white hover:bg-white/10"
             }`}
           >
             {newChatLabel}
@@ -258,13 +257,13 @@ export default function Sidebar({
         </div>
 
         <div className="scrollbar-hide flex-1 overflow-y-auto scroll-smooth px-3 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className={`px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] ${subtleTextTone}`}>
+          <div className={`px-2 pb-2 text-[10px] font-semibold uppercase tracking-widest ${isLightMode ? "text-neutral-500" : "text-neutral-500"}`}>
             {recentChatsLabel}
           </div>
           {chatSessions.length === 0 ? (
             <p className={`px-2 py-3 text-sm ${subtleTextTone}`}>{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
           ) : (
-            <div className="space-y-1.5">
+            <div className="space-y-0">
               {chatSessions.map((chat) => (
                 <ChatItem
                   key={chat.id}
@@ -309,13 +308,22 @@ export default function Sidebar({
               </div>
             </div>
 
-            <div className={`mt-3 space-y-1 border-t pt-3 ${profileBorderTone}`}>
+            <div className={`mt-3 space-y-1 border-t border-white/5 pt-3 ${profileBorderTone}`}>
+              <button
+                type="button"
+                onClick={onToggleMute}
+                aria-label={isMuted ? unmuteLabel : muteLabel}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
+              >
+                {isMuted ? <VolumeX className="h-4 w-4 shrink-0 text-neutral-400" /> : <Volume2 className="h-4 w-4 shrink-0 text-neutral-400" />}
+                <span>{isMuted ? unmuteLabel : muteLabel}</span>
+              </button>
               <button
                 type="button"
                 onClick={onOpenSettings}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4 shrink-0 text-neutral-400" />
                 <span>{settingsLabel}</span>
               </button>
               <button
@@ -323,7 +331,7 @@ export default function Sidebar({
                 onClick={onToggleThemeMode}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                {isLightMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {isLightMode ? <Sun className="h-4 w-4 shrink-0 text-neutral-400" /> : <Moon className="h-4 w-4 shrink-0 text-neutral-400" />}
                 <span>{themeLabel}: {isLightMode ? lightModeLabel : darkModeLabel}</span>
               </button>
               <button
@@ -331,7 +339,7 @@ export default function Sidebar({
                 onClick={() => void onLogout()}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-4 w-4 shrink-0 text-neutral-400" />
                 <span>{logoutLabel}</span>
               </button>
             </div>
