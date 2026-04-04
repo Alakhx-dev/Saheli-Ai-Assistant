@@ -42,6 +42,16 @@ import {
   type MemoryProfile,
 } from "@/lib/memory";
 import { detectMemory, saveImageMemoryDB, saveMemoryToDB } from "@/lib/chatService";
+import {
+  setSwaraInworldMuted,
+  stopSwaraInworldPlayback,
+  unlockSwaraInworldAudio,
+} from "../lib/inworld-service";
+import {
+  playInworldVoice,
+  stopInworldVoicePlayback,
+  unlockInworldTtsAudio,
+} from "../lib/inworld-tts";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
@@ -64,8 +74,6 @@ const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
-
-const EMOJI_REGEX = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu;
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
@@ -144,204 +152,6 @@ async function buildCroppedProfileImage(
   context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 
   return canvas.toDataURL("image/jpeg", 0.9);
-}
-
-function normalizeTextForTts(text: string) {
-  let normalized = text
-    .replace(EMOJI_REGEX, "")
-    .replace(/\*\*/g, " ")
-    .replace(/_/g, " ")
-    .replace(/([,.!?])([^\s,.!?])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  normalized = normalized
-    .replace(/\bplz+\b/gi, "please")
-    .replace(/\bplzz+\b/gi, "please")
-    .replace(/([a-z])\1{2,}/gi, "$1");
-
-  const replacements: Array<[RegExp, string]> = [
-    [/\bnhi\b/gi, "nahi"],
-    [/\bhn\b/gi, "haan"],
-    [/\bkr\b/gi, "kar"],
-    [/\bh\b/gi, "hai"],
-    [/\bhu\b/gi, "hoon"],
-    [/\bm\b/gi, "main"],
-    [/\bbt\b/gi, "baat"],
-    [/\bkyu\b/gi, "kyun"],
-  ];
-
-  for (const [pattern, replacement] of replacements) {
-    normalized = normalized.replace(pattern, replacement);
-  }
-
-  return normalized
-    .replace(/\s+([,.!?])/g, "$1")
-    .replace(/([,.!?])([^\s,.!?])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanTextForNaturalTts(text: string) {
-  return normalizeTextForTts(text)
-    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, "")
-    .replace(/[^\p{L}\p{N}\s.,?!]/gu, "")
-    .replace(/([a-zA-Z])\1{2,}/g, "$1")
-    .replace(/\b[a-zA-Z]\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function splitSentencesForTts(text: string) {
-  return text
-    .split(/[.?!]/)
-    .map((sentence) => sentence.trim())
-    .filter((sentence) => sentence.length > 2);
-}
-
-function useVoice(isMuted: boolean) {
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const unlockedRef = useRef(false);
-  const preferredVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
-  const speakSequenceRef = useRef(0);
-
-  const primePreferredVoice = () => {
-    const voices = window.speechSynthesis.getVoices();
-    preferredVoiceRef.current =
-      voices.find((voice) => voice.lang === "hi-IN") ||
-      voices.find((voice) => voice.name.toLowerCase().includes("google")) ||
-      voices.find((voice) => voice.lang.includes("hi")) ||
-      voices.find((voice) => voice.name.toLowerCase().includes("female")) ||
-      null;
-  };
-
-  useEffect(() => {
-    if (!("speechSynthesis" in window)) {
-      return;
-    }
-
-    window.speechSynthesis.getVoices();
-    primePreferredVoice();
-
-    const handleVoicesChanged = () => {
-      window.speechSynthesis.getVoices();
-      primePreferredVoice();
-    };
-
-    window.speechSynthesis.addEventListener("voiceschanged", handleVoicesChanged);
-    window.speechSynthesis.onvoiceschanged = handleVoicesChanged;
-
-    return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", handleVoicesChanged);
-      window.speechSynthesis.onvoiceschanged = null;
-    };
-  }, []);
-
-  const unlock = async () => {
-    if (unlockedRef.current) {
-      return;
-    }
-
-    try {
-      const AudioContextCtor =
-        window.AudioContext || ((window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
-
-      if (AudioContextCtor) {
-        if (!audioContextRef.current) {
-          audioContextRef.current = new AudioContextCtor();
-        }
-
-        if (audioContextRef.current.state === "suspended") {
-          await audioContextRef.current.resume();
-        }
-      }
-
-      primePreferredVoice();
-
-      // Silent prime to satisfy browser user-interaction requirements.
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
-      unlockedRef.current = true;
-    } catch (error) {
-      console.error("Voice unlock failed", error);
-    }
-  };
-
-  const speak = (text: string) => {
-    if (isMuted || !unlockedRef.current || !window.speechSynthesis) {
-      return;
-    }
-
-    speakSequenceRef.current += 1;
-    const activeSequence = speakSequenceRef.current;
-
-    if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.cancel();
-    }
-
-    const cleanText = cleanTextForNaturalTts(text);
-    if (!cleanText) {
-      return;
-    }
-
-    const sentenceChunks = splitSentencesForTts(cleanText);
-
-    if (!sentenceChunks.length) {
-      return;
-    }
-
-    const voices = window.speechSynthesis.getVoices();
-    const selectedVoice = preferredVoiceRef.current
-      || voices.find((v) => v.lang === "hi-IN")
-      || voices.find((v) => v.name.toLowerCase().includes("google"))
-      || voices.find((v) => v.lang.includes("hi"))
-      || voices.find((v) => v.name.toLowerCase().includes("female"))
-      || voices[0]
-      || null;
-
-    let index = 0;
-    const speakNext = () => {
-      if (activeSequence !== speakSequenceRef.current || index >= sentenceChunks.length) {
-        return;
-      }
-
-      const utterance = new SpeechSynthesisUtterance(sentenceChunks[index]);
-      if (selectedVoice) {
-        utterance.voice = selectedVoice;
-      }
-      utterance.lang = "hi-IN";
-      utterance.rate = 0.93;
-      utterance.pitch = 1.08;
-      utterance.volume = 1;
-
-      utterance.onend = () => {
-        index += 1;
-        if (activeSequence !== speakSequenceRef.current) {
-          return;
-        }
-        window.setTimeout(speakNext, 180);
-      };
-
-      utterance.onerror = () => {
-        index += 1;
-        if (activeSequence !== speakSequenceRef.current) {
-          return;
-        }
-        window.setTimeout(speakNext, 180);
-      };
-
-      window.speechSynthesis.resume();
-      window.speechSynthesis.speak(utterance);
-    };
-
-    speakNext();
-  };
-
-  const stop = () => {
-    speakSequenceRef.current += 1;
-    window.speechSynthesis.cancel();
-  };
-
-  return { unlock, speak, stop };
 }
 
 // ── Speech-to-Text Hook ──
@@ -826,6 +636,7 @@ export default function Chat() {
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSwaraSpeaking, setIsSwaraSpeaking] = useState(false);
   const [mood, setMood] = useState("neutral");
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
@@ -856,11 +667,11 @@ export default function Chat() {
   const storeAddMessage = useAppStore((state) => state.addMessage);
   const storeUpdateStreamingMessage = useAppStore((state) => state.updateStreamingMessage);
   const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
-  const { unlock, speak, stop } = useVoice(isMuted);
 
   useEffect(() => {
     const handleFirstInteraction = () => {
-      void unlock();
+      void unlockSwaraInworldAudio();
+      void unlockInworldTtsAudio();
       window.removeEventListener("pointerdown", handleFirstInteraction);
       window.removeEventListener("keydown", handleFirstInteraction);
     };
@@ -872,15 +683,17 @@ export default function Chat() {
       window.removeEventListener("pointerdown", handleFirstInteraction);
       window.removeEventListener("keydown", handleFirstInteraction);
     };
-  }, [unlock]);
+  }, []);
 
-  const speakAfterRender = useCallback((text: string) => {
-    requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        speak(text);
-      }, 120);
+  useEffect(() => {
+    void setSwaraInworldMuted(isMuted).catch((error) => {
+      console.error("Failed to apply Inworld mute state", error);
     });
-  }, [speak]);
+
+    if (isMuted) {
+      setIsSwaraSpeaking(false);
+    }
+  }, [isMuted]);
 
   // Speech-to-text: appends recognized speech to current input
   const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
@@ -1137,7 +950,8 @@ export default function Chat() {
   }, []);
 
   const handleLogout = async () => {
-    stop();
+    void stopSwaraInworldPlayback();
+    stopInworldVoicePlayback();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/login");
@@ -1729,58 +1543,15 @@ export default function Chat() {
       );
     }
 
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          messages: history,
-          identity: requestIdentity,
-          memory: memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
-        }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error(`Streaming failed: ${response.status}`);
-      }
-
-      let fullText = "";
-      let firstTokenReceived = false;
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      updateStreamingMessage(chatId, "");
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-
-        const chunk = decoder.decode(value, { stream: true });
-        fullText += chunk;
-        if (!firstTokenReceived && fullText.trim().length > 0) {
-          firstTokenReceived = true;
-          setIsLoading(false);
-        }
-        updateStreamingMessage(chatId, fullText);
-      }
-
-      fullText += decoder.decode();
-      return fullText.trim() || FALLBACK_MESSAGE;
-    } catch {
-      return sendMessage(
-        history,
-        imageBase64,
-        detectedEmotion,
-        memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
-        requestIdentity,
-        memoryEnabled ? "enabled" : "disabled",
-      );
-    }
-  }, [memoryEnabled, updateStreamingMessage]);
+    return sendMessage(
+      history,
+      imageBase64,
+      detectedEmotion,
+      memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
+      requestIdentity,
+      memoryEnabled ? "enabled" : "disabled",
+    );
+  }, [memoryEnabled]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
@@ -1824,7 +1595,15 @@ export default function Chat() {
       );
       saveFinalMessage(request.chatId, responseText);
       setIsLoading(false);
-      speakAfterRender(responseText);
+      if (!isMuted) {
+        void playInworldVoice(responseText, {
+          onPlayingChange: (playing) => {
+            setIsSwaraSpeaking(playing);
+          },
+        }).catch((error) => {
+          console.error("Inworld TTS playback failed (mobile vision)", error);
+        });
+      }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
@@ -1886,7 +1665,8 @@ export default function Chat() {
 
     const userText = input.trim();
     setInput("");
-    void unlock();
+    void unlockSwaraInworldAudio();
+    void unlockInworldTtsAudio();
 
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
@@ -2017,7 +1797,15 @@ export default function Chat() {
 
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
-      speakAfterRender(responseText);
+      if (!isMuted) {
+        void playInworldVoice(responseText, {
+          onPlayingChange: (playing) => {
+            setIsSwaraSpeaking(playing);
+          },
+        }).catch((error) => {
+          console.error("Inworld TTS playback failed", error);
+        });
+      }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
@@ -2066,11 +1854,13 @@ export default function Chat() {
     setIsMuted((previous) => {
       const nextMuted = !previous;
       if (nextMuted) {
-        stop();
+        void stopSwaraInworldPlayback();
+        stopInworldVoicePlayback();
+        setIsSwaraSpeaking(false);
       }
       return nextMuted;
     });
-  }, [stop]);
+  }, []);
 
   return (
     <div
@@ -2085,6 +1875,7 @@ export default function Chat() {
         currentChatId={currentChatId}
         isGuest={isGuest}
         isMuted={isMuted}
+        isSpeaking={isSwaraSpeaking}
         isLightMode={isSidebarLightMode}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}

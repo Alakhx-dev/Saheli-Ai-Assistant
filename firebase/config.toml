@@ -2,3 +2,9 @@ project_id = "ndmorahhjwltbdjjylap"
 
 [functions.luxand-emotion]
 verify_jwt = false
+
+[functions.inworld-session]
+verify_jwt = false
+
+[functions.inworld-tts]
+verify_jwt = false

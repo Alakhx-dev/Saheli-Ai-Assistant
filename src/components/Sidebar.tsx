@@ -12,6 +12,7 @@ interface SidebarProps {
   currentChatId: string | null;
   isGuest: boolean;
   isMuted: boolean;
+  isSpeaking?: boolean;
   isLightMode: boolean;
   newChatLabel: string;
   recentChatsLabel: string;
@@ -152,6 +153,7 @@ export default function Sidebar({
   currentChatId,
   isGuest,
   isMuted,
+  isSpeaking = false,
   isLightMode,
   newChatLabel,
   recentChatsLabel,
@@ -315,7 +317,16 @@ export default function Sidebar({
                 aria-label={isMuted ? unmuteLabel : muteLabel}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                {isMuted ? <VolumeX className="h-4 w-4 shrink-0 text-neutral-400" /> : <Volume2 className="h-4 w-4 shrink-0 text-neutral-400" />}
+                {isMuted ? (
+                  <VolumeX className="h-4 w-4 shrink-0 text-neutral-400" />
+                ) : (
+                  <div className="relative flex h-4 w-4 items-center justify-center">
+                    {isSpeaking ? (
+                      <span className="absolute inline-flex h-4 w-4 rounded-full bg-pink-400/30 animate-ping" />
+                    ) : null}
+                    <Volume2 className={`h-4 w-4 shrink-0 ${isSpeaking ? "text-pink-300" : "text-neutral-400"}`} />
+                  </div>
+                )}
                 <span>{isMuted ? unmuteLabel : muteLabel}</span>
               </button>
               <button
