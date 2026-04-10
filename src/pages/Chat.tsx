@@ -52,6 +52,17 @@ import {
   stopInworldVoicePlayback,
   unlockInworldTtsAudio,
 } from "../lib/inworld-tts";
+import {
+  primeBrowserTtsVoices,
+  speakWithBrowserTts,
+  stopBrowserTtsPlayback,
+} from "@/lib/browser-tts";
+import {
+  INWORLD_TTS_DEFAULT_VOICE_ID,
+  TTS_VOICE_PRESETS,
+  resolveVoiceProfile,
+} from "@/lib/tts-config";
+import { isMobile } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
@@ -72,6 +83,7 @@ const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
 const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
+const TTS_SELECTED_VOICE_STORAGE_KEY = "selected_tts_voice";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
 
@@ -95,6 +107,19 @@ function getStoredReplyLanguageMode(): ReplyLanguageMode {
   }
 
   return "hinglish";
+}
+
+function getStoredTtsVoiceId() {
+  if (typeof window === "undefined") {
+    return INWORLD_TTS_DEFAULT_VOICE_ID;
+  }
+
+  const storedValue = window.localStorage.getItem(TTS_SELECTED_VOICE_STORAGE_KEY);
+  if (storedValue && TTS_VOICE_PRESETS.some((voice) => voice.id === storedValue)) {
+    return storedValue;
+  }
+
+  return INWORLD_TTS_DEFAULT_VOICE_ID;
 }
 
 function readGuestProfileName() {
@@ -305,6 +330,38 @@ function shouldRefreshGeneratedTitle(messageCount: number, currentTitle: string,
   return isDefaultChatTitle(currentTitle) || messageCount === 1 || messageCount % TITLE_UPDATE_INTERVAL === 0;
 }
 
+function extractFirstSentence(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const match = normalized.match(/(.+?[.!?।])(?:\s|$)/);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+
+  if (normalized.length >= 45) {
+    return normalized;
+  }
+
+  return "";
+}
+
+function removePrefixSentence(fullText: string, prefixSentence: string) {
+  const full = fullText.trim();
+  const prefix = prefixSentence.trim();
+  if (!full || !prefix) {
+    return full;
+  }
+
+  if (full.startsWith(prefix)) {
+    return full.slice(prefix.length).trim();
+  }
+
+  return full;
+}
+
 // ── Auto Chat Language Detection ──
 // Detects the language of the user's message to pick the right AI reply language.
 // This is completely separate from the UI language (localStorage "app_language").
@@ -427,10 +484,6 @@ function detectMood(text: string): string {
     if (keywords.some((kw) => lower.includes(kw))) return mood;
   }
   return "neutral";
-}
-
-function isMobileDevice() {
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
 function logCameraFailure(error: unknown) {
@@ -612,6 +665,7 @@ export default function Chat() {
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => getStoredTtsVoiceId());
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [memoryEnabled, setMemoryEnabledState] = useState(true);
@@ -660,6 +714,8 @@ export default function Chat() {
   const currentChatIdRef = useRef<string | null>(null);
   const titleUpdateTimeoutRef = useRef<number | null>(null);
   const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
+  const ttsPlaybackQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const mobileTtsInteractionRef = useRef(false);
   const setStoreUser = useAppStore((state) => state.setUser);
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
@@ -669,6 +725,10 @@ export default function Chat() {
   const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
 
   useEffect(() => {
+    if (isMobile()) {
+      return;
+    }
+
     const handleFirstInteraction = () => {
       void unlockSwaraInworldAudio();
       void unlockInworldTtsAudio();
@@ -682,6 +742,22 @@ export default function Chat() {
     return () => {
       window.removeEventListener("pointerdown", handleFirstInteraction);
       window.removeEventListener("keydown", handleFirstInteraction);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile()) {
+      return;
+    }
+
+    primeBrowserTtsVoices();
+    const handleVoiceCatalogChanged = () => {
+      primeBrowserTtsVoices();
+    };
+
+    window.speechSynthesis?.addEventListener("voiceschanged", handleVoiceCatalogChanged);
+    return () => {
+      window.speechSynthesis?.removeEventListener("voiceschanged", handleVoiceCatalogChanged);
     };
   }, []);
 
@@ -728,6 +804,16 @@ export default function Chat() {
   useEffect(() => {
     localStorage.setItem(REPLY_LANGUAGE_MODE_STORAGE_KEY, replyLanguageMode);
   }, [replyLanguageMode]);
+
+  useEffect(() => {
+    localStorage.setItem(TTS_SELECTED_VOICE_STORAGE_KEY, selectedVoiceId);
+    const voiceProfile = resolveVoiceProfile(selectedVoiceId);
+    setStoreSettings({
+      selectedVoice: voiceProfile.voiceId,
+      speakingRate: voiceProfile.speakingRate,
+      temperature: voiceProfile.temperature,
+    });
+  }, [selectedVoiceId, setStoreSettings]);
 
   useEffect(() => {
     chatLanguageRef.current = replyLanguageMode;
@@ -952,6 +1038,7 @@ export default function Chat() {
   const handleLogout = async () => {
     void stopSwaraInworldPlayback();
     stopInworldVoicePlayback();
+    stopBrowserTtsPlayback();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/login");
@@ -971,6 +1058,10 @@ export default function Chat() {
     }));
     setMemoryStatus(enabled ? t.statuses.memoryOn : t.statuses.memoryOff);
   };
+
+  const handleVoiceChange = useCallback((voiceId: string) => {
+    setSelectedVoiceId(voiceId);
+  }, []);
 
   const refreshMemoryState = useCallback(async () => {
     try {
@@ -1523,25 +1614,57 @@ export default function Chat() {
     storeSaveFinalMessage(chatId, { role: "model", content });
   }, [storeSaveFinalMessage]);
 
+  const queueVoicePlayback = useCallback((text: string, contextTag: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || isMuted) {
+      return;
+    }
+
+    const mobile = isMobile();
+    const voiceProfile = resolveVoiceProfile(selectedVoiceId);
+    ttsPlaybackQueueRef.current = ttsPlaybackQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (mobile) {
+          if (!mobileTtsInteractionRef.current) {
+            return;
+          }
+
+          setIsSwaraSpeaking(true);
+          await speakWithBrowserTts(trimmed);
+          setIsSwaraSpeaking(false);
+          return;
+        }
+
+        await playInworldVoice(trimmed, {
+          voiceId: voiceProfile.voiceId,
+          speakingRate: voiceProfile.speakingRate,
+          temperature: voiceProfile.temperature,
+          onPlayingChange: (playing) => {
+            setIsSwaraSpeaking(playing);
+          },
+        });
+      })
+      .catch((error) => {
+        console.error(`TTS playback failed (${contextTag})`, error);
+        setIsSwaraSpeaking(false);
+      });
+  }, [isMuted, selectedVoiceId]);
+
   const streamResponse = useCallback(async (
-    prompt: string,
+    _prompt: string,
     chatId: string,
     history: ChatMessage[],
     imageBase64?: string,
     detectedEmotion?: EmotionLabel,
     requestIdentity?: UserIdentityContext,
     nextMemoryProfile?: MemoryProfile | null,
+    onPartialText?: (partialText: string) => void,
   ) => {
-    if (imageBase64) {
-      return sendMessage(
-        history,
-        imageBase64,
-        detectedEmotion,
-        memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
-        requestIdentity,
-        memoryEnabled ? "enabled" : "disabled",
-      );
-    }
+    const handleChunk = (partialText: string) => {
+      updateStreamingMessage(chatId, partialText);
+      onPartialText?.(partialText);
+    };
 
     return sendMessage(
       history,
@@ -1550,8 +1673,9 @@ export default function Chat() {
       memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
       requestIdentity,
       memoryEnabled ? "enabled" : "disabled",
+      handleChunk,
     );
-  }, [memoryEnabled]);
+  }, [memoryEnabled, updateStreamingMessage]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
@@ -1584,6 +1708,8 @@ export default function Chat() {
       }
 
       lastMsgCountRef.current = request.history.length;
+      let spokenLeadSentence = "";
+      let firstSentenceQueued = false;
       const responseText = await streamResponse(
         request.history[request.history.length - 1]?.content ?? "",
         request.chatId,
@@ -1592,17 +1718,26 @@ export default function Chat() {
         detectedEmotion,
         requestIdentity as any,
         request.memoryProfile,
+        (partialText) => {
+          if (firstSentenceQueued || isMuted) {
+            return;
+          }
+
+          const firstSentence = extractFirstSentence(partialText);
+          if (!firstSentence) {
+            return;
+          }
+
+          firstSentenceQueued = true;
+          spokenLeadSentence = firstSentence;
+          queueVoicePlayback(firstSentence, "mobile-first-sentence");
+        },
       );
       saveFinalMessage(request.chatId, responseText);
       setIsLoading(false);
       if (!isMuted) {
-        void playInworldVoice(responseText, {
-          onPlayingChange: (playing) => {
-            setIsSwaraSpeaking(playing);
-          },
-        }).catch((error) => {
-          console.error("Inworld TTS playback failed (mobile vision)", error);
-        });
+        const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
+        queueVoicePlayback(remainingText, "mobile-final");
       }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -1665,8 +1800,14 @@ export default function Chat() {
 
     const userText = input.trim();
     setInput("");
-    void unlockSwaraInworldAudio();
-    void unlockInworldTtsAudio();
+    const mobile = isMobile();
+    if (mobile) {
+      mobileTtsInteractionRef.current = true;
+      primeBrowserTtsVoices();
+    } else {
+      void unlockSwaraInworldAudio();
+      void unlockInworldTtsAudio();
+    }
 
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
@@ -1754,7 +1895,6 @@ export default function Chat() {
       });
     }
 
-    const mobile = isMobileDevice();
     const shouldUseVision = VISION_TRIGGER_PATTERNS.some((pattern) => pattern.test(userText));
 
     if (mobile && shouldUseVision) {
@@ -1774,6 +1914,8 @@ export default function Chat() {
 
     try {
       lastMsgCountRef.current = nextHistory.length;
+      let spokenLeadSentence = "";
+      let firstSentenceQueued = false;
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
 
@@ -1793,18 +1935,27 @@ export default function Chat() {
         detectedEmotion,
         requestIdentity as any,
         nextMemoryProfile,
+        (partialText) => {
+          if (firstSentenceQueued || isMuted) {
+            return;
+          }
+
+          const firstSentence = extractFirstSentence(partialText);
+          if (!firstSentence) {
+            return;
+          }
+
+          firstSentenceQueued = true;
+          spokenLeadSentence = firstSentence;
+          queueVoicePlayback(firstSentence, "chat-first-sentence");
+        },
       );
 
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
       if (!isMuted) {
-        void playInworldVoice(responseText, {
-          onPlayingChange: (playing) => {
-            setIsSwaraSpeaking(playing);
-          },
-        }).catch((error) => {
-          console.error("Inworld TTS playback failed", error);
-        });
+        const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
+        queueVoicePlayback(remainingText, "chat-final");
       }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -1856,10 +2007,20 @@ export default function Chat() {
       if (nextMuted) {
         void stopSwaraInworldPlayback();
         stopInworldVoicePlayback();
+        stopBrowserTtsPlayback();
         setIsSwaraSpeaking(false);
       }
       return nextMuted;
     });
+  }, []);
+
+  const handleSendInteraction = useCallback(() => {
+    if (!isMobile()) {
+      return;
+    }
+
+    mobileTtsInteractionRef.current = true;
+    primeBrowserTtsVoices();
   }, []);
 
   return (
@@ -1967,6 +2128,7 @@ export default function Chat() {
               </button>
               <button
                 type="submit"
+                onPointerDown={handleSendInteraction}
                 aria-label={t.composer.sendMessage}
                 disabled={!input.trim() || isLoading}
                 className="p-2 mr-2 transition-all"
@@ -1976,7 +2138,7 @@ export default function Chat() {
                 </div>
               </button>
             </form>
-            {pendingMobileVisionRequest && isMobileDevice() && (
+            {pendingMobileVisionRequest && isMobile() && (
               <div className="mt-3 flex justify-center">
                 <button
                   type="button"
@@ -2010,6 +2172,8 @@ export default function Chat() {
               onSectionChange={setActiveSettingsSection}
               languageMode={replyLanguageMode}
               onLanguageModeChange={handleLanguageModeChange}
+              selectedVoice={selectedVoiceId}
+              onVoiceChange={handleVoiceChange}
               memoryEnabled={memoryEnabled}
               onMemoryToggle={handleMemoryToggle}
               onManageMemory={handleOpenMemoryFromSettings}

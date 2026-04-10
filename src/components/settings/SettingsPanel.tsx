@@ -22,6 +22,8 @@ interface SettingsPanelProps {
   onSectionChange: (section: SettingsSectionId) => void;
   languageMode: ReplyLanguageMode;
   onLanguageModeChange: (mode: ReplyLanguageMode) => void;
+  selectedVoice: string;
+  onVoiceChange: (voiceId: string) => void;
   memoryEnabled: boolean;
   onMemoryToggle: (enabled: boolean) => void;
   onManageMemory: () => void;
@@ -41,6 +43,8 @@ function SettingsPanel({
   onSectionChange,
   languageMode,
   onLanguageModeChange,
+  selectedVoice,
+  onVoiceChange,
   memoryEnabled,
   onMemoryToggle,
   onManageMemory,
@@ -94,6 +98,8 @@ function SettingsPanel({
                 <GeneralSettings
                   languageMode={languageMode}
                   onLanguageModeChange={onLanguageModeChange}
+                  selectedVoice={selectedVoice}
+                  onVoiceChange={onVoiceChange}
                 />
               ) : null}
               {activeSection === "personalization" ? (

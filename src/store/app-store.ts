@@ -11,6 +11,9 @@ type AppState = {
   settings: {
     memoryEnabled: boolean;
     language: string;
+    selectedVoice: string;
+    speakingRate: number;
+    temperature: number;
   };
   setUser: (user: AppUser) => void;
   setChats: (chats: AppChat[]) => void;
@@ -28,6 +31,9 @@ export const useAppStore = create<AppState>((set) => ({
   settings: {
     memoryEnabled: true,
     language: "auto",
+    selectedVoice: "default-exsg-odgaqb9kgydhmbw-w__design-voice-14078e0a",
+    speakingRate: 0.96,
+    temperature: 1.29,
   },
   setUser: (user) => set({ user }),
   setChats: (chats) => set({ chats }),

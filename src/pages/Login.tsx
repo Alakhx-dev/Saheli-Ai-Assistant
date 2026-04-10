@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, GithubAuthProvider, signInWithPopup } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  GithubAuthProvider,
+  getRedirectResult,
+  signInWithPopup,
+  signInWithRedirect,
+  type AuthProvider,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
 import { Sparkles, Github } from "lucide-react";
 import { motion } from "framer-motion";
+import { isMobile } from "@/lib/utils";
 
 // Star Dust Cursor Particle System
 function useStarDust(containerRef: React.RefObject<HTMLDivElement>) {
@@ -65,6 +75,30 @@ export default function Login() {
 
   useStarDust(containerRef);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void getRedirectResult(auth)
+      .then((result) => {
+        if (cancelled || !result?.user) {
+          return;
+        }
+
+        navigate("/chat");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(err instanceof Error ? err.message : "Social authentication failed.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -80,9 +114,14 @@ export default function Login() {
     }
   };
 
-  const handleSocialAuth = async (provider: any) => {
+  const handleSocialAuth = async (provider: AuthProvider) => {
     setError("");
     try {
+      if (isMobile()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
       await signInWithPopup(auth, provider);
       navigate("/chat");
     } catch (err: any) {

@@ -1,16 +1,15 @@
-const INWORLD_TTS_VOICE_ID = "default-exsg-odgaqb9kgydhmbw-w__design-voice-14078e0a";
-const INWORLD_TTS_MODEL_ID = "inworld-tts-1.5-max";
+import {
+  DEFAULT_SPEAKING_RATE,
+  DEFAULT_TEMPERATURE,
+  INWORLD_TTS_DEFAULT_VOICE_ID,
+  INWORLD_TTS_MODEL_ID,
+} from "@/lib/tts-config";
+
+const INWORLD_TTS_VOICE_ID = INWORLD_TTS_DEFAULT_VOICE_ID;
 const INWORLD_TTS_LANGUAGE_CODE = "hi-IN";
-const INWORLD_TTS_SPEAKING_RATE = 0.96;
-const INWORLD_TTS_TEMPERATURE = 1.29;
-const INWORLD_TTS_AUTH = (
-  import.meta.env.VITE_INWORLD_TTS_AUTH
-  || import.meta.env.NEXT_PUBLIC_INWORLD_KEY
-  || ""
-).trim();
-const INWORLD_TTS_URL = "https://api.inworld.ai/tts/v1/voice";
-const INWORLD_TTS_STREAM_URL = "https://api.inworld.ai/tts/v1/voice:stream";
-const INWORLD_TTS_CLONE_URL = (import.meta.env.VITE_INWORLD_VOICE_CLONE_URL || "https://api.inworld.ai/tts/v1/voices:clone").trim();
+const INWORLD_TTS_SPEAKING_RATE = DEFAULT_SPEAKING_RATE;
+const INWORLD_TTS_TEMPERATURE = DEFAULT_TEMPERATURE;
+const INWORLD_TTS_API_URL = "/api/tts";
 
 let currentAudio: HTMLAudioElement | null = null;
 let audioContext: AudioContext | null = null;
@@ -46,6 +45,10 @@ interface StreamChunk {
 
 interface PlayInworldVoiceOptions {
   onPlayingChange?: (isPlaying: boolean) => void;
+  voiceId?: string;
+  modelId?: string;
+  speakingRate?: number;
+  temperature?: number;
 }
 
 interface SynthesizeOptions {
@@ -185,20 +188,17 @@ function prepareHindiTtsText(input: string) {
   return transliterateForHindiTts(cleaned);
 }
 
-function getAuthHeader() {
-  if (!INWORLD_TTS_AUTH) {
-    throw new Error("Missing VITE_INWORLD_TTS_AUTH or NEXT_PUBLIC_INWORLD_KEY");
+async function parseError(response: Response) {
+  const rawText = await response.text();
+  if (!rawText) {
+    return "Unknown error";
   }
 
-  return `Basic ${INWORLD_TTS_AUTH}`;
-}
-
-async function parseError(response: Response) {
   try {
-    const payload = (await response.json()) as TtsApiError;
-    return payload.error || payload.message || "Unknown error";
+    const payload = JSON.parse(rawText) as TtsApiError;
+    return payload.error || payload.message || rawText;
   } catch {
-    return await response.text();
+    return rawText;
   }
 }
 
@@ -252,17 +252,15 @@ export async function synthesizeInworldVoice(text: string, options?: SynthesizeO
     temperature: options?.temperature ?? INWORLD_TTS_TEMPERATURE,
   };
 
-  if (import.meta.env.DEV) {
-    console.info("Inworld TTS payload", requestPayload);
-  }
-
-  const response = await fetch(INWORLD_TTS_URL, {
+  const response = await fetch(INWORLD_TTS_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: getAuthHeader(),
     },
-    body: JSON.stringify(requestPayload),
+    body: JSON.stringify({
+      action: "synthesize",
+      ...requestPayload,
+    }),
   });
 
   if (!response.ok) {
@@ -282,28 +280,18 @@ export async function synthesizeInworldVoice(text: string, options?: SynthesizeO
 }
 
 export async function playInworldVoice(text: string, options?: PlayInworldVoiceOptions) {
-  const { audioContent } = await synthesizeInworldVoice(text, {
-    timestampType: "WORD",
-  });
-
-  stopInworldVoicePlayback();
-  await unlockInworldTtsAudio();
-
-  const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-  currentAudio = audio;
   options?.onPlayingChange?.(true);
 
-  const cleanup = () => {
-    if (currentAudio === audio) {
-      currentAudio = null;
-    }
+  try {
+    await streamInworldVoice(text, {
+      voiceId: options?.voiceId,
+      modelId: options?.modelId,
+      speakingRate: options?.speakingRate,
+      temperature: options?.temperature,
+    });
+  } finally {
     options?.onPlayingChange?.(false);
-  };
-
-  audio.onended = cleanup;
-  audio.onerror = cleanup;
-
-  await audio.play();
+  }
 }
 
 export async function streamInworldVoice(text: string, options?: StreamOptions) {
@@ -316,13 +304,13 @@ export async function streamInworldVoice(text: string, options?: StreamOptions) 
 
   await unlockInworldTtsAudio();
 
-  const response = await fetch(INWORLD_TTS_STREAM_URL, {
+  const response = await fetch(INWORLD_TTS_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: getAuthHeader(),
     },
     body: JSON.stringify({
+      action: "stream",
       text: ttsText,
       voice_id: options?.voiceId || INWORLD_TTS_VOICE_ID,
       voiceId: options?.voiceId || INWORLD_TTS_VOICE_ID,
@@ -338,12 +326,16 @@ export async function streamInworldVoice(text: string, options?: StreamOptions) 
     }),
   });
 
-  if (!response.ok || !response.body) {
+  if (!response.ok) {
     const reason = await parseError(response);
     if (response.status === 401 || response.status === 403) {
       throw new Error(`Inworld TTS stream auth failed (${response.status}). Key may be invalid or expired. ${reason}`);
     }
     throw new Error(`Inworld TTS stream failed: ${response.status} ${reason}`);
+  }
+
+  if (!response.body) {
+    throw new Error("Inworld TTS stream failed: response body is empty");
   }
 
   const reader = response.body.getReader();
@@ -404,23 +396,20 @@ export async function streamInworldVoice(text: string, options?: StreamOptions) 
 }
 
 export async function cloneInworldVoice(options: CloneVoiceOptions): Promise<string> {
-  const bytes = Uint8Array.from(atob(options.sampleBase64), (char) => char.charCodeAt(0));
-  const formData = new FormData();
-  formData.append(
-    "file",
-    new Blob([bytes], { type: options.sampleMimeType || "audio/mpeg" }),
-    options.sampleFileName || "sample.mp3",
-  );
-  formData.append("name", options.voiceName);
-  formData.append("languageCode", options.languageCode || "hi-IN");
-  formData.append("removeBackgroundNoise", String(options.removeBackgroundNoise ?? true));
-
-  const response = await fetch(INWORLD_TTS_CLONE_URL, {
+  const response = await fetch(INWORLD_TTS_API_URL, {
     method: "POST",
     headers: {
-      Authorization: getAuthHeader(),
+      "Content-Type": "application/json",
     },
-    body: formData,
+    body: JSON.stringify({
+      action: "clone",
+      sampleBase64: options.sampleBase64,
+      sampleMimeType: options.sampleMimeType,
+      sampleFileName: options.sampleFileName,
+      voiceName: options.voiceName,
+      languageCode: options.languageCode,
+      removeBackgroundNoise: options.removeBackgroundNoise,
+    }),
   });
 
   if (!response.ok) {

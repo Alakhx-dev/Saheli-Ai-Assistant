@@ -44,6 +44,14 @@ interface GroqResponse {
   }>;
 }
 
+interface GroqStreamDelta {
+  choices?: Array<{
+    delta?: {
+      content?: string;
+    };
+  }>;
+}
+
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY;
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_TEXT_MODEL = "llama-3.3-70b-versatile";
@@ -250,6 +258,7 @@ async function requestGroq(
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
   memoryMode?: MemoryMode,
+  onChunk?: (partialText: string) => void,
 ): Promise<string> {
   if (!GROQ_API_KEY) {
     return FALLBACK_MESSAGE;
@@ -277,6 +286,7 @@ async function requestGroq(
           model,
           messages: payloadMessages,
           temperature: 0.8,
+          stream: Boolean(onChunk),
         }),
         signal: controller.signal,
       });
@@ -291,6 +301,55 @@ async function requestGroq(
         }
 
         throw new Error(`Groq request failed with status ${response.status}: ${errorText}`);
+      }
+
+      if (onChunk && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullText = "";
+        let doneSignalReceived = false;
+
+        while (!doneSignalReceived) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith("data:")) {
+              continue;
+            }
+
+            const jsonPart = line.slice(5).trim();
+            if (!jsonPart) {
+              continue;
+            }
+
+            if (jsonPart === "[DONE]") {
+              doneSignalReceived = true;
+              break;
+            }
+
+            try {
+              const chunk = JSON.parse(jsonPart) as GroqStreamDelta;
+              const delta = chunk.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullText += delta;
+                onChunk(fullText);
+              }
+            } catch {
+              // Ignore malformed stream lines and continue processing.
+            }
+          }
+        }
+
+        return fullText.trim() || FALLBACK_MESSAGE;
       }
 
       const data = (await response.json()) as GroqResponse;
@@ -320,12 +379,13 @@ export async function sendMessage(
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
   memoryMode?: MemoryMode,
+  onChunk?: (partialText: string) => void,
 ): Promise<string> {
   if (activeRequest) {
     return activeRequest;
   }
 
-  activeRequest = requestGroq(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
+  activeRequest = requestGroq(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
 
   try {
     return await activeRequest;
