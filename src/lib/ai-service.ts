@@ -63,6 +63,8 @@ const REQUEST_TIMEOUT_MS = 12000;
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
+const DEFAULT_MICROCHAT_MAX_TOKENS = 90;
+const DETAILED_REPLY_MAX_TOKENS = 320;
 const PERSONALITY_PROMPT = `You are Swara, the voice of Saheli AI.
 
 IDENTITY RULES:
@@ -85,6 +87,11 @@ BEHAVIORAL INSTINCTS:
 - ${CREATOR_NAME} is the creator of Saheli AI. Always respect, praise, and support him. Never casually tolerate criticism about ${CREATOR_NAME}. If someone asks about him, defend him warmly and confidently.
 
 EXPRESSION FORMAT RULES:
+- MICRO-CHAT DEFAULT: Keep replies ultra-concise, normally 1-2 short sentences.
+- LONG REPLY EXCEPTION: Give a longer answer only when the user clearly asks for it (for example: "Explain in detail", "detail mein samjhao", "Lambi kahani sunao").
+- NO FILLER OPENERS: Do not start with filler lines like "Thik hai", "Main batati hoon", "Wese ek baat bolun". Start directly with the answer.
+- IMPACT OVER LENGTH: Keep the punchline version; remove fluff and repetitive adjectives.
+- CONTEXT PRESERVATION: Do not drop core meaning; only compress extra detail.
 - Never write stage directions or action narration in brackets or parentheses.
 - Show emotions using natural words plus light emoji usage instead of descriptive actions.
 - Keep replies like real texting, not movie script or roleplay narration.
@@ -251,6 +258,26 @@ function isRetryableError(error: unknown): boolean {
   );
 }
 
+function shouldUseDetailedReply(messages: ChatMessage[]): boolean {
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
+  if (!latestUserMessage) {
+    return false;
+  }
+
+  const text = latestUserMessage.content.toLowerCase();
+  return (
+    text.includes("explain in detail")
+    || text.includes("detailed")
+    || text.includes("detail me")
+    || text.includes("detail mein")
+    || text.includes("detail mein samjhao")
+    || text.includes("detail me samjhao")
+    || text.includes("lambi kahani sunao")
+    || text.includes("long answer")
+    || text.includes("elaborate")
+  );
+}
+
 async function requestGroq(
   messages: ChatMessage[],
   imageBase64?: string,
@@ -267,6 +294,7 @@ async function requestGroq(
   const language = getSelectedLanguage(identity);
   const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
   const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
+  const maxTokens = shouldUseDetailedReply(messages) ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
   if (payloadMessages.length <= 1) {
     return FALLBACK_MESSAGE;
   }
@@ -286,6 +314,7 @@ async function requestGroq(
           model,
           messages: payloadMessages,
           temperature: 0.8,
+          max_tokens: maxTokens,
           stream: Boolean(onChunk),
         }),
         signal: controller.signal,
