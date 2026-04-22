@@ -17,11 +17,80 @@ import { isMobile } from "@/lib/utils";
 
 export default function Login() {
   const t = getLang();
+  const dialogues = {
+    welcome: [
+      "Aa gaye? Chalo fatafat login karo! ✨",
+      "Tumhara hi intezar tha, jaldi aao! 🌸",
+      "Missing me? Login karo phir baatein karte hain! ❤️",
+    ],
+    signup: [
+      "Ohoo, naye dost? Chalo ID banao jaldi! 🎀",
+      "Nayi shuruat? I'm excited! Details bharo. ✨",
+      "Pehli baar? Don't worry, main hoon na! 🥰",
+    ],
+    google: [
+      "Smart choice! Google se toh kaam aur asaan ho gaya. 😎",
+      "Direct entry? Wah, smart ho tum! ⚡",
+    ],
+    github: [
+      "Ohoo... Developer ho? Code-shode likhte ho kya? 💻",
+      "GitHub? Lagta hai koi bada project ban raha hai! 🚀",
+    ],
+    error: [
+      "Hey! Kuch toh gadbad hai, password phir se check karo. 🤨",
+      "Password bhool gaye? Itni jaldi? Dhyan se dalo! 🧐",
+    ],
+    emailFocus: [
+      "Email se shuru karo, bestie. Main yahin hoon. ✨",
+      "Bas sahi email dalo aur hum start karte hain. 🌸",
+    ],
+    passwordFocus: [
+      "Password carefully, warna main tease karungi. 😉",
+      "Shhh... secret password safe rakhna. 🔐",
+    ],
+    hoverDoll: [
+      "Ooye! Idhar kya kar rahe ho? 🤨",
+      "Dobara aa gaye? Maanoge nahi tum... 🙄",
+      "Phir se mujhe pareshan karne aa gaye? Jaao apna kaam karo! 😤",
+      "Arae! Mere itne paas mat aao, thodi duri rakho! 🎀",
+      "Tumhe aur koi kaam nahi hai kya? Sirf mujhe dekhna hai? 🙄",
+    ],
+    clickDoll: [
+      "Pagal ho kya? Mujhe kyun chhu rahe ho! 😡",
+      "Hath hatao! Mujhe pareshan mat karo! 😤",
+      "Ab toh tum pakka pitoge! Chalo piche hato! 👊",
+      "Hey! Ye badtameezi hai, main tumse baat nahi karungi! 🤐",
+      "Touch kyun kiya? Seedhe login karo aur jao! 💢",
+    ],
+  };
+
+  type DialogueKey = keyof typeof dialogues;
+
+  const [message, setMessage] = useState("Aayiye shuru karein!");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  const setRandomMessage = (pool: string[]) => {
+    if (pool.length === 0) {
+      return;
+    }
+
+    let next = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length > 1) {
+      while (next === message) {
+        next = pool[Math.floor(Math.random() * pool.length)];
+      }
+    }
+
+    setMessage(next);
+  };
+
+  const handleTease = (action: DialogueKey) => {
+    setRandomMessage(dialogues[action]);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +116,24 @@ export default function Login() {
     };
   }, [navigate]);
 
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      const star = document.createElement("div");
+      star.className = "sparkle-star";
+      star.style.left = `${e.pageX}px`;
+      star.style.top = `${e.pageY}px`;
+      const size = `${Math.random() * 10 + 5}px`;
+      star.style.width = size;
+      star.style.height = size;
+      star.style.background = "radial-gradient(circle, #fff 0%, #ff6ad5 55%, #7928ca 100%)";
+      document.body.appendChild(star);
+      window.setTimeout(() => star.remove(), 800);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    return () => window.removeEventListener("mousemove", handleMove);
+  }, []);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -59,6 +146,7 @@ export default function Login() {
       navigate("/chat");
     } catch (err: any) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+      handleTease("error");
     }
   };
 
@@ -79,23 +167,33 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
-      <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative p-10">
-        <div className="relative group">
-          <div className="absolute inset-0 bg-pink-500/10 blur-[150px] rounded-full z-0"></div>
-          <img
-            src="/doll.png"
-            alt="Saheli AI Bestie"
-            className="max-h-[85vh] w-auto object-contain drop-shadow-[0_0_40px_rgba(236,72,153,0.2)] z-10"
-            style={{
-              filter: "brightness(0.9) contrast(1.05)",
-              opacity: "0.85",
-              mixBlendMode: "screen",
-            }}
-            onError={(e) => {
-              e.currentTarget.src = "/girl.png";
-            }}
-          />
+      <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
+        <div className="absolute top-[15%] right-[10%] z-50 pointer-events-none">
+          <div className="relative p-4 bg-white/5 backdrop-blur-xl border border-pink-500/20 shadow-2xl rounded-2xl animate-float">
+            <p className="text-pink-100 font-['Great_Vibes',_cursive] text-lg leading-tight text-center max-w-[140px]">
+              {message}
+            </p>
+            <div className="absolute bottom-2 -left-2 w-3 h-3 bg-white/5 border-l border-b border-pink-500/20 rotate-45"></div>
+          </div>
         </div>
+
+        <img
+          src="/doll.png"
+          alt="Saheli AI"
+          className="max-h-[80vh] w-auto object-contain cursor-help transition-all duration-300 active:scale-95"
+          onMouseEnter={() => setRandomMessage(dialogues.hoverDoll)}
+          onClick={() => setRandomMessage(dialogues.clickDoll)}
+          style={{
+            mixBlendMode: "lighten",
+            filter: "contrast(1.1) brightness(1.1)",
+            zIndex: 10,
+          }}
+          onError={(e) => {
+            e.currentTarget.src = "/girl.png";
+          }}
+        />
+
+        <div className="absolute inset-0 bg-pink-500/5 blur-[120px] rounded-full z-0"></div>
       </div>
 
       <div className="w-full md:w-1/2 flex justify-center items-center">
@@ -109,6 +207,7 @@ export default function Login() {
               placeholder="Username"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onFocus={() => handleTease("emailFocus")}
               className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
               required
             />
@@ -117,6 +216,7 @@ export default function Login() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              onFocus={() => handleTease("passwordFocus")}
               className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
               required
             />
@@ -125,6 +225,7 @@ export default function Login() {
 
             <button
               type="submit"
+              onMouseEnter={() => handleTease("welcome")}
               className="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-semibold rounded-2xl hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] transition-all"
             >
               {isSignUp ? "Create Account" : "Sign In"}
@@ -134,7 +235,10 @@ export default function Login() {
           <div className="mt-6 flex flex-col items-center gap-4">
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                handleTease("signup");
+                setIsSignUp(!isSignUp);
+              }}
               className="text-white/60 hover:text-white/90 text-sm transition-colors"
             >
               {isSignUp ? t.login.alreadyHaveAccount : t.login.needAccount}
@@ -146,6 +250,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => handleSocialAuth(new GoogleAuthProvider())}
+                onMouseEnter={() => setRandomMessage(dialogues.google)}
                 className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
                 aria-label="Continue with Google"
               >
@@ -159,6 +264,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => handleSocialAuth(new GithubAuthProvider())}
+                onMouseEnter={() => setRandomMessage(dialogues.github)}
                 className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
                 aria-label="Continue with GitHub"
               >

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Pacifico&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -401,6 +401,36 @@
 
 .text-glow-magenta {
   text-shadow: 0 0 15px rgba(236, 72, 153, 0.6);
+}
+
+@keyframes sparkle-fade {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5) rotate(180deg);
+    opacity: 0;
+  }
+}
+
+.sparkle-star {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  z-index: 9999;
+  filter: drop-shadow(0 0 8px rgba(255, 105, 180, 0.65));
+  animation: sparkle-fade 0.8s linear forwards;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
 }
 
 .skip-sparkle:hover::before,
