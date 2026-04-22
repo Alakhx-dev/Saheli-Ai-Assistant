@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
     server: {
       host: "::",
-      port: 8080,
+      port: 3000,
+      open: true,
       hmr: {
         overlay: false,
       },
@@ -24,6 +25,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+    optimizeDeps: {
+      force: true,
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
