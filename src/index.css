@@ -398,6 +398,11 @@
   left: -6px;
   animation: sparkle-twinkle 1.5s ease-in-out infinite 0.5s;
 }
+
+.text-glow-magenta {
+  text-shadow: 0 0 15px rgba(236, 72, 153, 0.6);
+}
+
 .skip-sparkle:hover::before,
 .skip-sparkle:hover::after {
   opacity: 1;
