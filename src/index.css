@@ -195,41 +195,72 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* ===== Premium Saheli Speech Bubble ===== */
+/* ===== Ultra-Premium Saheli Speech Bubble ===== */
 .saheli-bubble {
   position: relative;
   max-width: 250px;
   min-width: 180px;
+  /* Sheer dark glass fill */
   background: linear-gradient(
     135deg,
-    rgba(60, 15, 50, 0.55) 0%,
-    rgba(30, 10, 45, 0.60) 50%,
-    rgba(50, 12, 55, 0.55) 100%
+    rgba(255, 150, 200, 0.08) 0%,
+    rgba(30, 5, 25, 0.4) 50%,
+    rgba(10, 2, 15, 0.5) 100%
   );
-  backdrop-filter: blur(22px) saturate(1.3);
-  -webkit-backdrop-filter: blur(22px) saturate(1.3);
-  border: 1px solid rgba(236, 72, 153, 0.30);
-  border-radius: 22px;
+  /* Heavy blur for premium frosted effect */
+  backdrop-filter: blur(32px) saturate(150%);
+  -webkit-backdrop-filter: blur(32px) saturate(150%);
+  /* 3D Glass Edge: Bright top/left, soft bottom/right */
+  border-top: 1px solid rgba(255, 180, 220, 0.45);
+  border-left: 1px solid rgba(255, 180, 220, 0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
   box-shadow:
-    0 0 12px rgba(236, 72, 153, 0.15),
-    0 0 30px rgba(168, 85, 247, 0.08),
-    inset 0 0 20px rgba(236, 72, 153, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 15px 35px rgba(0, 0, 0, 0.5),
+    0 0 25px rgba(236, 72, 153, 0.2),
+    inset 0 0 20px rgba(236, 72, 153, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   overflow: visible;
 }
 
-/* Speech bubble tail — pointing toward her face (bottom-left) */
-.saheli-bubble::after {
-  content: '';
+/* Premium thought bubble trail pointing down-left toward mouth */
+.thought-dot {
   position: absolute;
-  bottom: 12px;
-  left: -9px;
-  width: 0;
-  height: 0;
-  border-top: 7px solid transparent;
-  border-bottom: 7px solid transparent;
-  border-right: 11px solid rgba(45, 12, 48, 0.58);
-  filter: drop-shadow(-1px 0 3px rgba(236, 72, 153, 0.15));
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 150, 200, 0.15), rgba(30, 5, 25, 0.5));
+  border-top: 1px solid rgba(255, 180, 220, 0.5);
+  border-left: 1px solid rgba(255, 180, 220, 0.3);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 5px 10px rgba(0,0,0,0.4), 0 0 12px rgba(236, 72, 153, 0.3);
+  backdrop-filter: blur(20px) saturate(150%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Largest dot closest to bubble */
+.thought-dot-1 {
+  width: 16px;
+  height: 16px;
+  bottom: 2px;
+  left: -10px;
+}
+
+/* Medium dot */
+.thought-dot-2 {
+  width: 10px;
+  height: 10px;
+  bottom: -10px;
+  left: -22px;
+}
+
+/* Smallest dot nearest to mouth */
+.thought-dot-3 {
+  width: 6px;
+  height: 6px;
+  bottom: -18px;
+  left: -32px;
 }
 
 /* Neon glow border accent — top edge shimmer */
@@ -387,35 +418,36 @@
   width: 75%;
   height: 45px;
   background: radial-gradient(ellipse at center,
-    rgba(255, 122, 162, 0.40) 0%,
-    rgba(255, 122, 162, 0.20) 35%,
-    rgba(255, 122, 162, 0.08) 60%,
-    transparent 80%
+    rgba(236, 72, 153, 0.45) 0%,
+    rgba(168, 85, 247, 0.22) 40%,
+    rgba(20, 5, 25, 0.1) 65%,
+    transparent 85%
   );
   border-radius: 50%;
-  filter: blur(25px);
+  filter: blur(22px);
   pointer-events: none;
   z-index: 1;
 }
 
-/* 3. SHADOW — studio soft, 12-18% opacity, blur 30-50px */
+/* 3. SHADOW — true cinematic contact shadow */
 .girl-ground-shadow {
   position: absolute;
-  bottom: -1%;
+  bottom: -2%;
   left: 50%;
   transform: translateX(-50%);
-  width: 45%;
-  height: 20px;
+  width: 50%;
+  height: 18px;
   background: radial-gradient(ellipse at center,
-    rgba(8, 0, 15, 0.15) 0%,
-    rgba(12, 2, 20, 0.10) 30%,
-    rgba(15, 3, 25, 0.04) 55%,
-    transparent 80%
+    rgba(0, 0, 0, 0.95) 0%,
+    rgba(5, 0, 15, 0.65) 35%,
+    rgba(15, 5, 25, 0.15) 65%,
+    transparent 85%
   );
   border-radius: 50%;
-  filter: blur(40px);
+  filter: blur(10px);
   pointer-events: none;
   z-index: 5;
+  mix-blend-mode: multiply;
 }
 
 /* 4. AMBIENT GLOW — 5-8%, pink+purple mix */

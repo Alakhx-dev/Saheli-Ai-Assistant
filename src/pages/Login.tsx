@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -14,7 +14,7 @@ import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
 import { Github } from "lucide-react";
 import { isMobile } from "@/lib/utils";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function Login() {
   const t = getLang();
@@ -73,6 +73,8 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
   const [isClicked, setIsClicked] = useState(false);
+  const [showBubble, setShowBubble] = useState(false);
+  const bubbleTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
   const setRandomMessage = (pool: string[]) => {
@@ -91,7 +93,20 @@ export default function Login() {
   };
 
   const handleTease = (action: DialogueKey) => {
+    if (bubbleTimeoutRef.current) window.clearTimeout(bubbleTimeoutRef.current);
     setRandomMessage(dialogues[action]);
+    setShowBubble(true);
+  };
+
+  const showCustomTease = (messages: string[]) => {
+    if (bubbleTimeoutRef.current) window.clearTimeout(bubbleTimeoutRef.current);
+    setRandomMessage(messages);
+    setShowBubble(true);
+  };
+
+  const hideBubble = () => {
+    if (bubbleTimeoutRef.current) window.clearTimeout(bubbleTimeoutRef.current);
+    setShowBubble(false);
   };
 
   useEffect(() => {
@@ -171,22 +186,57 @@ export default function Login() {
     <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
       <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
         <div className="relative group flex items-center justify-center">
-          {/* Anchored Chat Bubble: Positioned to the right of her face (not overlapping) */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="absolute left-[85%] md:left-[95%] top-[5%] z-50 bubble-glow bubble-romantic-float pointer-events-none"
-          >
-            <div className="saheli-bubble p-5 flex items-center justify-center">
-              <p className="saheli-bubble-text">
-                {message}
-              </p>
-              {/* Decorative sparkle / heart accents */}
-              <span className="bubble-sparkle bubble-sparkle--tl">✦</span>
-              <span className="bubble-sparkle bubble-sparkle--tr">♡</span>
-              <span className="bubble-sparkle bubble-sparkle--br">✧</span>
-            </div>
-          </motion.div>
+          {/* Anchored Chat Bubble: Toggled by Hover/Focus */}
+          <AnimatePresence>
+            {showBubble && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95, transition: { delay: message.length * 0.001, duration: 0.05 } }}
+                transition={{ type: "spring", stiffness: 500, damping: 20 }}
+                className="absolute left-[85%] md:left-[95%] top-[5%] z-50 bubble-glow bubble-romantic-float pointer-events-none"
+              >
+                <div className="saheli-bubble p-5 flex items-center justify-center">
+                  {/* Thought bubble trail pointing down-left toward mouth */}
+                  <span className="thought-dot thought-dot-1"></span>
+                  <span className="thought-dot thought-dot-2"></span>
+                  <span className="thought-dot thought-dot-3"></span>
+                  
+                  <AnimatePresence mode="wait">
+                    <motion.p 
+                      key={message}
+                      className="saheli-bubble-text"
+                      variants={{
+                        hidden: { opacity: 1 },
+                        visible: { opacity: 1, transition: { staggerChildren: 0.003 } },
+                        exit: { opacity: 1, transition: { staggerChildren: 0.001, staggerDirection: -1 } }
+                      }}
+                      initial="hidden"
+                      animate="visible"
+                      exit="exit"
+                    >
+                      {message.split("").map((char, index) => (
+                        <motion.span
+                          key={index}
+                          variants={{
+                            hidden: { opacity: 0 },
+                            visible: { opacity: 1 },
+                            exit: { opacity: 0 }
+                          }}
+                        >
+                          {char}
+                        </motion.span>
+                      ))}
+                    </motion.p>
+                  </AnimatePresence>
+                  {/* Decorative sparkle / heart accents */}
+                  <span className="bubble-sparkle bubble-sparkle--tl">✦</span>
+                  <span className="bubble-sparkle bubble-sparkle--tr">♡</span>
+                  <span className="bubble-sparkle bubble-sparkle--br">✧</span>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Character Image with Multi-Layered Animations */}
           <img
@@ -194,9 +244,8 @@ export default function Login() {
             alt="Saheli AI Bestie"
             className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
             // Multi-Event Binding
-            onMouseEnter={() => {
-              setRandomMessage(dialogues.hoverDoll);
-            }}
+            onMouseEnter={() => showCustomTease(dialogues.hoverDoll)}
+            onMouseLeave={hideBubble}
             onClick={() => {
               setIsClicked(true);
               setRandomMessage(dialogues.clickDoll);
@@ -238,6 +287,7 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onFocus={() => handleTease("emailFocus")}
+              onBlur={hideBubble}
               className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
               required
             />
@@ -247,6 +297,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onFocus={() => handleTease("passwordFocus")}
+              onBlur={hideBubble}
               className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
               required
             />
@@ -255,7 +306,8 @@ export default function Login() {
 
             <button
               type="submit"
-              onMouseEnter={() => handleTease("welcome")}
+              onMouseEnter={() => handleTease(isSignUp ? "signup" : "welcome")}
+              onMouseLeave={hideBubble}
               className="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-semibold rounded-2xl romantic-cta"
             >
               {isSignUp ? "Create Account" : "Sign In"}
@@ -280,7 +332,8 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => handleSocialAuth(new GoogleAuthProvider())}
-                onMouseEnter={() => setRandomMessage(dialogues.google)}
+                onMouseEnter={() => showCustomTease(dialogues.google)}
+                onMouseLeave={hideBubble}
                 className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
                 aria-label="Continue with Google"
               >
@@ -294,7 +347,8 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => handleSocialAuth(new GithubAuthProvider())}
-                onMouseEnter={() => setRandomMessage(dialogues.github)}
+                onMouseEnter={() => showCustomTease(dialogues.github)}
+                onMouseLeave={hideBubble}
                 className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
                 aria-label="Continue with GitHub"
               >
