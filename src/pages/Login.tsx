@@ -77,6 +77,49 @@ export default function Login() {
   const bubbleTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
+  const ANGRY_EMOJIS = ["😕", "😐", "😑", "😤", "😠"];
+  const HOVER_EMOJIS = ["🥰", "😍", "😘", "🥺", "😊", "💖", "🌸", "✨", "💕", "💘", "💓", "🤗", "🎀", "😽", "♥️", "🙈", "🤭", "🤤", "🫶", "💞"];
+  
+  const CLICK_TEXTS_NORMAL = ["ouch!", "aah", "kya hai?", "mat kr yaar", "dard hota h", "kyu chhu rahe ho?", "seriously?", "kya chahiye?", "bas bhi karo..."];
+  const CLICK_TEXTS_FAST = ["pitungi!", "maar khayega!", "rone lagungi... 😭", "kyu presan kr rha hai?!", "lagta hai padega ek mukka!", "hatooooo!", "maroge kya?!", "dobara kiya to dekhna 😤"];
+  
+  const HOVER_TEXTS_NORMAL = ["are are are...", "kya kar rahe ho?", "koi dekh lega...", "uff...", "shhh...", "please...", "kya chahiye bestie?", "hmm?"];
+  const HOVER_TEXTS_FAST = ["itna fast?", "aram se yaar", "what!", "hey stop!", "dhyan se!", "chakkar aa raha hai", "udte hue aaye?"];
+
+  const [clickCount, setClickCount] = useState(0);
+  const [hoverCount, setHoverCount] = useState(0);
+  const interactionTimer = useRef<number>(Date.now());
+  
+  interface ReactionEffect {
+    id: number;
+    content: string;
+    isText: boolean;
+    sparkles: { id: string; left: string; top: string; delay: number }[];
+  }
+  const [activeEffects, setActiveEffects] = useState<ReactionEffect[]>([]);
+
+  const createReaction = (content: string, isText: boolean) => {
+    const newId = Date.now() + Math.random();
+    
+    const newEffect: ReactionEffect = {
+      id: newId,
+      content,
+      isText,
+      sparkles: [
+         { id: `s1-${newId}`, left: `${Math.random() * 20 + 5}%`, top: `${Math.random() * 20 + 5}%`, delay: 0 },
+         { id: `s2-${newId}`, left: `${Math.random() * 20 + 75}%`, top: `${Math.random() * 20 + 10}%`, delay: 0.1 },
+         { id: `s3-${newId}`, left: `${Math.random() * 40 + 30}%`, top: `${Math.random() * 10}%`, delay: 0.2 }
+      ]
+    };
+    
+    // Replace array so strictly ONLY 1 reaction exists at a time (No overlaps)
+    setActiveEffects([newEffect]);
+    
+    window.setTimeout(() => {
+      setActiveEffects(curr => curr.filter(e => e.id !== newId));
+    }, 600);
+  };
+
   const setRandomMessage = (pool: string[]) => {
     if (pool.length === 0) {
       return;
@@ -190,52 +233,64 @@ export default function Login() {
           <AnimatePresence>
             {showBubble && (
               <motion.div
-                initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95, transition: { delay: message.length * 0.001, duration: 0.05 } }}
-                transition={{ type: "spring", stiffness: 500, damping: 20 }}
-                className="absolute left-[85%] md:left-[95%] top-[5%] z-50 bubble-glow bubble-romantic-float pointer-events-none"
+                key="main-system-bubble"
+                initial={{ opacity: 0, scale: 0.5, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: -5 }}
+                exit={{ opacity: 0, scale: 0.8, y: -20 }}
+                transition={{ duration: 0.4 }}
+                className="absolute z-50 left-[60%] md:left-[80%] top-[10%] drop-shadow-md pointer-events-none"
               >
-                <div className="saheli-bubble p-5 flex items-center justify-center">
-                  {/* Thought bubble trail pointing down-left toward mouth */}
-                  <span className="thought-dot thought-dot-1"></span>
-                  <span className="thought-dot thought-dot-2"></span>
-                  <span className="thought-dot thought-dot-3"></span>
-                  
-                  <AnimatePresence mode="wait">
-                    <motion.p 
-                      key={message}
-                      className="saheli-bubble-text"
-                      variants={{
-                        hidden: { opacity: 1 },
-                        visible: { opacity: 1, transition: { staggerChildren: 0.003 } },
-                        exit: { opacity: 1, transition: { staggerChildren: 0.001, staggerDirection: -1 } }
-                      }}
-                      initial="hidden"
-                      animate="visible"
-                      exit="exit"
-                    >
-                      {message.split("").map((char, index) => (
-                        <motion.span
-                          key={index}
-                          variants={{
-                            hidden: { opacity: 0 },
-                            visible: { opacity: 1 },
-                            exit: { opacity: 0 }
-                          }}
-                        >
-                          {char}
-                        </motion.span>
-                      ))}
-                    </motion.p>
-                  </AnimatePresence>
-                  {/* Decorative sparkle / heart accents */}
-                  <span className="bubble-sparkle bubble-sparkle--tl">✦</span>
-                  <span className="bubble-sparkle bubble-sparkle--tr">♡</span>
-                  <span className="bubble-sparkle bubble-sparkle--br">✧</span>
-                </div>
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={message}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2 }}
+                    className="bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-xs md:text-sm font-medium px-3 py-1.5 rounded-2xl w-max max-w-[200px] md:max-w-[260px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)]"
+                  >
+                    {message}
+                  </motion.div>
+                </AnimatePresence>
               </motion.div>
             )}
+          </AnimatePresence>
+
+          {/* Click Interaction Effects: Emojis & Sparkles */}
+          <AnimatePresence>
+            {activeEffects.map((effect) => (
+              <div key={effect.id} className="absolute inset-0 pointer-events-none z-40">
+                {/* Progressive Mixed Reaction (Text / Emoji) */}
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.5, y: 15 }}
+                  animate={{ opacity: 1, scale: effect.isText ? 1 : 1.3, y: -5 }}
+                  exit={{ opacity: 0, scale: 0.8, y: -20 }}
+                  transition={{ duration: 0.4 }}
+                  className={`absolute z-50 left-[75%] md:left-[85%] top-[10%] drop-shadow-md pointer-events-none ${
+                    effect.isText 
+                      ? "bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-sm md:text-[15px] font-medium px-3 py-1.5 rounded-2xl w-max max-w-[180px] md:max-w-[220px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)]"
+                      : "text-3xl md:text-4xl emoji-native"
+                  }`}
+                >
+                  {effect.content}
+                </motion.div>
+
+                {/* Sparkles */}
+                {effect.sparkles.map((sp) => (
+                  <motion.div
+                    key={sp.id}
+                    initial={{ opacity: 0, scale: 0, y: 0 }}
+                    animate={{ opacity: 1, scale: 1, y: -20 }}
+                    exit={{ opacity: 0, scale: 0 }}
+                    transition={{ duration: 0.3, delay: sp.delay }}
+                    className="absolute text-pink-300 text-xl filter drop-shadow-md"
+                    style={{ left: sp.left, top: sp.top }}
+                  >
+                    ✦
+                  </motion.div>
+                ))}
+              </div>
+            ))}
           </AnimatePresence>
 
           {/* Character Image with Multi-Layered Animations */}
@@ -244,12 +299,57 @@ export default function Login() {
             alt="Saheli AI Bestie"
             className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
             // Multi-Event Binding
-            onMouseEnter={() => showCustomTease(dialogues.hoverDoll)}
-            onMouseLeave={hideBubble}
+            onMouseEnter={() => {
+              hideBubble(); 
+              
+              const now = Date.now();
+              const timeSinceLast = now - interactionTimer.current;
+              interactionTimer.current = now;
+              const isFast = timeSinceLast < 450;
+              
+              setHoverCount(prev => {
+                const current = prev + 1;
+                // Text occurs 85% of the time, emoji occasionally (~15%)
+                const isText = Math.random() > 0.15;
+                
+                let content = "";
+                if (isText) {
+                  const arr = isFast ? HOVER_TEXTS_FAST : HOVER_TEXTS_NORMAL;
+                  content = arr[Math.floor(Math.random() * arr.length)];
+                } else {
+                  content = HOVER_EMOJIS[Math.floor(Math.random() * HOVER_EMOJIS.length)];
+                }
+                
+                createReaction(content, isText);
+                return current;
+              });
+            }}
             onClick={() => {
               setIsClicked(true);
-              setRandomMessage(dialogues.clickDoll);
+              hideBubble(); 
               window.setTimeout(() => setIsClicked(false), 150);
+
+              const now = Date.now();
+              const timeSinceLast = now - interactionTimer.current;
+              interactionTimer.current = now;
+              const isFast = timeSinceLast < 350;
+
+              setClickCount(prev => {
+                const current = prev + 1;
+                // Text occurs 85% of the time, emoji occasionally (~15%)
+                const isText = Math.random() > 0.15;
+                
+                let content = "";
+                if (isText) {
+                  const arr = isFast ? CLICK_TEXTS_FAST : CLICK_TEXTS_NORMAL;
+                  content = arr[Math.floor(Math.random() * arr.length)];
+                } else {
+                  content = ANGRY_EMOJIS[Math.floor(Math.random() * ANGRY_EMOJIS.length)];
+                }
+                
+                createReaction(content, isText);
+                return current;
+              });
             }}
             style={{
               mixBlendMode: "lighten",
@@ -276,7 +376,7 @@ export default function Login() {
       </div>
 
       <div className="w-full md:w-1/2 flex justify-center items-center">
-        <div className="z-20 w-full max-w-md p-10 bg-surface/30 backdrop-blur-2xl rounded-[40px] border border-white/5 shadow-2xl">
+        <div className="login-card-premium z-20 w-full max-w-md p-10 rounded-[40px] relative overflow-hidden">
           <h1 className="text-4xl font-bold text-white mb-2 text-glow-magenta">Aayiye Shuru Karein!</h1>
           <p className="text-white/60 mb-8">Saheli (AI Bestie) is waiting for you...</p>
 
@@ -308,7 +408,7 @@ export default function Login() {
               type="submit"
               onMouseEnter={() => handleTease(isSignUp ? "signup" : "welcome")}
               onMouseLeave={hideBubble}
-              className="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-semibold rounded-2xl romantic-cta"
+              className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_4px_25px_rgba(244,163,187,0.4),0_2px_10px_rgba(232,121,249,0.25)] hover:shadow-[0_6px_35px_rgba(244,163,187,0.55),0_4px_15px_rgba(232,121,249,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
             >
               {isSignUp ? "Create Account" : "Sign In"}
             </button>
