@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Pacifico&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Pacifico&family=Quicksand:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -193,6 +193,270 @@
   background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* ===== Premium Saheli Speech Bubble ===== */
+.saheli-bubble {
+  position: relative;
+  max-width: 250px;
+  min-width: 180px;
+  background: linear-gradient(
+    135deg,
+    rgba(60, 15, 50, 0.55) 0%,
+    rgba(30, 10, 45, 0.60) 50%,
+    rgba(50, 12, 55, 0.55) 100%
+  );
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  border: 1px solid rgba(236, 72, 153, 0.30);
+  border-radius: 22px;
+  box-shadow:
+    0 0 12px rgba(236, 72, 153, 0.15),
+    0 0 30px rgba(168, 85, 247, 0.08),
+    inset 0 0 20px rgba(236, 72, 153, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  overflow: visible;
+}
+
+/* Speech bubble tail — pointing toward her face (bottom-left) */
+.saheli-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: 12px;
+  left: -9px;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-right: 11px solid rgba(45, 12, 48, 0.58);
+  filter: drop-shadow(-1px 0 3px rgba(236, 72, 153, 0.15));
+}
+
+/* Neon glow border accent — top edge shimmer */
+.saheli-bubble::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 20%;
+  right: 20%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(236, 72, 153, 0.5), rgba(168, 85, 247, 0.35), transparent);
+  border-radius: 999px;
+}
+
+/* Bubble text — Quicksand: cute, rounded, readable */
+.saheli-bubble-text {
+  font-family: 'Quicksand', 'Outfit', sans-serif;
+  font-weight: 500;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  text-align: center;
+  color: rgba(255, 230, 240, 0.92);
+  text-shadow: 0 0 6px rgba(236, 72, 153, 0.18);
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* Tiny decorative accents on the bubble */
+.bubble-sparkle {
+  position: absolute;
+  pointer-events: none;
+  font-size: 9px;
+  opacity: 0;
+  animation: sparkle-twinkle-soft 3s ease-in-out infinite;
+}
+.bubble-sparkle--tl {
+  top: -5px;
+  left: -3px;
+  animation-delay: 0s;
+}
+.bubble-sparkle--tr {
+  top: -3px;
+  right: -5px;
+  animation-delay: 1s;
+}
+.bubble-sparkle--br {
+  bottom: -5px;
+  right: 10px;
+  animation-delay: 2s;
+}
+@keyframes sparkle-twinkle-soft {
+  0%, 100% { opacity: 0; transform: scale(0.6); }
+  50% { opacity: 0.5; transform: scale(1); }
+}
+
+.bubble-glow {
+  filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.20)) drop-shadow(0 0 18px rgba(168, 85, 247, 0.10));
+}
+
+@keyframes bubble-drift {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+}
+
+.bubble-romantic-float {
+  animation: bubble-drift 5.6s ease-in-out infinite;
+}
+
+@property --y {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --tap-scale {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+.anime-girl {
+  width: 700px;
+  max-width: 90%;
+  height: auto;
+  --y: 0px;
+  --scale: 1;
+  --tap-scale: 1;
+  transform: translateY(var(--y)) scale(calc(var(--scale) * var(--tap-scale)));
+  animation:
+    floatY 6s ease-in-out infinite,
+    breathe 4s ease-in-out infinite;
+  transition: --tap-scale 150ms cubic-bezier(0.22, 1, 0.36, 1), filter 400ms ease;
+  will-change: transform, filter;
+  cursor: pointer;
+  /* Always-visible: soft studio shadow + ambient glow + balanced tones */
+  filter:
+    drop-shadow(0 6px 16px rgba(5, 0, 12, 0.50))
+    drop-shadow(0 0 10px rgba(168, 85, 247, 0.05))
+    brightness(0.93)
+    saturate(0.93)
+    contrast(1.03);
+}
+
+/* Hover: barely perceptible glow lift — studio style */
+.anime-girl:hover {
+  filter:
+    drop-shadow(0 6px 18px rgba(5, 0, 12, 0.55))
+    drop-shadow(0 0 14px rgba(168, 85, 247, 0.08))
+    drop-shadow(0 0 6px rgba(236, 72, 153, 0.06))
+    brightness(0.95)
+    saturate(0.94)
+    contrast(1.03);
+}
+
+/* Tap: quick press-down then bounce back */
+.anime-girl.tap-soft {
+  --tap-scale: 0.96;
+}
+
+/* ===== LIGHTING SYSTEM (exact values) ===== */
+
+/* 1. SPOTLIGHT — top-center studio light, prominently visible on girl's head/torso */
+.girl-spotlight {
+  position: absolute;
+  top: -15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  height: 80%;
+  background:
+    radial-gradient(ellipse at 50% 0%,
+      rgba(255, 122, 162, 0.28) 0%,
+      rgba(255, 122, 162, 0.16) 20%,
+      rgba(255, 122, 162, 0.08) 40%,
+      transparent 65%
+    );
+  border-radius: 0 0 50% 50%;
+  filter: blur(25px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 2. GROUND LIGHT — visible round pink patch under the girl */
+.girl-ground-light {
+  position: absolute;
+  bottom: -6%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 75%;
+  height: 45px;
+  background: radial-gradient(ellipse at center,
+    rgba(255, 122, 162, 0.40) 0%,
+    rgba(255, 122, 162, 0.20) 35%,
+    rgba(255, 122, 162, 0.08) 60%,
+    transparent 80%
+  );
+  border-radius: 50%;
+  filter: blur(25px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* 3. SHADOW — studio soft, 12-18% opacity, blur 30-50px */
+.girl-ground-shadow {
+  position: absolute;
+  bottom: -1%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 45%;
+  height: 20px;
+  background: radial-gradient(ellipse at center,
+    rgba(8, 0, 15, 0.15) 0%,
+    rgba(12, 2, 20, 0.10) 30%,
+    rgba(15, 3, 25, 0.04) 55%,
+    transparent 80%
+  );
+  border-radius: 50%;
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 4. AMBIENT GLOW — 5-8%, pink+purple mix */
+.girl-ambient-glow {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 65%;
+  background: radial-gradient(ellipse at center,
+    rgba(220, 80, 170, 0.06) 0%,
+    rgba(160, 60, 200, 0.04) 35%,
+    rgba(140, 50, 180, 0.02) 55%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  filter: blur(35px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes floatY {
+  0% { --y: 0px; }
+  50% { --y: -8px; }
+  100% { --y: 0px; }
+}
+
+@keyframes breathe {
+  0%, 100% { --scale: 1; }
+  50% { --scale: 1.015; }
+}
+
+.romantic-cta {
+  transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 460ms ease, filter 460ms ease;
+}
+
+.romantic-cta:hover {
+  transform: translateY(-1px) scale(1.01);
+  box-shadow: 0 0 24px rgba(236, 72, 153, 0.35);
+  filter: saturate(1.04);
 }
 
 /* ===== Glowing Neon Bestie Theme ===== */
@@ -424,14 +688,6 @@
   animation: sparkle-fade 0.8s linear forwards;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(-1deg); }
-  50% { transform: translateY(-10px) rotate(1deg); }
-}
-
-.animate-float {
-  animation: float 4s ease-in-out infinite;
-}
 
 .skip-sparkle:hover::before,
 .skip-sparkle:hover::after {

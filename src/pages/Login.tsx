@@ -14,6 +14,7 @@ import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
 import { Github } from "lucide-react";
 import { isMobile } from "@/lib/utils";
+import { motion } from "framer-motion";
 
 export default function Login() {
   const t = getLang();
@@ -71,6 +72,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState("");
+  const [isClicked, setIsClicked] = useState(false);
   const navigate = useNavigate();
 
   const setRandomMessage = (pool: string[]) => {
@@ -168,32 +170,60 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
       <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
-        <div className="absolute top-[15%] right-[10%] z-50 pointer-events-none">
-          <div className="relative p-4 bg-white/5 backdrop-blur-xl border border-pink-500/20 shadow-2xl rounded-2xl animate-float">
-            <p className="text-pink-100 font-['Great_Vibes',_cursive] text-lg leading-tight text-center max-w-[140px]">
-              {message}
-            </p>
-            <div className="absolute bottom-2 -left-2 w-3 h-3 bg-white/5 border-l border-b border-pink-500/20 rotate-45"></div>
-          </div>
+        <div className="relative group flex items-center justify-center">
+          {/* Anchored Chat Bubble: Positioned to the right of her face (not overlapping) */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="absolute left-[85%] md:left-[95%] top-[5%] z-50 bubble-glow bubble-romantic-float pointer-events-none"
+          >
+            <div className="saheli-bubble p-5 flex items-center justify-center">
+              <p className="saheli-bubble-text">
+                {message}
+              </p>
+              {/* Decorative sparkle / heart accents */}
+              <span className="bubble-sparkle bubble-sparkle--tl">✦</span>
+              <span className="bubble-sparkle bubble-sparkle--tr">♡</span>
+              <span className="bubble-sparkle bubble-sparkle--br">✧</span>
+            </div>
+          </motion.div>
+
+          {/* Character Image with Multi-Layered Animations */}
+          <img
+            src="/doll.png"
+            alt="Saheli AI Bestie"
+            className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
+            // Multi-Event Binding
+            onMouseEnter={() => {
+              setRandomMessage(dialogues.hoverDoll);
+            }}
+            onClick={() => {
+              setIsClicked(true);
+              setRandomMessage(dialogues.clickDoll);
+              window.setTimeout(() => setIsClicked(false), 150);
+            }}
+            style={{
+              mixBlendMode: "lighten",
+              // These are optimized from the base animation class
+              willChange: "transform, filter",
+            }}
+            onError={(e) => {
+              e.currentTarget.src = "/girl.png";
+            }}
+          />
+
+          {/* 3. Soft realistic shadow under feet */}
+          <div className="girl-ground-shadow" />
+
+          {/* 2. Ground light — barely visible pink oval patch */}
+          <div className="girl-ground-light" />
+
+          {/* 1. Spotlight — soft top-center cone on girl only */}
+          <div className="girl-spotlight" />
+
+          {/* 4. Ambient glow — very faint depth around character */}
+          <div className="girl-ambient-glow" />
         </div>
-
-        <img
-          src="/doll.png"
-          alt="Saheli AI"
-          className="max-h-[80vh] w-auto object-contain cursor-help transition-all duration-300 active:scale-95"
-          onMouseEnter={() => setRandomMessage(dialogues.hoverDoll)}
-          onClick={() => setRandomMessage(dialogues.clickDoll)}
-          style={{
-            mixBlendMode: "lighten",
-            filter: "contrast(1.1) brightness(1.1)",
-            zIndex: 10,
-          }}
-          onError={(e) => {
-            e.currentTarget.src = "/girl.png";
-          }}
-        />
-
-        <div className="absolute inset-0 bg-pink-500/5 blur-[120px] rounded-full z-0"></div>
       </div>
 
       <div className="w-full md:w-1/2 flex justify-center items-center">
@@ -226,7 +256,7 @@ export default function Login() {
             <button
               type="submit"
               onMouseEnter={() => handleTease("welcome")}
-              className="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-semibold rounded-2xl hover:shadow-[0_0_30px_rgba(236,72,153,0.5)] transition-all"
+              className="w-full py-4 bg-gradient-to-r from-pink-500 to-violet-500 text-white font-semibold rounded-2xl romantic-cta"
             >
               {isSignUp ? "Create Account" : "Sign In"}
             </button>
