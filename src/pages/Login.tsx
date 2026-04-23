@@ -90,6 +90,10 @@ export default function Login() {
   const [hoverCount, setHoverCount] = useState(0);
   const interactionTimer = useRef<number>(Date.now());
   
+  
+
+
+  
   interface ReactionEffect {
     id: number;
     content: string;
@@ -229,6 +233,8 @@ export default function Login() {
     <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
       <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
         <div className="relative group flex items-center justify-center">
+
+
           {/* Anchored Chat Bubble: Toggled by Hover/Focus */}
           <AnimatePresence>
             {showBubble && (
@@ -295,7 +301,8 @@ export default function Login() {
 
           {/* Character Image with Multi-Layered Animations */}
           <img
-            src="/doll.png"
+            src="/ChatGPT Image Apr 23, 2026, 09_32_49 PM.png"
+
             alt="Saheli AI Bestie"
             className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
             // Multi-Event Binding
@@ -352,12 +359,11 @@ export default function Login() {
               });
             }}
             style={{
-              mixBlendMode: "lighten",
               // These are optimized from the base animation class
               willChange: "transform, filter",
             }}
             onError={(e) => {
-              e.currentTarget.src = "/girl.png";
+              e.currentTarget.src = "/doll.png";
             }}
           />
 
