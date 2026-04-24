@@ -15,7 +15,7 @@ export default function SettingsSection({ label, title, description, children }:
         <h3 className="text-xl font-semibold tracking-tight text-white">{title}</h3>
         {description ? <p className="max-w-2xl text-sm text-white/55">{description}</p> : null}
       </div>
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#232323]">{children}</div>
+      <div className="overflow-hidden rounded-2xl border border-pink-500/10 bg-[#130a18]">{children}</div>
     </section>
   );
 }

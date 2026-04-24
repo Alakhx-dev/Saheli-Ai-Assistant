@@ -13,7 +13,7 @@ export default function ToggleSwitch({ checked, onCheckedChange, ariaLabel }: To
       checked={checked}
       onCheckedChange={onCheckedChange}
       aria-label={ariaLabel}
-      className="border border-white/10 bg-white/10 data-[state=checked]:bg-white data-[state=unchecked]:bg-white/10"
+      className="border border-pink-500/15 bg-pink-900/30 data-[state=checked]:bg-pink-500 data-[state=unchecked]:bg-pink-900/30"
     />
   );
 }

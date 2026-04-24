@@ -46,7 +46,7 @@ function AccountSettings({
           <button
             type="button"
             onClick={onEditProfile}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-xl border border-pink-500/15 bg-pink-500/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-pink-500/10"
           >
             <UserPen className="h-4 w-4" />
             {t.settings.edit}
@@ -57,7 +57,7 @@ function AccountSettings({
         <button
           type="button"
           onClick={onChangePassword}
-          className="rounded-md border border-white/10 bg-white/10 px-3 py-1 text-sm text-white transition duration-200 hover:bg-white/20"
+          className="rounded-md border border-pink-500/15 bg-pink-500/10 px-3 py-1 text-sm text-white transition duration-200 hover:bg-pink-500/15"
         >
           {t.settings.change}
         </button>
@@ -70,7 +70,7 @@ function AccountSettings({
         <button
           type="button"
           onClick={onLogout}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
+          className="inline-flex items-center gap-2 rounded-xl border border-pink-500/15 bg-pink-500/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-pink-500/10"
         >
           <LogOut className="h-4 w-4" />
           {t.settings.logoutButton}

@@ -1,5 +1,4 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
-import Spline from "@splinetool/react-spline";
 import {
   Menu,
   Mic,
@@ -508,31 +507,30 @@ function getMessageKey(msg: ChatMessage, index: number) {
   return `${msg.role}-${index}`;
 }
 
-// Message Item with Scroll-triggered Fade + Sheen + Hover Pulse
 const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean }>(
   function ScrollFadeMessageItem({ msg, isNew }, ref) {
     return (
       <motion.div
       ref={ref}
       layout={false}
-      initial={isNew ? { opacity: 0, y: 10, scale: 0.96 } : false}
+      initial={isNew ? { opacity: 0, y: 18, scale: 0.92 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -12, scale: 0.98 }}
-      transition={{ duration: 0.28, ease: "easeOut" }}
+      exit={{ opacity: 0, y: -12, scale: 0.96 }}
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
       className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
       style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
     >
       <div
         className={`
-        max-w-[84%] md:max-w-[72%] px-5 py-3 text-sm leading-relaxed font-medium relative text-neutral-50
-        bubble-hover transition-all duration-300
+        max-w-[84%] md:max-w-[72%] px-5 py-3.5 text-sm leading-relaxed font-medium relative text-neutral-50
+        transition-all duration-300
         ${isNew ? "msg-sheen" : ""}
         ${msg.role === "user"
-          ? "bg-gradient-to-r from-purple-600 to-indigo-600 border border-white/10 rounded-xl rounded-br-none shadow-[0_10px_26px_rgba(79,70,229,0.35)]"
-          : "bg-neutral-800/40 backdrop-blur-md border border-white/10 rounded-xl rounded-bl-none shadow-[0_8px_22px_rgba(3,7,18,0.45)]"
+          ? "saheli-user-bubble rounded-2xl rounded-br-sm"
+          : "saheli-ai-bubble rounded-2xl rounded-bl-sm"
         }
       `}
-        style={{ fontFamily: "'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
+        style={{ fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
       >
         {msg.content}
       </div>
@@ -581,20 +579,20 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
           {isLoading ? (
             <motion.div
               key="typing-indicator"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
+              initial={{ opacity: 0, y: 12, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
               className="flex justify-start h-[76px] items-start"
               style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
             >
-              <div className="bg-white/[0.05] backdrop-blur-3xl border border-pink-400/40 p-4 rounded-2xl shadow-[0_0_20px_rgba(236,72,153,0.3)] animate-pulse-slow">
-                <div className="flex items-center gap-2 mb-1.5 px-1">
-                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0s' }}></div>
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.2s' }}></div>
-                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-premium-wave" style={{ animationDelay: '0.4s' }}></div>
+              <div className="saheli-ai-bubble px-5 py-4 rounded-2xl rounded-bl-sm">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0s' }}></div>
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0.15s' }}></div>
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0.3s' }}></div>
                 </div>
-                <p className="text-white/60 text-xs font-medium">{typingLabel}</p>
+                <p className="text-pink-200/50 text-[11px] font-medium tracking-wide">{typingLabel}</p>
               </div>
             </motion.div>
           ) : null}
@@ -610,17 +608,39 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
 const BackgroundComponent = memo(function BackgroundComponent({ isSidebarOpen }: { isSidebarOpen: boolean }) {
   return (
     <div
-      className={`absolute inset-y-0 right-0 z-0 flex items-center justify-center overflow-hidden bg-[#050505] transition-all duration-300 ${
+      className={`absolute inset-y-0 right-0 z-0 overflow-hidden bg-[#0a0a0f] transition-all duration-300 ${
         isSidebarOpen ? "md:left-72" : "left-0"
       }`}
     >
-      <Spline
-        scene="https://prod.spline.design/hvkm7wWU5NhlhhNo/scene.splinecode"
-        onLoad={(app) => {
-          app.setGlobalEvents(true);
-        }}
-        className="absolute left-1/2 top-1/2 z-0 h-[90vh] w-[95vw] -translate-x-1/2 -translate-y-1/2 scale-[1.2] opacity-95"
-      />
+      {/* Animated floating mesh blobs */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div
+          className="blob-drift-1 absolute rounded-full opacity-40 blur-[100px]"
+          style={{
+            width: '45vw', height: '45vw', maxWidth: '600px', maxHeight: '600px',
+            top: '-10%', left: '-10%',
+            background: 'radial-gradient(circle, var(--mood-blob-1), transparent 70%)',
+          }}
+        />
+        <div
+          className="blob-drift-2 absolute rounded-full opacity-30 blur-[120px]"
+          style={{
+            width: '40vw', height: '40vw', maxWidth: '550px', maxHeight: '550px',
+            bottom: '-15%', right: '-5%',
+            background: 'radial-gradient(circle, var(--mood-blob-2), transparent 70%)',
+          }}
+        />
+        <div
+          className="blob-drift-3 absolute rounded-full opacity-25 blur-[90px]"
+          style={{
+            width: '30vw', height: '30vw', maxWidth: '400px', maxHeight: '400px',
+            top: '40%', left: '50%',
+            background: 'radial-gradient(circle, var(--mood-blob-3), transparent 70%)',
+          }}
+        />
+      </div>
+      {/* Subtle star-dust noise overlay */}
+      <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 0.7px, transparent 0.7px)', backgroundSize: '3px 3px' }} />
     </div>
   );
 });
@@ -2025,7 +2045,7 @@ export default function Chat() {
 
   return (
     <div
-      className="chat-spline-bg relative flex h-screen w-full overflow-hidden bg-[#050505] text-white selection:bg-pink-500/30"
+      className="relative flex h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
@@ -2065,12 +2085,12 @@ export default function Chat() {
       />
 
       <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-72" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
-        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none backdrop-blur-md">
+        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
           <div className="flex items-center gap-4 pointer-events-auto">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               aria-label={t.header.toggleSidebar}
-              className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-white/5 transition-colors hidden md:block"
+              className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-pink-500/5 transition-colors hidden md:block"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -2104,7 +2124,7 @@ export default function Chat() {
             ) : null}
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-white/[0.09] border border-white/35 backdrop-blur-md rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(2,6,23,0.55),inset_0_1px_0_rgba(255,255,255,0.22)] transition-all duration-300"
+              className="relative flex items-center bg-[#1a0a14]/50 border border-pink-500/15 backdrop-blur-md rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(10,2,15,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300"
             >
               <input
                 type="text"
@@ -2121,7 +2141,7 @@ export default function Chat() {
                 className={`p-2 ml-1 rounded-full transition-all ${
                   isListening
                     ? "bg-pink-500/20 text-pink-400 animate-pulse"
-                    : "bg-white/5 text-white/50 hover:text-white hover:bg-white/15"
+                    : "bg-pink-500/5 text-pink-300/50 hover:text-pink-200 hover:bg-pink-500/10"
                 }`}
               >
                 <Mic className="w-5 h-5" />
@@ -2133,7 +2153,7 @@ export default function Chat() {
                 disabled={!input.trim() || isLoading}
                 className="p-2 mr-2 transition-all"
               >
-                <div className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 p-2.5 rounded-full text-white shadow-[0_4px_16px_rgba(236,72,153,0.3)] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none">
+                <div className="bg-gradient-to-r from-pink-400 to-fuchsia-500 hover:from-pink-300 hover:to-fuchsia-400 p-2.5 rounded-full text-white shadow-[0_4px_16px_rgba(236,72,153,0.3)] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none">
                   <Send className="w-4 h-4" />
                 </div>
               </button>

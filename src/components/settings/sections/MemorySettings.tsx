@@ -26,7 +26,7 @@ function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: Memor
           type="button"
           onClick={() => onMemoryToggle(!memoryEnabled)}
           className={`h-6 w-10 rounded-full p-1 transition duration-200 ${
-            memoryEnabled ? "bg-purple-500" : "bg-gray-600"
+            memoryEnabled ? "bg-pink-500" : "bg-pink-900/30"
           }`}
           aria-label="Toggle memory"
         >
@@ -45,7 +45,7 @@ function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: Memor
         <button
           type="button"
           onClick={onManageMemory}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-white/10"
+          className="rounded-xl border border-pink-500/15 bg-pink-500/5 px-4 py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-pink-500/10"
         >
           {t.settings.manageMemoryButton}
         </button>

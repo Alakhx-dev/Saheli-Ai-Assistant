@@ -64,9 +64,9 @@ function SettingsPanel({
   ], [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-xl border border-white/10 bg-[#1e1e1e] p-0 text-white">
+      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-xl border border-pink-500/10 bg-[#0d0510] p-0 text-white">
         <div className="grid h-full min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="border-b border-white/10 bg-[#171717] px-4 py-5 md:border-b-0 md:border-r">
+          <aside className="border-b border-pink-500/8 bg-[#0a0810] px-4 py-5 md:border-b-0 md:border-r">
             <DialogHeader className="space-y-2 px-2 text-left">
               <DialogTitle className="text-xl font-semibold text-white">{t.settings.title}</DialogTitle>
               <DialogDescription className="text-sm text-white/50">
@@ -82,8 +82,8 @@ function SettingsPanel({
                   onClick={() => onSectionChange(section.id)}
                   className={`flex w-full items-center rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-transform duration-200 ${
                     activeSection === section.id
-                      ? "bg-white/10 text-white"
-                      : "text-white/55 hover:bg-white/5 hover:text-white"
+                      ? "bg-pink-500/10 text-pink-100"
+                      : "text-white/55 hover:bg-pink-500/5 hover:text-white"
                   }`}
                 >
                   {section.label}

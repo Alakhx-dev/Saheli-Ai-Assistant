@@ -83,8 +83,8 @@ const ChatItem = memo(function ChatItem({
     <div
       className={`group flex items-center justify-between rounded-lg px-3 py-2 transition duration-200 ${
         isActive
-          ? "bg-white/10 text-white"
-          : "text-white/70 hover:bg-gradient-to-r hover:from-white/8 hover:to-fuchsia-300/10 hover:text-white"
+          ? "bg-pink-500/10 border border-pink-500/15 text-white"
+          : "text-white/70 hover:bg-gradient-to-r hover:from-pink-500/5 hover:to-fuchsia-500/5 hover:text-white"
       }`}
     >
       {isEditing ? (
@@ -207,15 +207,15 @@ export default function Sidebar({
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
   const sidebarTone = isLightMode
     ? "border-neutral-300/70 bg-[#f5f6f8]/92 text-neutral-900"
-    : "border-white/5 bg-neutral-950 text-white";
-  const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-white/10 bg-white/[0.02]";
+    : "border-pink-500/10 bg-[#0a0a0f]/95 text-white";
+  const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-pink-500/10 bg-[#1a0a14]/40";
   const rowTone = isLightMode
     ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"
-    : "text-neutral-300 hover:bg-white/5 hover:text-white";
+    : "text-neutral-300 hover:bg-pink-500/5 hover:text-white";
   const subtleTextTone = isLightMode ? "text-neutral-500" : "text-white/45";
   const defaultTextTone = isLightMode ? "text-neutral-900" : "text-white";
-  const profileBorderTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
-  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
+  const profileBorderTone = isLightMode ? "border-neutral-300/80" : "border-pink-500/10";
+  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-pink-500/10";
 
   return (
     <>
@@ -230,7 +230,7 @@ export default function Sidebar({
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="border-b border-white/5 px-6 pb-4 pt-6">
+        <div className="border-b border-pink-500/10 px-6 pb-4 pt-6">
           <div className="mb-5 flex items-center justify-start gap-2">
             <Heart className="h-4 w-4 shrink-0 text-[#FF69B4]" fill="currentColor" />
             <div
@@ -251,7 +251,7 @@ export default function Sidebar({
             className={`w-full rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
               isLightMode
                 ? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100"
-                : "border-white/10 bg-white/5 text-white hover:bg-white/10"
+                : "border-pink-500/15 bg-pink-500/5 text-white hover:bg-pink-500/10"
             }`}
           >
             {newChatLabel}
@@ -310,7 +310,7 @@ export default function Sidebar({
               </div>
             </div>
 
-            <div className={`mt-3 space-y-1 border-t border-white/5 pt-3 ${profileBorderTone}`}>
+            <div className={`mt-3 space-y-1 border-t border-pink-500/8 pt-3 ${profileBorderTone}`}>
               <button
                 type="button"
                 onClick={onToggleMute}
@@ -318,13 +318,13 @@ export default function Sidebar({
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
                 {isMuted ? (
-                  <VolumeX className="h-4 w-4 shrink-0 text-neutral-400" />
+                  <VolumeX className="h-4 w-4 shrink-0 text-pink-300/60" />
                 ) : (
                   <div className="relative flex h-4 w-4 items-center justify-center">
                     {isSpeaking ? (
                       <span className="absolute inline-flex h-4 w-4 rounded-full bg-pink-400/30 animate-ping" />
                     ) : null}
-                    <Volume2 className={`h-4 w-4 shrink-0 ${isSpeaking ? "text-pink-300" : "text-neutral-400"}`} />
+                    <Volume2 className={`h-4 w-4 shrink-0 ${isSpeaking ? "text-pink-300" : "text-pink-300/60"}`} />
                   </div>
                 )}
                 <span>{isMuted ? unmuteLabel : muteLabel}</span>
@@ -334,7 +334,7 @@ export default function Sidebar({
                 onClick={onOpenSettings}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                <Settings className="h-4 w-4 shrink-0 text-neutral-400" />
+                <Settings className="h-4 w-4 shrink-0 text-pink-300/60" />
                 <span>{settingsLabel}</span>
               </button>
               <button
@@ -342,7 +342,7 @@ export default function Sidebar({
                 onClick={onToggleThemeMode}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                {isLightMode ? <Sun className="h-4 w-4 shrink-0 text-neutral-400" /> : <Moon className="h-4 w-4 shrink-0 text-neutral-400" />}
+                {isLightMode ? <Sun className="h-4 w-4 shrink-0 text-neutral-400" /> : <Moon className="h-4 w-4 shrink-0 text-pink-300/60" />}
                 <span>{themeLabel}: {isLightMode ? lightModeLabel : darkModeLabel}</span>
               </button>
               <button
@@ -350,7 +350,7 @@ export default function Sidebar({
                 onClick={() => void onLogout()}
                 className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
               >
-                <LogOut className="h-4 w-4 shrink-0 text-neutral-400" />
+                <LogOut className="h-4 w-4 shrink-0 text-pink-300/60" />
                 <span>{logoutLabel}</span>
               </button>
             </div>
