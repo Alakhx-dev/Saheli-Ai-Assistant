@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   GithubAuthProvider,
   getRedirectResult,
+  onAuthStateChanged,
   signInWithPopup,
   signInWithRedirect,
   type AuthProvider,
@@ -157,6 +158,12 @@ export default function Login() {
   };
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        navigate("/chat");
+      }
+    });
+
     let cancelled = false;
 
     void getRedirectResult(auth)
@@ -177,6 +184,7 @@ export default function Login() {
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [navigate]);
 
@@ -301,7 +309,7 @@ export default function Login() {
 
           {/* Character Image with Multi-Layered Animations */}
           <img
-            src="/ChatGPT Image Apr 23, 2026, 09_32_49 PM.png"
+            src="/saheli-ai-logo.png"
 
             alt="Saheli AI Bestie"
             className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
@@ -363,7 +371,7 @@ export default function Login() {
               willChange: "transform, filter",
             }}
             onError={(e) => {
-              e.currentTarget.src = "/doll.png";
+              e.currentTarget.src = "/saheli-ai-logo.png";
             }}
           />
 

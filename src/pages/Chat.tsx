@@ -42,25 +42,12 @@ import {
 } from "@/lib/memory";
 import { detectMemory, saveImageMemoryDB, saveMemoryToDB } from "@/lib/chatService";
 import {
-  setSwaraInworldMuted,
-  stopSwaraInworldPlayback,
-  unlockSwaraInworldAudio,
-} from "../lib/inworld-service";
-import {
-  playInworldVoice,
-  stopInworldVoicePlayback,
-  unlockInworldTtsAudio,
-} from "../lib/inworld-tts";
-import {
   primeBrowserTtsVoices,
-  speakWithBrowserTts,
+  speakHindi,
   stopBrowserTtsPlayback,
 } from "@/lib/browser-tts";
-import {
-  INWORLD_TTS_DEFAULT_VOICE_ID,
-  TTS_VOICE_PRESETS,
-  resolveVoiceProfile,
-} from "@/lib/tts-config";
+import { speakWithInworldTts, stopInworldTtsPlayback } from "@/lib/inworld-tts";
+
 import { isMobile } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
@@ -82,7 +69,6 @@ const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
 const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
-const TTS_SELECTED_VOICE_STORAGE_KEY = "selected_tts_voice";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
 
@@ -106,19 +92,6 @@ function getStoredReplyLanguageMode(): ReplyLanguageMode {
   }
 
   return "hinglish";
-}
-
-function getStoredTtsVoiceId() {
-  if (typeof window === "undefined") {
-    return INWORLD_TTS_DEFAULT_VOICE_ID;
-  }
-
-  const storedValue = window.localStorage.getItem(TTS_SELECTED_VOICE_STORAGE_KEY);
-  if (storedValue && TTS_VOICE_PRESETS.some((voice) => voice.id === storedValue)) {
-    return storedValue;
-  }
-
-  return INWORLD_TTS_DEFAULT_VOICE_ID;
 }
 
 function readGuestProfileName() {
@@ -718,7 +691,6 @@ export default function Chat() {
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
-  const [selectedVoiceId, setSelectedVoiceId] = useState<string>(() => getStoredTtsVoiceId());
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [memoryEnabled, setMemoryEnabledState] = useState(true);
@@ -783,8 +755,6 @@ export default function Chat() {
     }
 
     const handleFirstInteraction = () => {
-      void unlockSwaraInworldAudio();
-      void unlockInworldTtsAudio();
       window.removeEventListener("pointerdown", handleFirstInteraction);
       window.removeEventListener("keydown", handleFirstInteraction);
     };
@@ -815,10 +785,6 @@ export default function Chat() {
   }, []);
 
   useEffect(() => {
-    void setSwaraInworldMuted(isMuted).catch((error) => {
-      console.error("Failed to apply Inworld mute state", error);
-    });
-
     if (isMuted) {
       setIsSwaraSpeaking(false);
     }
@@ -857,16 +823,6 @@ export default function Chat() {
   useEffect(() => {
     localStorage.setItem(REPLY_LANGUAGE_MODE_STORAGE_KEY, replyLanguageMode);
   }, [replyLanguageMode]);
-
-  useEffect(() => {
-    localStorage.setItem(TTS_SELECTED_VOICE_STORAGE_KEY, selectedVoiceId);
-    const voiceProfile = resolveVoiceProfile(selectedVoiceId);
-    setStoreSettings({
-      selectedVoice: voiceProfile.voiceId,
-      speakingRate: voiceProfile.speakingRate,
-      temperature: voiceProfile.temperature,
-    });
-  }, [selectedVoiceId, setStoreSettings]);
 
   useEffect(() => {
     chatLanguageRef.current = replyLanguageMode;
@@ -1089,9 +1045,8 @@ export default function Chat() {
   }, []);
 
   const handleLogout = async () => {
-    void stopSwaraInworldPlayback();
-    stopInworldVoicePlayback();
     stopBrowserTtsPlayback();
+    stopInworldTtsPlayback();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/login");
@@ -1112,8 +1067,25 @@ export default function Chat() {
     setMemoryStatus(enabled ? t.statuses.memoryOn : t.statuses.memoryOff);
   };
 
-  const handleVoiceChange = useCallback((voiceId: string) => {
-    setSelectedVoiceId(voiceId);
+  const playVoice = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const mobile = isMobile();
+    stopInworldTtsPlayback();
+    stopBrowserTtsPlayback();
+    setIsSwaraSpeaking(true);
+    try {
+      if (mobile) {
+        await speakHindi(trimmed);
+      } else {
+        await speakWithInworldTts(trimmed);
+      }
+    } finally {
+      setIsSwaraSpeaking(false);
+    }
   }, []);
 
   const refreshMemoryState = useCallback(async () => {
@@ -1674,35 +1646,20 @@ export default function Chat() {
     }
 
     const mobile = isMobile();
-    const voiceProfile = resolveVoiceProfile(selectedVoiceId);
+    if (mobile && !mobileTtsInteractionRef.current) {
+      return;
+    }
+
     ttsPlaybackQueueRef.current = ttsPlaybackQueueRef.current
       .catch(() => undefined)
       .then(async () => {
-        if (mobile) {
-          if (!mobileTtsInteractionRef.current) {
-            return;
-          }
-
-          setIsSwaraSpeaking(true);
-          await speakWithBrowserTts(trimmed);
-          setIsSwaraSpeaking(false);
-          return;
-        }
-
-        await playInworldVoice(trimmed, {
-          voiceId: voiceProfile.voiceId,
-          speakingRate: voiceProfile.speakingRate,
-          temperature: voiceProfile.temperature,
-          onPlayingChange: (playing) => {
-            setIsSwaraSpeaking(playing);
-          },
-        });
+        await playVoice(trimmed);
       })
       .catch((error) => {
         console.error(`TTS playback failed (${contextTag})`, error);
         setIsSwaraSpeaking(false);
       });
-  }, [isMuted, selectedVoiceId]);
+  }, [isMuted]);
 
   const streamResponse = useCallback(async (
     _prompt: string,
@@ -1857,9 +1814,6 @@ export default function Chat() {
     if (mobile) {
       mobileTtsInteractionRef.current = true;
       primeBrowserTtsVoices();
-    } else {
-      void unlockSwaraInworldAudio();
-      void unlockInworldTtsAudio();
     }
 
     if (!isGuest && user?.uid) {
@@ -2058,9 +2012,8 @@ export default function Chat() {
     setIsMuted((previous) => {
       const nextMuted = !previous;
       if (nextMuted) {
-        void stopSwaraInworldPlayback();
-        stopInworldVoicePlayback();
         stopBrowserTtsPlayback();
+        stopInworldTtsPlayback();
         setIsSwaraSpeaking(false);
       }
       return nextMuted;
@@ -2223,8 +2176,6 @@ export default function Chat() {
               onSectionChange={setActiveSettingsSection}
               languageMode={replyLanguageMode}
               onLanguageModeChange={handleLanguageModeChange}
-              selectedVoice={selectedVoiceId}
-              onVoiceChange={handleVoiceChange}
               memoryEnabled={memoryEnabled}
               onMemoryToggle={handleMemoryToggle}
               onManageMemory={handleOpenMemoryFromSettings}

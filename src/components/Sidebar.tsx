@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { Heart, LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
+import { LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -232,7 +232,11 @@ export default function Sidebar({
       >
         <div className="border-b border-pink-500/10 px-6 pb-4 pt-6">
           <div className="mb-5 flex items-center justify-start gap-2">
-            <Heart className="h-4 w-4 shrink-0 text-[#FF69B4]" fill="currentColor" />
+            <img
+              src="/logo.png"
+              alt="Saheli AI logo"
+              className="h-8 w-8 shrink-0 rounded-full border border-pink-400/40 object-cover"
+            />
             <div
               className={`text-base font-bold tracking-tight ${
                 isLightMode
@@ -241,7 +245,7 @@ export default function Sidebar({
               }`}
               style={{ fontFamily: "'Lexend', 'Outfit', system-ui, sans-serif" }}
             >
-              Saheli Ai
+              Saheli AI
             </div>
           </div>
 

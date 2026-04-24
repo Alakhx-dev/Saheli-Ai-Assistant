@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
 import { clearIndexedDbPersistence, initializeFirestore, terminate } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -15,6 +15,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+void setPersistence(auth, browserLocalPersistence).catch((error) => {
+  console.error("Failed to set Firebase auth persistence", error);
+});
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 });
