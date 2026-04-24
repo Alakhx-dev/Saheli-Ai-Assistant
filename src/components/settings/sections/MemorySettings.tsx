@@ -1,6 +1,7 @@
 import React from "react";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
+import ToggleSwitch from "@/components/settings/ToggleSwitch";
 import { getLang } from "@/lib/useLanguage";
 
 interface MemorySettingsProps {
@@ -22,20 +23,11 @@ function MemorySettings({ memoryEnabled, onMemoryToggle, onManageMemory }: Memor
         title={t.settings.referenceSavedMemory}
         description={t.settings.referenceSavedMemoryDescription}
       >
-        <button
-          type="button"
-          onClick={() => onMemoryToggle(!memoryEnabled)}
-          className={`h-6 w-10 rounded-full p-1 transition duration-200 ${
-            memoryEnabled ? "bg-pink-500" : "bg-pink-900/30"
-          }`}
-          aria-label="Toggle memory"
-        >
-          <div
-            className={`h-4 w-4 rounded-full bg-white shadow-sm transition duration-200 ${
-              memoryEnabled ? "translate-x-4" : ""
-            }`}
-          />
-        </button>
+        <ToggleSwitch
+          checked={memoryEnabled}
+          onCheckedChange={onMemoryToggle}
+          ariaLabel="Toggle memory"
+        />
       </SettingsRow>
       <SettingsRow
         title={t.settings.manageMemory}

@@ -4,6 +4,7 @@ import {
   INWORLD_TTS_DEFAULT_VOICE_ID,
   INWORLD_TTS_MODEL_ID,
 } from "@/lib/tts-config";
+import { speakWithBrowserTts } from "@/lib/browser-tts";
 
 const INWORLD_TTS_VOICE_ID = INWORLD_TTS_DEFAULT_VOICE_ID;
 const INWORLD_TTS_LANGUAGE_CODE = "hi-IN";
@@ -348,11 +349,16 @@ export async function streamInworldVoice(text: string, options?: StreamOptions) 
     playbackQueue = playbackQueue.then(async () => {
       const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
       currentAudio = audio;
-      await audio.play();
-      await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-      });
+      try {
+        await audio.play();
+        await new Promise<void>((resolve) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+        });
+      } catch (error) {
+        console.warn("Inworld TTS playback failed (possibly autoplay blocked). Falling back to browser TTS.", error);
+        await speakWithBrowserTts(text);
+      }
       if (currentAudio === audio) {
         currentAudio = null;
       }

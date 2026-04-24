@@ -523,7 +523,7 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
       <div
         className={`
         max-w-[84%] md:max-w-[72%] px-5 py-3.5 text-sm leading-relaxed font-medium relative text-neutral-50
-        transition-all duration-300
+        transition-all duration-300 saheli-bubble-float
         ${isNew ? "msg-sheen" : ""}
         ${msg.role === "user"
           ? "saheli-user-bubble rounded-2xl rounded-br-sm"
@@ -608,39 +608,72 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
 const BackgroundComponent = memo(function BackgroundComponent({ isSidebarOpen }: { isSidebarOpen: boolean }) {
   return (
     <div
-      className={`absolute inset-y-0 right-0 z-0 overflow-hidden bg-[#0a0a0f] transition-all duration-300 ${
+      className={`absolute inset-y-0 right-0 z-0 overflow-hidden transition-all duration-300 ${
         isSidebarOpen ? "md:left-72" : "left-0"
       }`}
+      style={{
+        background: 'linear-gradient(160deg, #090314 0%, #100821 52%, #0d0419 100%)',
+        contain: 'paint',
+      }}
     >
-      {/* Animated floating mesh blobs */}
-      <div className="absolute inset-0 overflow-hidden">
+      {/* Cinematic radial glow layers — very soft, slow moving */}
+      <div className="absolute inset-0 overflow-hidden" style={{ contain: 'strict' }}>
         <div
-          className="blob-drift-1 absolute rounded-full opacity-40 blur-[100px]"
+          className="saheli-glow-drift-1 absolute rounded-full"
           style={{
-            width: '45vw', height: '45vw', maxWidth: '600px', maxHeight: '600px',
-            top: '-10%', left: '-10%',
+            width: '50vw', height: '50vw', maxWidth: '700px', maxHeight: '700px',
+            top: '-12%', left: '-8%',
             background: 'radial-gradient(circle, var(--mood-blob-1), transparent 70%)',
+            opacity: 0.06,
+            filter: 'blur(80px)',
+            willChange: 'transform',
           }}
         />
         <div
-          className="blob-drift-2 absolute rounded-full opacity-30 blur-[120px]"
+          className="saheli-glow-drift-2 absolute rounded-full"
           style={{
-            width: '40vw', height: '40vw', maxWidth: '550px', maxHeight: '550px',
+            width: '45vw', height: '45vw', maxWidth: '650px', maxHeight: '650px',
             bottom: '-15%', right: '-5%',
             background: 'radial-gradient(circle, var(--mood-blob-2), transparent 70%)',
+            opacity: 0.05,
+            filter: 'blur(90px)',
+            willChange: 'transform',
           }}
         />
         <div
-          className="blob-drift-3 absolute rounded-full opacity-25 blur-[90px]"
+          className="saheli-glow-drift-3 absolute rounded-full"
           style={{
-            width: '30vw', height: '30vw', maxWidth: '400px', maxHeight: '400px',
-            top: '40%', left: '50%',
+            width: '35vw', height: '35vw', maxWidth: '500px', maxHeight: '500px',
+            top: '35%', left: '55%',
             background: 'radial-gradient(circle, var(--mood-blob-3), transparent 70%)',
+            opacity: 0.04,
+            filter: 'blur(70px)',
+            willChange: 'transform',
           }}
         />
       </div>
-      {/* Subtle star-dust noise overlay */}
-      <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 0.7px, transparent 0.7px)', backgroundSize: '3px 3px' }} />
+
+      {/* Center spotlight — soft light for character focus area */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          top: '30%', left: '50%', transform: 'translate(-50%, -50%)',
+          width: '60vw', height: '50vh', maxWidth: '800px',
+          background: 'radial-gradient(ellipse at center, rgba(255, 220, 240, 0.03) 0%, transparent 65%)',
+          filter: 'blur(40px)',
+        }}
+      />
+
+      {/* Cinematic noise/grain texture overlay */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 0.5px, transparent 0.5px)',
+          backgroundSize: '3px 3px',
+          opacity: 0.04,
+          mixBlendMode: 'overlay',
+        }}
+      />
     </div>
   );
 });
@@ -2124,7 +2157,7 @@ export default function Chat() {
             ) : null}
             <form
               onSubmit={handleSubmit}
-              className="relative flex items-center bg-[#1a0a14]/50 border border-pink-500/15 backdrop-blur-md rounded-[30px] overflow-visible shadow-[0_18px_50px_rgba(10,2,15,0.6),inset_0_1px_0_rgba(255,255,255,0.06)] transition-all duration-300"
+              className="relative flex items-center saheli-input-bar w-full"
             >
               <input
                 type="text"
@@ -2138,7 +2171,7 @@ export default function Chat() {
                 type="button"
                 onClick={toggleMic}
                 aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
-                className={`p-2 ml-1 rounded-full transition-all ${
+                className={`p-2 ml-1 rounded-full saheli-icon-hover ${
                   isListening
                     ? "bg-pink-500/20 text-pink-400 animate-pulse"
                     : "bg-pink-500/5 text-pink-300/50 hover:text-pink-200 hover:bg-pink-500/10"
@@ -2151,11 +2184,9 @@ export default function Chat() {
                 onPointerDown={handleSendInteraction}
                 aria-label={t.composer.sendMessage}
                 disabled={!input.trim() || isLoading}
-                className="p-2 mr-2 transition-all"
+                className="mr-3 saheli-send-btn saheli-btn-hover"
               >
-                <div className="bg-gradient-to-r from-pink-400 to-fuchsia-500 hover:from-pink-300 hover:to-fuchsia-400 p-2.5 rounded-full text-white shadow-[0_4px_16px_rgba(236,72,153,0.3)] hover:scale-105 transition-all disabled:opacity-50 disabled:hover:scale-100 disabled:shadow-none">
-                  <Send className="w-4 h-4" />
-                </div>
+                <Send className="w-5 h-5" />
               </button>
             </form>
             {pendingMobileVisionRequest && isMobile() && (

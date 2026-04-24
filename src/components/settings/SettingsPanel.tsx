@@ -64,9 +64,9 @@ function SettingsPanel({
   ], [t]);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-xl border border-pink-500/10 bg-[#0d0510] p-0 text-white">
+      <DialogContent className="h-[min(44rem,calc(100vh-2rem))] w-[min(70rem,calc(100vw-2rem))] max-w-6xl overflow-hidden rounded-[28px] border border-pink-500/20 bg-[#160822]/60 backdrop-blur-2xl p-0 text-white shadow-[0_24px_60px_rgba(10,2,15,0.7),inset_0_1px_0_rgba(255,255,255,0.1)]">
         <div className="grid h-full min-h-0 md:grid-cols-[240px_minmax(0,1fr)]">
-          <aside className="border-b border-pink-500/8 bg-[#0a0810] px-4 py-5 md:border-b-0 md:border-r">
+          <aside className="border-b border-pink-500/15 bg-[#0a0510]/40 px-4 py-5 md:border-b-0 md:border-r">
             <DialogHeader className="space-y-2 px-2 text-left">
               <DialogTitle className="text-xl font-semibold text-white">{t.settings.title}</DialogTitle>
               <DialogDescription className="text-sm text-white/50">
