@@ -295,6 +295,7 @@ async function requestGroq(
   const payloadMessages = buildMessages(messages, imageBase64, emotion, memoryProfile, identity, memoryMode);
   const model = imageBase64 ? GROQ_VISION_MODEL : GROQ_TEXT_MODEL;
   const maxTokens = shouldUseDetailedReply(messages) ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
+  const shouldStream = Boolean(onChunk) && !imageBase64;
   if (payloadMessages.length <= 1) {
     return FALLBACK_MESSAGE;
   }
@@ -315,7 +316,7 @@ async function requestGroq(
           messages: payloadMessages,
           temperature: 0.8,
           max_tokens: maxTokens,
-          stream: Boolean(onChunk),
+          stream: shouldStream,
         }),
         signal: controller.signal,
       });
@@ -332,7 +333,7 @@ async function requestGroq(
         throw new Error(`Groq request failed with status ${response.status}: ${errorText}`);
       }
 
-      if (onChunk && response.body) {
+      if (shouldStream && response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";

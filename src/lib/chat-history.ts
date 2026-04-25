@@ -23,6 +23,7 @@ export interface ChatSessionSummary {
   title: string;
   createdAt: number;
   updatedAt: number;
+  titleGenerated?: boolean;
 }
 
 export interface StoredChatMessage extends ChatMessage {
@@ -73,6 +74,7 @@ export async function createChatSession(user: User | null): Promise<string> {
       title: "New Chat",
       createdAt: now,
       updatedAt: now,
+      titleGenerated: false,
       messages: [],
     };
     writeLocalChats(chats);
@@ -82,6 +84,7 @@ export async function createChatSession(user: User | null): Promise<string> {
   await setDoc(doc(db, "chats", chatId), {
     userId: user.uid,
     title: "New Chat",
+    titleGenerated: false,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdAtMs: now,
@@ -99,6 +102,7 @@ export async function saveChatMessage(chatId: string, message: StoredChatMessage
       title: "New Chat",
       createdAt: message.createdAt,
       updatedAt: message.createdAt,
+      titleGenerated: false,
       messages: [],
     };
 
@@ -131,6 +135,7 @@ export async function updateChatSessionTitle(chatId: string, title: string, user
     }
 
     existingChat.title = trimmedTitle;
+    existingChat.titleGenerated = true;
     existingChat.updatedAt = Date.now();
     chats[chatId] = existingChat;
     writeLocalChats(chats);
@@ -139,6 +144,7 @@ export async function updateChatSessionTitle(chatId: string, title: string, user
 
   await updateDoc(doc(db, "chats", chatId), {
     title: trimmedTitle,
+    titleGenerated: true,
     updatedAt: serverTimestamp(),
     updatedAtMs: Date.now(),
   });
@@ -153,6 +159,7 @@ export async function loadChatSessions(user: User | null): Promise<ChatSessionSu
         title: chat.title,
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
+        titleGenerated: typeof chat.titleGenerated === "boolean" ? chat.titleGenerated : chat.title !== "New Chat",
       })),
     );
   }
@@ -166,6 +173,9 @@ export async function loadChatSessions(user: User | null): Promise<ChatSessionSu
         title: typeof data.title === "string" ? data.title : "New Chat",
         createdAt: typeof data.createdAtMs === "number" ? data.createdAtMs : 0,
         updatedAt: typeof data.updatedAtMs === "number" ? data.updatedAtMs : 0,
+        titleGenerated: typeof data.titleGenerated === "boolean"
+          ? data.titleGenerated
+          : (typeof data.title === "string" ? data.title !== "New Chat" : false),
       };
     }),
   );

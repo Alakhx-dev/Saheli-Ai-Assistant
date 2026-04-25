@@ -23,7 +23,7 @@ import {
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
-import { detectEmotionFromImage } from "@/lib/emotion-service";
+import { analyzeFaceImage } from "@/lib/emotion-service";
 import { formatText, getLang, getStoredLanguage, UI_LANGUAGE_STORAGE_KEY } from "@/lib/useLanguage";
 import {
   CREATOR_NAME,
@@ -199,6 +199,8 @@ interface PendingMobileVisionRequest {
   memoryProfile: MemoryProfile | null;
   identity: UserIdentityContext;
 }
+
+const CAMERA_ANALYSIS_FALLBACK_MESSAGE = "Camera analysis failed, try again";
 
 type TitleMood = "flirty" | "sad" | "funny" | "serious" | "neutral";
 
@@ -578,75 +580,80 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   );
 });
 
-const BackgroundComponent = memo(function BackgroundComponent({ isSidebarOpen }: { isSidebarOpen: boolean }) {
+const BackgroundComponent = memo(function BackgroundComponent() {
   return (
-    <div
-      className={`absolute inset-y-0 right-0 z-0 overflow-hidden transition-all duration-300 ${
-        isSidebarOpen ? "md:left-72" : "left-0"
-      }`}
-      style={{
-        background: 'linear-gradient(160deg, #090314 0%, #100821 52%, #0d0419 100%)',
-        contain: 'paint',
-      }}
-    >
-      {/* Cinematic radial glow layers — very soft, slow moving */}
-      <div className="absolute inset-0 overflow-hidden" style={{ contain: 'strict' }}>
+    <div className="absolute inset-0 z-0 overflow-hidden">
+      <video
+        className="anime-bg-video"
+        src="/anime-girl.mp4"
+        autoPlay
+        loop
+        muted
+        playsInline
+      />
+      <div className="chat-overlay" />
+      <div
+        className="absolute inset-0 z-0 overflow-hidden"
+        style={{
+          contain: 'paint',
+        }}
+      >
+        <div className="absolute inset-0 overflow-hidden" style={{ contain: 'strict' }}>
+          <div
+            className="saheli-glow-drift-1 absolute rounded-full"
+            style={{
+              width: '50vw', height: '50vw', maxWidth: '700px', maxHeight: '700px',
+              top: '-12%', left: '-8%',
+              background: 'radial-gradient(circle, var(--mood-blob-1), transparent 70%)',
+              opacity: 0.05,
+              filter: 'blur(80px)',
+              willChange: 'transform',
+            }}
+          />
+          <div
+            className="saheli-glow-drift-2 absolute rounded-full"
+            style={{
+              width: '45vw', height: '45vw', maxWidth: '650px', maxHeight: '650px',
+              bottom: '-15%', right: '-5%',
+              background: 'radial-gradient(circle, var(--mood-blob-2), transparent 70%)',
+              opacity: 0.04,
+              filter: 'blur(90px)',
+              willChange: 'transform',
+            }}
+          />
+          <div
+            className="saheli-glow-drift-3 absolute rounded-full"
+            style={{
+              width: '35vw', height: '35vw', maxWidth: '500px', maxHeight: '500px',
+              top: '35%', left: '55%',
+              background: 'radial-gradient(circle, var(--mood-blob-3), transparent 70%)',
+              opacity: 0.03,
+              filter: 'blur(70px)',
+              willChange: 'transform',
+            }}
+          />
+        </div>
+
         <div
-          className="saheli-glow-drift-1 absolute rounded-full"
+          className="absolute pointer-events-none"
           style={{
-            width: '50vw', height: '50vw', maxWidth: '700px', maxHeight: '700px',
-            top: '-12%', left: '-8%',
-            background: 'radial-gradient(circle, var(--mood-blob-1), transparent 70%)',
-            opacity: 0.06,
-            filter: 'blur(80px)',
-            willChange: 'transform',
+            top: '30%', left: '50%', transform: 'translate(-50%, -50%)',
+            width: '60vw', height: '50vh', maxWidth: '800px',
+            background: 'radial-gradient(ellipse at center, rgba(255, 220, 240, 0.02) 0%, transparent 65%)',
+            filter: 'blur(40px)',
           }}
         />
+
         <div
-          className="saheli-glow-drift-2 absolute rounded-full"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            width: '45vw', height: '45vw', maxWidth: '650px', maxHeight: '650px',
-            bottom: '-15%', right: '-5%',
-            background: 'radial-gradient(circle, var(--mood-blob-2), transparent 70%)',
-            opacity: 0.05,
-            filter: 'blur(90px)',
-            willChange: 'transform',
-          }}
-        />
-        <div
-          className="saheli-glow-drift-3 absolute rounded-full"
-          style={{
-            width: '35vw', height: '35vw', maxWidth: '500px', maxHeight: '500px',
-            top: '35%', left: '55%',
-            background: 'radial-gradient(circle, var(--mood-blob-3), transparent 70%)',
-            opacity: 0.04,
-            filter: 'blur(70px)',
-            willChange: 'transform',
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 0.5px, transparent 0.5px)',
+            backgroundSize: '3px 3px',
+            opacity: 0.03,
+            mixBlendMode: 'overlay',
           }}
         />
       </div>
-
-      {/* Center spotlight — soft light for character focus area */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: '30%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: '60vw', height: '50vh', maxWidth: '800px',
-          background: 'radial-gradient(ellipse at center, rgba(255, 220, 240, 0.03) 0%, transparent 65%)',
-          filter: 'blur(40px)',
-        }}
-      />
-
-      {/* Cinematic noise/grain texture overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: 'radial-gradient(rgba(255,255,255,0.12) 0.5px, transparent 0.5px)',
-          backgroundSize: '3px 3px',
-          opacity: 0.04,
-          mixBlendMode: 'overlay',
-        }}
-      />
     </div>
   );
 });
@@ -711,7 +718,7 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
   const [input, setInput] = useState("");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobile());
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -736,6 +743,24 @@ export default function Chat() {
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const messagesRef = useRef<ChatMessage[]>([]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncSidebarState = () => {
+      setIsSidebarOpen(!mediaQuery.matches);
+    };
+
+    syncSidebarState();
+    mediaQuery.addEventListener("change", syncSidebarState);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncSidebarState);
+    };
+  }, []);
   const currentChatIdRef = useRef<string | null>(null);
   const titleUpdateTimeoutRef = useRef<number | null>(null);
   const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
@@ -1515,78 +1540,38 @@ export default function Chat() {
     await refreshChatSessions(currentChatId === chatId ? chatId : currentChatId);
   }, [currentChatId, refreshChatSessions, user]);
 
-  const generateTitle = useCallback(async (message: string) => {
-    const response = await fetch("/api/title", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message }),
-    });
+  const requestChatTitle = useCallback(async (message: string) => {
+    try {
+      const response = await fetch("/api/title", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Title API failed: ${response.status}`);
-    }
-
-    const data = (await response.json()) as { title?: string };
-    const title = (data.title ?? "").trim();
-    return title
-      .split(/\s+/)
-      .slice(0, 6)
-      .join(" ");
-  }, []);
-
-  const scheduleChatTitleUpdate = useCallback((chatId: string | null, nextTitle: string) => {
-    const trimmedTitle = nextTitle.trim();
-    if (!chatId || !trimmedTitle) {
-      return;
-    }
-
-    const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
-    if (trimmedTitle === currentTitle) {
-      return;
-    }
-
-    const pendingUpdate = pendingTitleUpdateRef.current;
-    if (pendingUpdate && pendingUpdate.chatId === chatId && pendingUpdate.title === trimmedTitle) {
-      return;
-    }
-
-    pendingTitleUpdateRef.current = { chatId, title: trimmedTitle };
-    if (titleUpdateTimeoutRef.current) {
-      window.clearTimeout(titleUpdateTimeoutRef.current);
-    }
-
-    titleUpdateTimeoutRef.current = window.setTimeout(() => {
-      const queuedUpdate = pendingTitleUpdateRef.current;
-      pendingTitleUpdateRef.current = null;
-      titleUpdateTimeoutRef.current = null;
-
-      if (!queuedUpdate) {
-        return;
+      if (!response.ok) {
+        return message.slice(0, 30);
       }
 
-      void updateChatSessionTitle(queuedUpdate.chatId, queuedUpdate.title, user)
-        .then(() => refreshChatSessions(queuedUpdate.chatId))
-        .catch((error) => {
-          console.error("Failed to update debounced chat title", error);
-        });
-    }, 1000);
-  }, [refreshChatSessions, user]);
+      const data = (await response.json()) as { title?: string };
+      const title = (data.title ?? "").trim();
+      return title || message.slice(0, 30);
+    } catch {
+      return message.slice(0, 30);
+    }
+  }, []);
 
-  const syncSmartChatTitle = useCallback(async (chatId: string, history: ChatMessage[]) => {
-    const currentTitle = chatSessionsRef.current.find((chat) => chat.id === chatId)?.title ?? "New Chat";
-    if (!shouldRefreshGeneratedTitle(history.length, currentTitle, language)) {
+  const generateFirstChatTitle = useCallback(async (chatId: string, firstMessage: string) => {
+    const currentChat = chatSessionsRef.current.find((chat) => chat.id === chatId);
+    if (currentChat?.titleGenerated) {
       return;
     }
 
-    const nextTitle = generateChatTitle(history, language);
-    if (nextTitle === currentTitle) {
-      return;
-    }
-
-    scheduleChatTitleUpdate(chatId, nextTitle);
-  }, [language, scheduleChatTitleUpdate]);
+    const title = await requestChatTitle(firstMessage);
+    await updateChatSessionTitle(chatId, title, user);
+    await refreshChatSessions(chatId);
+  }, [refreshChatSessions, requestChatTitle, user]);
 
   const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatIdRef.current ?? routeChatId ?? null;
@@ -1697,7 +1682,7 @@ export default function Chat() {
     }
 
     mobileVisionProcessingRequestIdRef.current = request.id;
-    let detectedEmotion: EmotionLabel | undefined;
+    let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
 
     pendingMobileVisionRequestRef.current = null;
     setPendingMobileVisionRequest(null);
@@ -1707,7 +1692,6 @@ export default function Chat() {
       const requestIdentity = getRequestIdentityContext();
 
       if (imageBase64) {
-        detectedEmotion = await detectEmotionFromImage(imageBase64);
         if (memoryEnabled) {
           try {
             await uploadMemoryImage(imageBase64, "upload");
@@ -1715,17 +1699,44 @@ export default function Chat() {
             console.error("Failed to save memory image", error);
           }
         }
+
+        analysisResult = await analyzeFaceImage(imageBase64);
+        if (!analysisResult.ok) {
+          saveFinalMessage(request.chatId, analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE);
+          if (isGuest) {
+            saveLocal({ role: "assistant", content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE });
+          }
+          void persistChatMessage(request.chatId, {
+            role: "model",
+            content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+            createdAt: Date.now(),
+          }).catch((error) => {
+            console.error("Failed to persist camera fallback reply", error);
+          });
+          return;
+        }
       }
+
+      const visionAnalysis = analysisResult?.analysis?.trim() || "";
+      const visionPromptHistory = visionAnalysis
+        ? [
+            ...request.history.slice(0, -1),
+            {
+              role: "user" as const,
+              content: `${request.history[request.history.length - 1]?.content ?? ""}\n\nUser image analysis: ${visionAnalysis}`,
+            },
+          ]
+        : request.history;
 
       lastMsgCountRef.current = request.history.length;
       let spokenLeadSentence = "";
       let firstSentenceQueued = false;
       const responseText = await streamResponse(
-        request.history[request.history.length - 1]?.content ?? "",
+        visionPromptHistory[visionPromptHistory.length - 1]?.content ?? "",
         request.chatId,
-        request.history,
-        imageBase64,
-        detectedEmotion,
+        visionPromptHistory,
+        undefined,
+        analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         request.memoryProfile,
         (partialText) => {
@@ -1765,9 +1776,6 @@ export default function Chat() {
         console.error("Failed to persist model reply (mobile vision)", error);
       });
 
-      void syncSmartChatTitle(request.chatId, nextHistory).catch((error) => {
-        console.error("Failed to update smart chat title (mobile vision)", error);
-      });
     } catch (error) {
       console.error("Failed to complete pending vision request", error);
     } finally {
@@ -1862,24 +1870,10 @@ export default function Chat() {
     }
 
     if (nextHistory.length === 1) {
-      // First message — generate title
-      void generateTitle(userText)
-        .then(async (title) => {
-          if (!title) {
-            return;
-          }
-          scheduleChatTitleUpdate(chatId, title);
-        })
-        .catch(() => {
-          void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
-            console.error("Failed to update fallback smart chat title", error);
-          });
-        });
+      void generateFirstChatTitle(chatId, userText).catch((error) => {
+        console.error("Failed to generate first chat title", error);
+      });
     }
-
-    void syncSmartChatTitle(chatId, nextHistory).catch((error) => {
-      console.error("Failed to update smart chat title", error);
-    });
 
     let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
     if (memoryEnabled) {
@@ -1924,7 +1918,40 @@ export default function Chat() {
       let spokenLeadSentence = "";
       let firstSentenceQueued = false;
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
-      const detectedEmotion = base64Image ? await detectEmotionFromImage(base64Image) : undefined;
+      let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
+
+      if (shouldUseVision) {
+        if (!base64Image) {
+          saveFinalMessage(chatId, CAMERA_ANALYSIS_FALLBACK_MESSAGE);
+          if (isGuest) {
+            saveLocal({ role: "assistant", content: CAMERA_ANALYSIS_FALLBACK_MESSAGE });
+          }
+          void persistChatMessage(chatId, {
+            role: "model",
+            content: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+            createdAt: Date.now(),
+          }).catch((error) => {
+            console.error("Failed to persist camera fallback reply", error);
+          });
+          return;
+        }
+
+        analysisResult = await analyzeFaceImage(base64Image);
+        if (!analysisResult.ok) {
+          saveFinalMessage(chatId, analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE);
+          if (isGuest) {
+            saveLocal({ role: "assistant", content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE });
+          }
+          void persistChatMessage(chatId, {
+            role: "model",
+            content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+            createdAt: Date.now(),
+          }).catch((error) => {
+            console.error("Failed to persist camera fallback reply", error);
+          });
+          return;
+        }
+      }
 
       if (base64Image && memoryEnabled) {
         try {
@@ -1934,12 +1961,23 @@ export default function Chat() {
         }
       }
 
+      const visionAnalysis = analysisResult?.analysis?.trim() || "";
+      const visionPromptHistory = visionAnalysis
+        ? [
+            ...nextHistory.slice(0, -1),
+            {
+              role: "user" as const,
+              content: `${userText}\n\nUser image analysis: ${visionAnalysis}`,
+            },
+          ]
+        : nextHistory;
+
       const responseText = await streamResponse(
-        userText,
+        visionPromptHistory[visionPromptHistory.length - 1]?.content ?? userText,
         chatId,
-        nextHistory,
-        base64Image,
-        detectedEmotion,
+        visionPromptHistory,
+        undefined,
+        analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         nextMemoryProfile,
         (partialText) => {
@@ -1981,9 +2019,6 @@ export default function Chat() {
         console.error("Failed to persist model reply", error);
       });
 
-      void syncSmartChatTitle(chatId, finalHistory).catch((error) => {
-        console.error("Failed to update smart chat title", error);
-      });
     } catch (error) {
       console.error("Failed to complete chat response", error);
     } finally {
@@ -2031,11 +2066,11 @@ export default function Chat() {
 
   return (
     <div
-      className="relative flex h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
+      className="chat-page-wrapper relative h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
-      <BackgroundComponent isSidebarOpen={isSidebarOpen} />
+      <BackgroundComponent />
       <Sidebar
         isOpen={isSidebarOpen}
         chatSessions={chatSessions}
@@ -2070,21 +2105,20 @@ export default function Chat() {
         onLogout={() => void handleLogout()}
       />
 
-      <div className={`flex h-full flex-1 flex-col relative z-10 transition-[margin] duration-300 ${isSidebarOpen ? "md:ml-72" : "md:ml-0"}`} style={{ isolation: 'isolate' }}>
-        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <button
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              aria-label={t.header.toggleSidebar}
-              className="p-2 text-white/60 hover:text-white rounded-lg hover:bg-pink-500/5 transition-colors hidden md:block"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+      <button
+        type="button"
+        onClick={() => setIsSidebarOpen((previous) => !previous)}
+        aria-label={t.header.toggleSidebar}
+        className="fixed left-4 top-4 z-[110] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white shadow-[0_8px_32px_rgba(192,38,211,0.18)] backdrop-blur-xl transition duration-300 hover:bg-black/60 hover:text-pink-200"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
 
-            <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm" style={{ fontFamily: "'Sour Gummy', cursive" }}>
-              <Heart className="w-5 h-5 fill-current" />
-              Saheli AI
-            </div>
+      <div className="chat-content relative z-10 flex h-full w-full flex-col" style={{ isolation: 'isolate' }}>
+        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
+          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm pointer-events-auto" style={{ fontFamily: "'Sour Gummy', cursive" }}>
+            <Heart className="w-5 h-5 fill-current" />
+            Saheli AI
           </div>
         </header>
 
@@ -2103,69 +2137,69 @@ export default function Chat() {
         </div>
 
         <div className="flex-none p-4 max-w-4xl mx-auto w-full group relative mt-auto z-10 backdrop-blur-sm pt-8">
-            {dbStatus ? (
-              <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
-                {dbStatus}
-              </div>
-            ) : null}
-            <form
-              onSubmit={handleSubmit}
-              className="relative flex items-center saheli-input-bar w-full"
+          {dbStatus ? (
+            <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+              {dbStatus}
+            </div>
+          ) : null}
+          <form
+            onSubmit={handleSubmit}
+            className="relative flex items-center saheli-input-bar w-full"
+          >
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={inputPlaceholder}
+              className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/55 focus:outline-none font-sans focus:ring-0 border-none"
+              style={{ fontSize: "15px" }}
+            />
+            <button
+              type="button"
+              onClick={toggleMic}
+              aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
+              className={`p-2 ml-1 rounded-full saheli-icon-hover ${
+                isListening
+                  ? "bg-pink-500/20 text-pink-400 animate-pulse"
+                  : "bg-pink-500/5 text-pink-300/50 hover:text-pink-200 hover:bg-pink-500/10"
+              }`}
             >
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder={inputPlaceholder}
-                className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/55 focus:outline-none font-sans focus:ring-0 border-none"
-                style={{ fontSize: "15px" }}
-              />
+              <Mic className="w-5 h-5" />
+            </button>
+            <button
+              type="submit"
+              onPointerDown={handleSendInteraction}
+              aria-label={t.composer.sendMessage}
+              disabled={!input.trim() || isLoading}
+              className="mr-3 saheli-send-btn saheli-btn-hover"
+            >
+              <Send className="w-5 h-5" />
+            </button>
+          </form>
+          {pendingMobileVisionRequest && isMobile() && (
+            <div className="mt-3 flex justify-center">
               <button
                 type="button"
-                onClick={toggleMic}
-                aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
-                className={`p-2 ml-1 rounded-full saheli-icon-hover ${
-                  isListening
-                    ? "bg-pink-500/20 text-pink-400 animate-pulse"
-                    : "bg-pink-500/5 text-pink-300/50 hover:text-pink-200 hover:bg-pink-500/10"
-                }`}
+                onClick={handleMobileCameraOpen}
+                className="rounded-full border border-pink-400/30 bg-white/10 px-4 py-2 text-sm text-pink-100 backdrop-blur-xl transition hover:bg-white/15 hover:text-white"
               >
-                <Mic className="w-5 h-5" />
+                {t.composer.openCamera}
               </button>
-              <button
-                type="submit"
-                onPointerDown={handleSendInteraction}
-                aria-label={t.composer.sendMessage}
-                disabled={!input.trim() || isLoading}
-                className="mr-3 saheli-send-btn saheli-btn-hover"
-              >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
-            {pendingMobileVisionRequest && isMobile() && (
-              <div className="mt-3 flex justify-center">
-                <button
-                  type="button"
-                  onClick={handleMobileCameraOpen}
-                  className="rounded-full border border-pink-400/30 bg-white/10 px-4 py-2 text-sm text-pink-100 backdrop-blur-xl transition hover:bg-white/15 hover:text-white"
-                >
-                  {t.composer.openCamera}
-                </button>
-                <input
-                  ref={mobileCameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  className="hidden"
-                  aria-label="Capture photo"
-                  onChange={handleMobileCameraChange}
-                />
-              </div>
-            )}
-            <div className="text-center mt-3 text-[10px] tracking-widest uppercase text-white/40 font-medium pb-2">
-              {t.composer.footer}
+              <input
+                ref={mobileCameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="user"
+                className="hidden"
+                aria-label="Capture photo"
+                onChange={handleMobileCameraChange}
+              />
             </div>
+          )}
+          <div className="text-center mt-3 text-[10px] tracking-widest uppercase text-white/40 font-medium pb-2">
+            {t.composer.footer}
           </div>
+        </div>
 
         <Suspense fallback={null}>
           {settingsPanelOpen ? (

@@ -1,18 +1,26 @@
 import type { EmotionLabel } from "@/lib/ai-service";
 
-interface EmotionDetectionResponse {
+export interface FaceAnalysisResponse {
+  ok: boolean;
   emotion: EmotionLabel | null;
+  analysis: string;
+  fallbackMessage?: string;
 }
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const CAMERA_ANALYSIS_FALLBACK_MESSAGE = "Camera analysis failed, try again";
 
-export async function detectEmotionFromImage(imageBase64: string): Promise<EmotionLabel | undefined> {
-  if (!SUPABASE_URL || !imageBase64) {
-    return undefined;
+export async function analyzeFaceImage(imageBase64: string): Promise<FaceAnalysisResponse> {
+  if (!imageBase64) {
+    return {
+      ok: false,
+      emotion: null,
+      analysis: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+      fallbackMessage: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+    };
   }
 
   try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/luxand-emotion`, {
+    const response = await fetch("/api/analyze-face", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -22,15 +30,31 @@ export async function detectEmotionFromImage(imageBase64: string): Promise<Emoti
       }),
     });
 
-    if (!response.ok) {
-      return undefined;
+    const data = (await response.json().catch(() => ({}))) as Partial<FaceAnalysisResponse>;
+    const fallbackMessage = data.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE;
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        emotion: null,
+        analysis: data.analysis?.trim() || fallbackMessage,
+        fallbackMessage,
+      };
     }
 
-    const data = (await response.json()) as EmotionDetectionResponse;
-    return data.emotion ?? undefined;
+    return {
+      ok: true,
+      emotion: data.emotion ?? null,
+      analysis: data.analysis?.trim() || "Luxand detected a neutral expression.",
+    };
   } catch (error) {
-    console.error("Emotion detection failed", error);
-    return undefined;
+    console.error("Emotion analysis failed", error);
+    return {
+      ok: false,
+      emotion: null,
+      analysis: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+      fallbackMessage: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
+    };
   }
 }
 

@@ -205,9 +205,7 @@ export default function Sidebar({
   };
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
-  const sidebarTone = isLightMode
-    ? "border-neutral-300/70 bg-[#f5f6f8]/92 text-neutral-900"
-    : "border-pink-500/10 bg-[#0a0a0f]/95 text-white";
+  const sidebarTone = isLightMode ? "text-neutral-900" : "text-white";
   const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-pink-500/10 bg-[#1a0a14]/40";
   const rowTone = isLightMode
     ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"
@@ -226,9 +224,7 @@ export default function Sidebar({
         }`}
       />
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-full w-72 flex-col border-r backdrop-blur-xl transition-transform duration-300 ${sidebarTone} ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`sidebar z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"}`}
       >
         <div className="border-b border-pink-500/10 px-6 pb-4 pt-6">
           <div className="mb-5 flex items-center justify-start gap-2">
