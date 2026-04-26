@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { LogOut, Moon, Pencil, Settings, Sun, Trash2, Volume2, VolumeX } from "lucide-react";
+import { MessageCircle, Pencil, Plus, Settings, Trash2, Volume2, VolumeX } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -21,10 +21,6 @@ interface SidebarProps {
   muteLabel: string;
   unmuteLabel: string;
   settingsLabel: string;
-  logoutLabel: string;
-  themeLabel: string;
-  lightModeLabel: string;
-  darkModeLabel: string;
   userName: string;
   userPhotoUrl?: string;
   userEmail?: string;
@@ -36,8 +32,6 @@ interface SidebarProps {
   onCloseSidebar?: () => void;
   onToggleMute: () => void;
   onOpenSettings: () => void;
-  onToggleThemeMode: () => void;
-  onLogout: () => void | Promise<void>;
 }
 
 interface ChatItemProps {
@@ -80,13 +74,8 @@ const ChatItem = memo(function ChatItem({
   }, [isEditing]);
 
   return (
-    <div
-      className={`group flex items-center justify-between rounded-lg px-3 py-2 transition duration-200 ${
-        isActive
-          ? "bg-pink-500/10 border border-pink-500/15 text-white"
-          : "text-white/70 hover:bg-gradient-to-r hover:from-pink-500/5 hover:to-fuchsia-500/5 hover:text-white"
-      }`}
-    >
+    <div className={`history-item group ${isActive ? "active" : ""}`}>
+      <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
       {isEditing ? (
         <input
           ref={inputRef}
@@ -162,10 +151,6 @@ export default function Sidebar({
   muteLabel,
   unmuteLabel,
   settingsLabel,
-  logoutLabel,
-  themeLabel,
-  lightModeLabel,
-  darkModeLabel,
   userName,
   userPhotoUrl,
   userEmail,
@@ -177,8 +162,6 @@ export default function Sidebar({
   onCloseSidebar,
   onToggleMute,
   onOpenSettings,
-  onToggleThemeMode,
-  onLogout,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -224,48 +207,33 @@ export default function Sidebar({
         }`}
       />
       <aside
-        className={`sidebar z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"}`}
+        className={`sidebar sidebar-glass z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"}`}
       >
-        <div className="border-b border-pink-500/10 px-6 pb-4 pt-6">
-          <div className="mb-5 flex items-center justify-start gap-2">
-            <img
-              src="/logo.png"
-              alt="Saheli AI logo"
-              className="h-8 w-8 shrink-0 rounded-full border border-pink-400/40 object-cover"
-            />
-            <div
-              className={`text-base font-bold tracking-tight ${
-                isLightMode
-                  ? "text-neutral-900"
-                  : "text-white drop-shadow-[0_0_8px_rgba(255,140,255,0.3)]"
-              }`}
-              style={{ fontFamily: "'Lexend', 'Outfit', system-ui, sans-serif" }}
-            >
-              Saheli AI
-            </div>
+        <div>
+          <div className="mb-10 px-2 opacity-60">
+            <h1 className="heading-cinematic text-[10px] tracking-[0.4em] text-white">
+              SAHELI AI
+            </h1>
           </div>
 
           <button
             type="button"
             onClick={() => void onCreateChat()}
-            className={`w-full rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
-              isLightMode
-                ? "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100"
-                : "border-pink-500/15 bg-pink-500/5 text-white hover:bg-pink-500/10"
-            }`}
+            className="new-chat-pill group mb-8"
           >
+            <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
             {newChatLabel}
           </button>
         </div>
 
-        <div className="scrollbar-hide flex-1 overflow-y-auto scroll-smooth px-3 py-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          <div className={`px-2 pb-2 text-[10px] font-semibold uppercase tracking-widest ${isLightMode ? "text-neutral-500" : "text-neutral-500"}`}>
+        <div className="custom-scrollbar flex-1 overflow-y-auto scroll-smooth">
+          <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-600">
             {recentChatsLabel}
           </div>
           {chatSessions.length === 0 ? (
             <p className={`px-2 py-3 text-sm ${subtleTextTone}`}>{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
           ) : (
-            <div className="space-y-0">
+            <div className="history-container">
               {chatSessions.map((chat) => (
                 <ChatItem
                   key={chat.id}
@@ -286,7 +254,7 @@ export default function Sidebar({
           )}
         </div>
 
-        <div className={`mt-auto border-t p-3 ${dividerTone}`}>
+        <div className={`mt-auto border-t pt-6 ${dividerTone}`}>
           <div className={`rounded-2xl border p-3 backdrop-blur-md ${surfaceTone}`}>
             <div className="flex items-center gap-3" title={userEmail || ""}>
               {userPhotoUrl ? (
@@ -336,22 +304,6 @@ export default function Sidebar({
               >
                 <Settings className="h-4 w-4 shrink-0 text-pink-300/60" />
                 <span>{settingsLabel}</span>
-              </button>
-              <button
-                type="button"
-                onClick={onToggleThemeMode}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
-              >
-                {isLightMode ? <Sun className="h-4 w-4 shrink-0 text-neutral-400" /> : <Moon className="h-4 w-4 shrink-0 text-pink-300/60" />}
-                <span>{themeLabel}: {isLightMode ? lightModeLabel : darkModeLabel}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void onLogout()}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
-              >
-                <LogOut className="h-4 w-4 shrink-0 text-pink-300/60" />
-                <span>{logoutLabel}</span>
               </button>
             </div>
           </div>

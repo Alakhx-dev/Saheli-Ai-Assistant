@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Pacifico&family=Quicksand:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Lexend:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Pacifico&family=Poppins:wght@400;500;600&family=Quicksand:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -117,7 +117,7 @@
   top: 50%;
   left: 20px;
   transform: translateY(-50%);
-  width: 260px;
+  width: 256px;
   max-height: 90vh;
   overflow-y: auto;
   background: rgba(20, 10, 35, 0.75);
@@ -1444,4 +1444,171 @@
   left: 0;
   width: 100%;
   height: 100%;
+}
+
+/* ===== Infinity Chat Overhaul ===== */
+.chat-screen-bg {
+  background: #000000 !important;
+  overflow: hidden;
+}
+
+.sidebar-glass {
+  background: rgba(8, 8, 12, 0.5) !important;
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 15px 0 40px rgba(0, 0, 0, 0.9);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 1.5rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.heading-cinematic {
+  font-family: 'Lexend', 'Outfit', system-ui, sans-serif;
+  font-weight: 700;
+  text-shadow: 0 0 16px rgba(255, 0, 200, 0.28);
+}
+
+/* Sleek New Chat Button */
+.new-chat-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(255, 0, 200, 0.05);
+  border: 1px solid rgba(255, 0, 200, 0.2);
+  border-radius: 14px;
+  color: #ff8cd2;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.3s ease;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.new-chat-pill:hover {
+  background: rgba(255, 0, 200, 0.15);
+  box-shadow: 0 0 20px rgba(255, 0, 200, 0.2);
+  transform: translateY(-2px);
+}
+
+/* History List - Improved Spacing */
+.history-container {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* History Item - Animated Hover */
+.history-item {
+  position: relative;
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  transform: none;
+}
+
+.history-item.active {
+  background: rgba(255, 0, 200, 0.08);
+  border-color: rgba(255, 0, 200, 0.2);
+  color: #ff8cd2;
+}
+
+/* Empty State Greeting Text */
+.welcome-text-cinematic {
+  font-family: 'Great Vibes', cursive;
+  font-size: clamp(2rem, 4.8vw, 42px);
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(255, 120, 200, 0.6);
+  text-align: center;
+  z-index: 50;
+  pointer-events: none;
+  max-width: min(90vw, 820px);
+  line-height: 1.25;
+  padding: 0 1rem;
+}
+
+.welcome-hint {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  color: #ff8cd2;
+  opacity: 0.8;
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-style: italic;
+}
+
+.glass-input-container {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 8px 16px;
+  width: 100%;
+  max-width: 700px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 0, 200, 0.18) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 200, 0.16);
+  border-radius: 999px;
+}
+
+.cursor-glow {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 0, 200, 0.08) 0%, transparent 70%);
+  position: fixed;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease-out;
+}
+
+.video-blend {
+  mix-blend-mode: lighten;
+  filter: brightness(1.1) contrast(1.1);
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+@media (max-width: 768px) {
+  .cursor-glow {
+    display: none;
+  }
 }

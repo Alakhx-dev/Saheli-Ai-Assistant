@@ -1,71 +1,136 @@
 let currentAudioContext: AudioContext | null = null;
 let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+let scheduledSources: AudioBufferSourceNode[] = [];
+let pendingTexts: string[] = [];
+let isProcessingQueue = false;
 let playbackToken = 0;
+let nextStartTime = 0;
+let speakingHandler: ((speaking: boolean) => void) | null = null;
+
+function emitSpeaking(speaking: boolean) {
+  speakingHandler?.(speaking);
+}
+
+export function setInworldTtsSpeakingHandler(handler: ((speaking: boolean) => void) | null) {
+  speakingHandler = handler;
+}
+
+function getAudioContextConstructor() {
+  return window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+}
+
+async function getAudioContext() {
+  if (!currentAudioContext) {
+    const AudioContextConstructor = getAudioContextConstructor();
+    if (!AudioContextConstructor) {
+      throw new Error("Web Audio API is not supported");
+    }
+
+    currentAudioContext = new AudioContextConstructor();
+    nextStartTime = currentAudioContext.currentTime + 0.05;
+  }
+
+  if (currentAudioContext.state === "suspended") {
+    await currentAudioContext.resume();
+  }
+
+  return currentAudioContext;
+}
+
+export async function primeInworldTtsPlayback() {
+  await getAudioContext();
+}
 
 function prepareInworldSpeech(text: string) {
   return text
-    .replace(/[,:;]+/g, " ")
-    .replace(/[()\[\]{}<>]/g, " ")
-    .replace(/[|\\/_]/g, " ")
-    .replace(/\.{2,}/g, ".")
-    .replace(/!{2,}/g, "!")
-    .replace(/\?{2,}/g, "?")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/www\.[^\s]+/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[\s-]*[-+]\s+/gm, " ")
+    .replace(/[*_~#>`]+/g, " ")
+    .replace(/[|\\/_]+/g, " ")
+    .replace(/\b(?:[A-Za-z]\s+){2,}[A-Za-z]\b/g, (match) => match.replace(/\s+/g, ""))
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, "")
+    .replace(/\s+([,.!?\u0964])/g, "$1")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{2,}/g, ". ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function base64ToBlob(base64: string, mimeType: string) {
+function base64ToArrayBuffer(base64: string) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index);
   }
-
-  return new Blob([bytes], { type: mimeType });
+  return bytes.buffer;
 }
 
 async function decodeAudioChunk(audioContext: AudioContext, audioContent: string) {
-  const audioBlob = base64ToBlob(audioContent, "audio/mpeg");
-  const chunkBuffer = await audioBlob.arrayBuffer();
+  const chunkBuffer = base64ToArrayBuffer(audioContent);
   return audioContext.decodeAudioData(chunkBuffer.slice(0));
 }
 
-export function stopInworldTtsPlayback() {
-  playbackToken += 1;
-
-  if (currentReader) {
-    void currentReader.cancel();
-    currentReader = null;
-  }
-
-  if (!currentAudioContext) {
-    return;
+function readAudioContent(line: string) {
+  const trimmedLine = line.trim();
+  if (!trimmedLine) {
+    return "";
   }
 
   try {
-    void currentAudioContext.close();
+    const payload = JSON.parse(trimmedLine) as { result?: { audioContent?: string } };
+    return payload.result?.audioContent ?? "";
   } catch {
-    // ignore context shutdown errors during cancellation
+    return "";
   }
-
-  currentAudioContext = null;
 }
 
-export async function speakWithInworldTts(text: string): Promise<void> {
-  const trimmed = prepareInworldSpeech(text);
-  if (!trimmed) {
+function maybeMarkIdle() {
+  if (!isProcessingQueue && pendingTexts.length === 0 && scheduledSources.length === 0) {
+    emitSpeaking(false);
+  }
+}
+
+function scheduleBuffer(audioContext: AudioContext, audioBuffer: AudioBuffer, token: number) {
+  if (token !== playbackToken || currentAudioContext !== audioContext) {
     return;
   }
 
-  stopInworldTtsPlayback();
-  const activeToken = playbackToken;
+  const source = audioContext.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(audioContext.destination);
+  scheduledSources.push(source);
+
+  const startAt = Math.max(nextStartTime, audioContext.currentTime + 0.02);
+  source.start(startAt);
+  nextStartTime = startAt + audioBuffer.duration;
+
+  source.onended = () => {
+    scheduledSources = scheduledSources.filter((item) => item !== source);
+    if (scheduledSources.length === 0) {
+      nextStartTime = audioContext.currentTime + 0.04;
+    }
+    maybeMarkIdle();
+  };
+}
+
+async function streamTextToAudio(text: string, token: number) {
+  const audioContext = await getAudioContext();
+  if (token !== playbackToken) {
+    return;
+  }
 
   const response = await fetch("/api/tts", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text: trimmed }),
+    body: JSON.stringify({ text }),
   });
 
   if (!response.ok) {
@@ -81,14 +146,9 @@ export async function speakWithInworldTts(text: string): Promise<void> {
   currentReader = reader;
   const decoder = new TextDecoder();
   let buffer = "";
-  const audioChunks: string[] = [];
 
   try {
-    while (true) {
-      if (activeToken !== playbackToken) {
-        break;
-      }
-
+    while (token === playbackToken) {
       const { done, value } = await reader.read();
       if (done) {
         break;
@@ -99,96 +159,97 @@ export async function speakWithInworldTts(text: string): Promise<void> {
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) {
+        const audioContent = readAudioContent(line);
+        if (!audioContent || token !== playbackToken) {
           continue;
         }
 
-        try {
-          const payload = JSON.parse(trimmedLine) as { result?: { audioContent?: string } };
-          const audioContent = payload.result?.audioContent;
-          if (audioContent) {
-            audioChunks.push(audioContent);
-          }
-        } catch {
-          // ignore malformed NDJSON chunks from upstream
-        }
+        const decodedChunk = await decodeAudioChunk(audioContext, audioContent);
+        scheduleBuffer(audioContext, decodedChunk, token);
       }
     }
 
-    const trailingLine = buffer.trim();
-    if (trailingLine) {
-      try {
-        const payload = JSON.parse(trailingLine) as { result?: { audioContent?: string } };
-        const audioContent = payload.result?.audioContent;
-        if (audioContent) {
-          audioChunks.push(audioContent);
-        }
-      } catch {
-        // ignore malformed NDJSON tail
-      }
+    const trailingAudioContent = readAudioContent(buffer);
+    if (trailingAudioContent && token === playbackToken) {
+      const decodedChunk = await decodeAudioChunk(audioContext, trailingAudioContent);
+      scheduleBuffer(audioContext, decodedChunk, token);
     }
-
-    if (activeToken !== playbackToken || audioChunks.length === 0) {
-      return;
-    }
-
-    const AudioContextConstructor = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextConstructor) {
-      throw new Error("Web Audio API is not supported");
-    }
-
-    const audioContext = currentAudioContext ?? new AudioContextConstructor();
-    currentAudioContext = audioContext;
-    if (audioContext.state === "suspended") {
-      await audioContext.resume();
-    }
-
-    const decodedBuffers = await Promise.all(
-      audioChunks.map((audioContent) => decodeAudioChunk(audioContext, audioContent)),
-    );
-
-    if (activeToken !== playbackToken || decodedBuffers.length === 0) {
-      return;
-    }
-
-    let playhead = audioContext.currentTime + 0.05;
-    let finalSource: AudioBufferSourceNode | null = null;
-
-    await new Promise<void>((resolve, reject) => {
-      for (const bufferChunk of decodedBuffers) {
-        const source = audioContext.createBufferSource();
-        source.buffer = bufferChunk;
-        source.connect(audioContext.destination);
-        source.start(playhead);
-        playhead += bufferChunk.duration;
-        finalSource = source;
-      }
-
-      if (!finalSource) {
-        reject(new Error("Audio playback failed"));
-        return;
-      }
-
-      finalSource.onended = () => {
-        if (currentAudioContext === audioContext) {
-          currentAudioContext = null;
-        }
-        resolve();
-      };
-
-      if (activeToken !== playbackToken) {
-        try {
-          finalSource.stop();
-        } catch {
-          // ignore race during cancellation
-        }
-        reject(new Error("Audio playback cancelled"));
-      }
-    });
   } finally {
     if (currentReader === reader) {
       currentReader = null;
     }
   }
+}
+
+async function processTextQueue(token: number) {
+  if (isProcessingQueue) {
+    return;
+  }
+
+  isProcessingQueue = true;
+  emitSpeaking(true);
+
+  try {
+    while (token === playbackToken && pendingTexts.length > 0) {
+      const nextText = pendingTexts.shift();
+      if (!nextText) {
+        continue;
+      }
+
+      await streamTextToAudio(nextText, token);
+    }
+  } catch (error) {
+    if (token === playbackToken) {
+      console.error("Inworld TTS failed", error);
+    }
+  } finally {
+    if (token === playbackToken) {
+      isProcessingQueue = false;
+      if (pendingTexts.length > 0) {
+        void processTextQueue(token);
+      } else {
+        maybeMarkIdle();
+      }
+    }
+  }
+}
+
+export function stopInworldTtsPlayback() {
+  playbackToken += 1;
+  pendingTexts = [];
+  isProcessingQueue = false;
+
+  if (currentReader) {
+    void currentReader.cancel();
+    currentReader = null;
+  }
+
+  for (const source of scheduledSources) {
+    try {
+      source.stop();
+    } catch {
+      // Source may already have ended.
+    }
+  }
+  scheduledSources = [];
+
+  if (currentAudioContext) {
+    nextStartTime = currentAudioContext.currentTime + 0.04;
+  } else {
+    nextStartTime = 0;
+  }
+
+  emitSpeaking(false);
+}
+
+export async function speakWithInworldTts(text: string): Promise<void> {
+  const preparedText = prepareInworldSpeech(text);
+  if (!preparedText) {
+    return;
+  }
+
+  pendingTexts.push(preparedText);
+  emitSpeaking(true);
+  await primeInworldTtsPlayback();
+  void processTextQueue(playbackToken);
 }

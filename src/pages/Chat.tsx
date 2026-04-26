@@ -46,7 +46,12 @@ import {
   speakHindi,
   stopBrowserTtsPlayback,
 } from "@/lib/browser-tts";
-import { speakWithInworldTts, stopInworldTtsPlayback } from "@/lib/inworld-tts";
+import {
+  primeInworldTtsPlayback,
+  setInworldTtsSpeakingHandler,
+  speakWithInworldTts,
+  stopInworldTtsPlayback,
+} from "@/lib/inworld-tts";
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
@@ -71,6 +76,18 @@ const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
+const BESTIE_GREETINGS = [
+  "Aa gaye? Badi jaldi yaad aa gayi meri!",
+  "Batao Alakh, aaj kya kaand kiya tumne?",
+  "Tumhare bina boring lag raha tha... bolo kya help karu?",
+  "Aree bestie! Chalo baatein karte hain, kya chal raha hai?",
+  "Wapas aa gaye? Pakka kuch help chahiye hogi... pucho!",
+  "Suno, aaj main bahut khush hoon, chalo kuch mast karte hain!",
+];
+
+function pickRandomGreeting() {
+  return BESTIE_GREETINGS[Math.floor(Math.random() * BESTIE_GREETINGS.length)];
+}
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
@@ -340,6 +357,102 @@ function removePrefixSentence(fullText: string, prefixSentence: string) {
 // Detects the language of the user's message to pick the right AI reply language.
 // This is completely separate from the UI language (localStorage "app_language").
 // Word-boundary patterns prevent false positives (e.g. "ho" inside "house").
+function normalizeDesktopTtsChunk(text: string) {
+  return text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/www\.[^\s]+/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/^[\s-]*[-+]\s+/gm, " ")
+    .replace(/[*_~#>`]+/g, " ")
+    .replace(/[|\\/_]+/g, " ")
+    .replace(/\b(?:[A-Za-z]\s+){2,}[A-Za-z]\b/g, (match) => match.replace(/\s+/g, ""))
+    .replace(/\s+([,.!?\u0964])/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasDesktopTtsContent(text: string) {
+  return /[\p{L}\p{N}]/u.test(text) && text.split(/\s+/).filter(Boolean).length >= 2;
+}
+
+function takeDesktopTtsChunk(buffer: string, force = false, isFirstChunk = false) {
+  const normalized = normalizeDesktopTtsChunk(buffer);
+  if (!normalized) {
+    return null;
+  }
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const minBoundaryChars = isFirstChunk ? 12 : 50;
+  const targetWords = isFirstChunk ? 4 : 14;
+  const hasWordBoundary = /[\s,.!?\u0964]$/.test(buffer);
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const character = normalized[index];
+    const nextCharacter = normalized[index + 1] ?? "";
+    if (/[.!?\u0964]/.test(character) && index + 1 >= minBoundaryChars && (!nextCharacter || /\s/.test(nextCharacter))) {
+      const chunk = normalized.slice(0, index + 1).trim();
+      const rest = normalized.slice(index + 1).trim();
+      return hasDesktopTtsContent(chunk) ? { chunk, rest } : null;
+    }
+  }
+
+  if (hasWordBoundary && words.length >= targetWords) {
+    const chunk = words.slice(0, targetWords).join(" ");
+    const rest = words.slice(targetWords).join(" ");
+    return hasDesktopTtsContent(chunk) ? { chunk, rest } : null;
+  }
+
+  if (force && hasDesktopTtsContent(normalized)) {
+    return { chunk: normalized, rest: "" };
+  }
+
+  return null;
+}
+
+function createDesktopTtsStreamController(queueVoicePlayback: (text: string, contextTag: string) => void) {
+  let previousText = "";
+  let pendingBuffer = "";
+  let hasQueuedChunk = false;
+
+  const pump = (force = false) => {
+    while (true) {
+      const next = takeDesktopTtsChunk(pendingBuffer, force, !hasQueuedChunk);
+      if (!next) {
+        break;
+      }
+
+      pendingBuffer = next.rest;
+      hasQueuedChunk = true;
+      queueVoicePlayback(next.chunk, "desktop-stream");
+    }
+  };
+
+  return {
+    push(partialText: string) {
+      const delta = partialText.startsWith(previousText)
+        ? partialText.slice(previousText.length)
+        : partialText;
+      previousText = partialText;
+      pendingBuffer = `${pendingBuffer} ${delta}`.trimStart();
+      pump(false);
+    },
+    flush(finalText: string) {
+      if (finalText.startsWith(previousText)) {
+        const delta = finalText.slice(previousText.length);
+        if (delta) {
+          pendingBuffer = `${pendingBuffer} ${delta}`.trimStart();
+        }
+      }
+      previousText = finalText;
+      pump(true);
+    },
+  };
+}
+
 const HINGLISH_PATTERNS = [
   "hai", "kya", "tum", "nahi", "yaar", "kar", "raha", "rahi", "baat", "mera",
   "tera", "haan", "nhi", "kyun", "kyu", "acha", "theek", "chal", "bol", "hoon",
@@ -584,12 +697,17 @@ const BackgroundComponent = memo(function BackgroundComponent() {
   return (
     <div className="absolute inset-0 z-0 overflow-hidden">
       <video
-        className="anime-bg-video"
+        className="anime-bg-video video-blend"
         src="/anime-girl.mp4"
         autoPlay
         loop
         muted
         playsInline
+        onEnded={(event) => {
+          const target = event.currentTarget;
+          target.currentTime = 0;
+          void target.play();
+        }}
       />
       <div className="chat-overlay" />
       <div
@@ -724,6 +842,7 @@ export default function Chat() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSwaraSpeaking, setIsSwaraSpeaking] = useState(false);
   const [mood, setMood] = useState("neutral");
+  const [randomGreeting, setRandomGreeting] = useState(() => pickRandomGreeting());
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
@@ -740,9 +859,26 @@ export default function Chat() {
   const mobileVisionRequestIdRef = useRef(0);
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const memoryCleanupDoneRef = useRef(false);
+  const cursorRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const messagesRef = useRef<ChatMessage[]>([]);
+
+  useEffect(() => {
+    const moveCursor = (event: MouseEvent) => {
+      if (!cursorRef.current) {
+        return;
+      }
+
+      cursorRef.current.style.left = `${event.clientX}px`;
+      cursorRef.current.style.top = `${event.clientY}px`;
+    };
+
+    window.addEventListener("mousemove", moveCursor);
+    return () => {
+      window.removeEventListener("mousemove", moveCursor);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -765,6 +901,7 @@ export default function Chat() {
   const titleUpdateTimeoutRef = useRef<number | null>(null);
   const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
   const ttsPlaybackQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const ttsPlaybackGenerationRef = useRef(0);
   const mobileTtsInteractionRef = useRef(false);
   const setStoreUser = useAppStore((state) => state.setUser);
   const setStoreChats = useAppStore((state) => state.setChats);
@@ -806,6 +943,18 @@ export default function Chat() {
     window.speechSynthesis?.addEventListener("voiceschanged", handleVoiceCatalogChanged);
     return () => {
       window.speechSynthesis?.removeEventListener("voiceschanged", handleVoiceCatalogChanged);
+    };
+  }, []);
+
+  useEffect(() => {
+    setInworldTtsSpeakingHandler((speaking) => {
+      if (!isMobile()) {
+        setIsSwaraSpeaking(speaking);
+      }
+    });
+
+    return () => {
+      setInworldTtsSpeakingHandler(null);
     };
   }, []);
 
@@ -1022,6 +1171,12 @@ export default function Chat() {
   }, [currentChatId]);
 
   useEffect(() => {
+    if (!isLoading && messages.length === 0) {
+      setRandomGreeting(pickRandomGreeting());
+    }
+  }, [currentChatId, isLoading, messages.length]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const bootstrapMemory = async () => {
@@ -1099,18 +1254,20 @@ export default function Chat() {
     }
 
     const mobile = isMobile();
-    stopInworldTtsPlayback();
-    stopBrowserTtsPlayback();
-    setIsSwaraSpeaking(true);
-    try {
-      if (mobile) {
+    if (mobile) {
+      stopInworldTtsPlayback();
+      stopBrowserTtsPlayback();
+      setIsSwaraSpeaking(true);
+      try {
         await speakHindi(trimmed);
-      } else {
-        await speakWithInworldTts(trimmed);
+      } finally {
+        setIsSwaraSpeaking(false);
       }
-    } finally {
-      setIsSwaraSpeaking(false);
+      return;
     }
+
+    setIsSwaraSpeaking(true);
+    await speakWithInworldTts(trimmed);
   }, []);
 
   const refreshMemoryState = useCallback(async () => {
@@ -1504,12 +1661,17 @@ export default function Chat() {
       return;
     }
 
+    sessionStorage.removeItem(ACTIVE_CHAT_SESSION_KEY);
     setCurrentChatId(null);
     setMessages([]);
+    currentChatIdRef.current = null;
     messagesRef.current = [];
+    lastMsgCountRef.current = 0;
+    setInput("");
+    setIsLoading(false);
     setPendingMobileVisionRequest(null);
     pendingMobileVisionRequestRef.current = null;
-    navigate("/chat");
+    navigate("/chat", { replace: true });
     await refreshChatSessions(null);
   };
 
@@ -1635,16 +1797,35 @@ export default function Chat() {
       return;
     }
 
+    const playbackGeneration = ttsPlaybackGenerationRef.current;
+    if (!mobile) {
+      void Promise.resolve()
+        .then(async () => {
+          if (playbackGeneration !== ttsPlaybackGenerationRef.current) {
+            return;
+          }
+          await playVoice(trimmed);
+        })
+        .catch((error) => {
+          console.error(`TTS playback failed (${contextTag})`, error);
+          setIsSwaraSpeaking(false);
+        });
+      return;
+    }
+
     ttsPlaybackQueueRef.current = ttsPlaybackQueueRef.current
       .catch(() => undefined)
       .then(async () => {
+        if (playbackGeneration !== ttsPlaybackGenerationRef.current) {
+          return;
+        }
         await playVoice(trimmed);
       })
       .catch((error) => {
         console.error(`TTS playback failed (${contextTag})`, error);
         setIsSwaraSpeaking(false);
       });
-  }, [isMuted]);
+  }, [isMuted, playVoice]);
 
   const streamResponse = useCallback(async (
     _prompt: string,
@@ -1816,12 +1997,22 @@ export default function Chat() {
       return;
     }
 
+    ttsPlaybackGenerationRef.current += 1;
+    ttsPlaybackQueueRef.current = Promise.resolve();
+    stopBrowserTtsPlayback();
+    stopInworldTtsPlayback();
+    setIsSwaraSpeaking(false);
+
     const userText = input.trim();
     setInput("");
     const mobile = isMobile();
     if (mobile) {
       mobileTtsInteractionRef.current = true;
       primeBrowserTtsVoices();
+    } else {
+      void primeInworldTtsPlayback().catch((error) => {
+        console.error("Failed to prime desktop TTS", error);
+      });
     }
 
     if (!isGuest && user?.uid) {
@@ -1917,6 +2108,7 @@ export default function Chat() {
       lastMsgCountRef.current = nextHistory.length;
       let spokenLeadSentence = "";
       let firstSentenceQueued = false;
+      const desktopVoiceStream = mobile ? null : createDesktopTtsStreamController(queueVoicePlayback);
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
 
@@ -1980,27 +2172,37 @@ export default function Chat() {
         analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         nextMemoryProfile,
-        (partialText) => {
-          if (firstSentenceQueued || isMuted) {
-            return;
-          }
+        mobile
+          ? (partialText) => {
+              if (firstSentenceQueued || isMuted) {
+                return;
+              }
 
-          const firstSentence = extractFirstSentence(partialText);
-          if (!firstSentence) {
-            return;
-          }
+              const firstSentence = extractFirstSentence(partialText);
+              if (!firstSentence) {
+                return;
+              }
 
-          firstSentenceQueued = true;
-          spokenLeadSentence = firstSentence;
-          queueVoicePlayback(firstSentence, "chat-first-sentence");
-        },
+              firstSentenceQueued = true;
+              spokenLeadSentence = firstSentence;
+              queueVoicePlayback(firstSentence, "chat-first-sentence");
+            }
+          : (partialText) => {
+              desktopVoiceStream?.push(partialText);
+            },
       );
 
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
       if (!isMuted) {
-        const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
-        queueVoicePlayback(remainingText, "chat-final");
+        if (mobile) {
+          const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
+          queueVoicePlayback(remainingText, "chat-final");
+        } else if (desktopVoiceStream) {
+          desktopVoiceStream.flush(responseText);
+        } else {
+          queueVoicePlayback(responseText, "desktop-final");
+        }
       }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -2066,10 +2268,11 @@ export default function Chat() {
 
   return (
     <div
-      className="chat-page-wrapper relative h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
+      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
+      <div ref={cursorRef} className="cursor-glow" />
       <BackgroundComponent />
       <Sidebar
         isOpen={isSidebarOpen}
@@ -2086,10 +2289,6 @@ export default function Chat() {
         muteLabel={t.header.muteVoice}
         unmuteLabel={t.header.unmuteVoice}
         settingsLabel={t.settings.title}
-        logoutLabel={t.settings.logout}
-        themeLabel="Theme"
-        lightModeLabel="Light"
-        darkModeLabel="Dark"
         userName={effectiveUserName}
         userPhotoUrl={profileDraftPhotoUrl || profilePhotoUrl}
         userEmail={user?.email || undefined}
@@ -2101,8 +2300,6 @@ export default function Chat() {
         onCloseSidebar={() => setIsSidebarOpen(false)}
         onToggleMute={handleSidebarMuteToggle}
         onOpenSettings={() => setSettingsPanelOpen(true)}
-        onToggleThemeMode={() => setIsSidebarLightMode((previous) => !previous)}
-        onLogout={() => void handleLogout()}
       />
 
       <button
@@ -2142,9 +2339,20 @@ export default function Chat() {
               {dbStatus}
             </div>
           ) : null}
+          {messages.length === 0 && !isLoading && !submitLockRef.current ? (
+            <motion.p
+              key={randomGreeting}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.45, ease: "easeOut" }}
+              className="welcome-hint"
+            >
+              &quot;{randomGreeting}&quot;
+            </motion.p>
+          ) : null}
           <form
             onSubmit={handleSubmit}
-            className="relative flex items-center saheli-input-bar w-full"
+            className="relative mx-auto flex w-full items-center saheli-input-bar glass-input-container"
           >
             <input
               type="text"

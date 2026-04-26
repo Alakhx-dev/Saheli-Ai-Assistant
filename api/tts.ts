@@ -2,7 +2,7 @@ export const runtime = "edge";
 
 const INWORLD_TTS_STREAM_URL = "https://api.inworld.ai/tts/v1/voice:stream";
 const DEFAULT_MODEL_ID = "inworld-tts-1.5-max";
-const DEFAULT_VOICE_ID = "default-exsg-odgaqb9kgydhmbw-w__design-voice-b48ec25d";
+const DEFAULT_VOICE_ID = "default-exsg-odgaqb9kgydhmbw-w__gemini";
 const DEFAULT_SPEAKING_RATE = 0.91;
 const DEFAULT_TEMPERATURE = 0.89;
 

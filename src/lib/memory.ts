@@ -15,6 +15,7 @@ import {
   type User,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { shouldSaveToMemory } from "@/lib/shouldSaveToMemory";
 
 const USERS_COLLECTION = "users";
 const CHAT_HISTORY_COLLECTION = "chat_history";
@@ -315,6 +316,79 @@ function normalizeIsoTimestamp(value: unknown) {
   return new Date(parsed).toISOString();
 }
 
+const MEMORY_STOP_WORDS = new Set([
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "at",
+  "for",
+  "is",
+  "am",
+  "are",
+  "was",
+  "were",
+  "very",
+  "really",
+  "just",
+  "my",
+  "your",
+  "user",
+  "me",
+  "i",
+]);
+
+function tokenizeMemoryValue(value: string) {
+  return sanitizeText(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length > 2 && !MEMORY_STOP_WORDS.has(word));
+}
+
+function hasSimilarMemoryValue(left: string, right: string) {
+  const leftTokens = tokenizeMemoryValue(left);
+  const rightTokens = tokenizeMemoryValue(right);
+  if (!leftTokens.length || !rightTokens.length) {
+    return false;
+  }
+
+  const rightSet = new Set(rightTokens);
+  const sharedTokens = leftTokens.filter((token) => rightSet.has(token)).length;
+  const ratio = sharedTokens / Math.max(leftTokens.length, rightTokens.length);
+  return ratio >= 0.6;
+}
+
+async function filterMemoryCandidates(values: string[]) {
+  const accepted: string[] = [];
+
+  for (const value of uniqueValues(normalizeList(values, MAX_FACTS), MAX_FACTS)) {
+    const decision = await shouldSaveToMemory(value);
+    if (!decision.save) {
+      continue;
+    }
+
+    if (accepted.some((existing) => hasSimilarMemoryValue(existing, value))) {
+      continue;
+    }
+
+    accepted.push(value);
+
+    if (accepted.length >= MAX_FACTS) {
+      break;
+    }
+  }
+
+  return accepted;
+}
+
 function getUserDocRef(user: User): DocumentReference {
   return doc(db, USERS_COLLECTION, user.uid);
 }
@@ -552,15 +626,27 @@ export async function setMemoryEnabled(user: User | null, enabled: boolean) {
 export async function saveMemoryFields(
   user: User | null,
   fields: Pick<MemoryProfile, "preferences" | "facts">,
+  options?: { skipAiFilter?: boolean },
 ) {
   if (!user) {
     return;
   }
 
   await ensureUserMemoryDoc(user);
+
+  const nextPreferencesSource = uniqueValues(normalizeList(fields.preferences, MAX_PREFERENCES), MAX_PREFERENCES);
+  const nextFactsSource = uniqueValues(normalizeList(fields.facts, MAX_FACTS), MAX_FACTS);
+
+  const nextPreferences = options?.skipAiFilter
+    ? nextPreferencesSource
+    : await filterMemoryCandidates(nextPreferencesSource);
+  const nextFacts = options?.skipAiFilter
+    ? nextFactsSource
+    : await filterMemoryCandidates(nextFactsSource);
+
   await updateDoc(getUserDocRef(user), {
-    preferences: uniqueValues(normalizeList(fields.preferences, MAX_PREFERENCES), MAX_PREFERENCES),
-    facts: uniqueValues(normalizeList(fields.facts, MAX_FACTS), MAX_FACTS),
+    preferences: uniqueValues(nextPreferences, MAX_PREFERENCES),
+    facts: uniqueValues(nextFacts, MAX_FACTS),
     updatedAt: serverTimestamp(),
   });
 }
@@ -630,7 +716,7 @@ export async function deleteMemoryChat(user: User | null, messageId: string) {
     await saveMemoryFields(user, {
       preferences: nextPreferences,
       facts: nextFacts,
-    });
+    }, { skipAiFilter: true });
     return;
   }
 
@@ -711,9 +797,7 @@ export const shouldSaveMemory = (text: string) => {
     'important',
   ];
 
-  return triggers.some(t =>
-    text.toLowerCase().includes(t)
-  );
+  return triggers.some((trigger) => text.toLowerCase().includes(trigger));
 };
 
 export const isImportant = (text: string) => {
@@ -721,7 +805,9 @@ export const isImportant = (text: string) => {
 };
 
 export const saveChatMemory = async (userId: string, content: string) => {
-  if (!userId) return;
+  if (!userId || !(await shouldSaveToMemory(content)).save) {
+    return;
+  }
 
   try {
     await addDoc(
@@ -737,19 +823,6 @@ export const saveChatMemory = async (userId: string, content: string) => {
   }
 };
 
-export const saveImageMemory = async (userId: string, imageUrl: string) => {
-  if (!userId || !imageUrl) return;
-
-  try {
-    await addDoc(
-      collection(db, 'users', userId, 'memory_images'),
-      {
-        url: imageUrl,
-        type: 'camera',
-        timestamp: serverTimestamp(),
-      }
-    );
-  } catch (err) {
-    console.error('Save image memory failed:', err);
-  }
+export const saveImageMemory = async (_userId: string, _imageUrl: string) => {
+  return;
 };
