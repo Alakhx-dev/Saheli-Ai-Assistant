@@ -41,17 +41,7 @@ import {
   type MemoryProfile,
 } from "@/lib/memory";
 import { detectMemory, saveImageMemoryDB, saveMemoryToDB } from "@/lib/chatService";
-import {
-  primeBrowserTtsVoices,
-  speakHindi,
-  stopBrowserTtsPlayback,
-} from "@/lib/browser-tts";
-import {
-  primeInworldTtsPlayback,
-  setInworldTtsSpeakingHandler,
-  speakWithInworldTts,
-  stopInworldTtsPlayback,
-} from "@/lib/inworld-tts";
+import { resetSaheliSpeechDedup, speakSaheli, stopSaheliSpeech } from "@/utils/speechEngine";
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
@@ -321,137 +311,10 @@ function shouldRefreshGeneratedTitle(messageCount: number, currentTitle: string,
   return isDefaultChatTitle(currentTitle) || messageCount === 1 || messageCount % TITLE_UPDATE_INTERVAL === 0;
 }
 
-function extractFirstSentence(text: string) {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
-
-  const match = normalized.match(/(.+?[.!?।])(?:\s|$)/);
-  if (match?.[1]) {
-    return match[1].trim();
-  }
-
-  if (normalized.length >= 45) {
-    return normalized;
-  }
-
-  return "";
-}
-
-function removePrefixSentence(fullText: string, prefixSentence: string) {
-  const full = fullText.trim();
-  const prefix = prefixSentence.trim();
-  if (!full || !prefix) {
-    return full;
-  }
-
-  if (full.startsWith(prefix)) {
-    return full.slice(prefix.length).trim();
-  }
-
-  return full;
-}
-
 // ── Auto Chat Language Detection ──
 // Detects the language of the user's message to pick the right AI reply language.
 // This is completely separate from the UI language (localStorage "app_language").
 // Word-boundary patterns prevent false positives (e.g. "ho" inside "house").
-function normalizeDesktopTtsChunk(text: string) {
-  return text
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/https?:\/\/\S+/gi, " ")
-    .replace(/www\.[^\s]+/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/^[\s-]*[-+]\s+/gm, " ")
-    .replace(/[*_~#>`]+/g, " ")
-    .replace(/[|\\/_]+/g, " ")
-    .replace(/\b(?:[A-Za-z]\s+){2,}[A-Za-z]\b/g, (match) => match.replace(/\s+/g, ""))
-    .replace(/\s+([,.!?\u0964])/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasDesktopTtsContent(text: string) {
-  return /[\p{L}\p{N}]/u.test(text) && text.split(/\s+/).filter(Boolean).length >= 2;
-}
-
-function takeDesktopTtsChunk(buffer: string, force = false, isFirstChunk = false) {
-  const normalized = normalizeDesktopTtsChunk(buffer);
-  if (!normalized) {
-    return null;
-  }
-
-  const words = normalized.split(/\s+/).filter(Boolean);
-  const minBoundaryChars = isFirstChunk ? 12 : 50;
-  const targetWords = isFirstChunk ? 4 : 14;
-  const hasWordBoundary = /[\s,.!?\u0964]$/.test(buffer);
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const character = normalized[index];
-    const nextCharacter = normalized[index + 1] ?? "";
-    if (/[.!?\u0964]/.test(character) && index + 1 >= minBoundaryChars && (!nextCharacter || /\s/.test(nextCharacter))) {
-      const chunk = normalized.slice(0, index + 1).trim();
-      const rest = normalized.slice(index + 1).trim();
-      return hasDesktopTtsContent(chunk) ? { chunk, rest } : null;
-    }
-  }
-
-  if (hasWordBoundary && words.length >= targetWords) {
-    const chunk = words.slice(0, targetWords).join(" ");
-    const rest = words.slice(targetWords).join(" ");
-    return hasDesktopTtsContent(chunk) ? { chunk, rest } : null;
-  }
-
-  if (force && hasDesktopTtsContent(normalized)) {
-    return { chunk: normalized, rest: "" };
-  }
-
-  return null;
-}
-
-function createDesktopTtsStreamController(queueVoicePlayback: (text: string, contextTag: string) => void) {
-  let previousText = "";
-  let pendingBuffer = "";
-  let hasQueuedChunk = false;
-
-  const pump = (force = false) => {
-    while (true) {
-      const next = takeDesktopTtsChunk(pendingBuffer, force, !hasQueuedChunk);
-      if (!next) {
-        break;
-      }
-
-      pendingBuffer = next.rest;
-      hasQueuedChunk = true;
-      queueVoicePlayback(next.chunk, "desktop-stream");
-    }
-  };
-
-  return {
-    push(partialText: string) {
-      const delta = partialText.startsWith(previousText)
-        ? partialText.slice(previousText.length)
-        : partialText;
-      previousText = partialText;
-      pendingBuffer = `${pendingBuffer} ${delta}`.trimStart();
-      pump(false);
-    },
-    flush(finalText: string) {
-      if (finalText.startsWith(previousText)) {
-        const delta = finalText.slice(previousText.length);
-        if (delta) {
-          pendingBuffer = `${pendingBuffer} ${delta}`.trimStart();
-        }
-      }
-      previousText = finalText;
-      pump(true);
-    },
-  };
-}
 
 const HINGLISH_PATTERNS = [
   "hai", "kya", "tum", "nahi", "yaar", "kar", "raha", "rahi", "baat", "mera",
@@ -834,13 +697,12 @@ export default function Chat() {
   };
   const inputPlaceholder = t.composer.messagePlaceholder;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [latestSaheliMessage, setLatestSaheliMessage] = useState("");
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobile());
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isSwaraSpeaking, setIsSwaraSpeaking] = useState(false);
   const [mood, setMood] = useState("neutral");
   const [randomGreeting, setRandomGreeting] = useState(() => pickRandomGreeting());
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
@@ -859,6 +721,7 @@ export default function Chat() {
   const mobileVisionRequestIdRef = useRef(0);
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const memoryCleanupDoneRef = useRef(false);
+  const lastSpokenMessageRef = useRef("");
   const cursorRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
@@ -900,9 +763,6 @@ export default function Chat() {
   const currentChatIdRef = useRef<string | null>(null);
   const titleUpdateTimeoutRef = useRef<number | null>(null);
   const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
-  const ttsPlaybackQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const ttsPlaybackGenerationRef = useRef(0);
-  const mobileTtsInteractionRef = useRef(false);
   const setStoreUser = useAppStore((state) => state.setUser);
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
@@ -930,40 +790,6 @@ export default function Chat() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!isMobile()) {
-      return;
-    }
-
-    primeBrowserTtsVoices();
-    const handleVoiceCatalogChanged = () => {
-      primeBrowserTtsVoices();
-    };
-
-    window.speechSynthesis?.addEventListener("voiceschanged", handleVoiceCatalogChanged);
-    return () => {
-      window.speechSynthesis?.removeEventListener("voiceschanged", handleVoiceCatalogChanged);
-    };
-  }, []);
-
-  useEffect(() => {
-    setInworldTtsSpeakingHandler((speaking) => {
-      if (!isMobile()) {
-        setIsSwaraSpeaking(speaking);
-      }
-    });
-
-    return () => {
-      setInworldTtsSpeakingHandler(null);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isMuted) {
-      setIsSwaraSpeaking(false);
-    }
-  }, [isMuted]);
-
   // Speech-to-text: appends recognized speech to current input
   const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
     useCallback((text: string) => setInput(text), [])
@@ -980,6 +806,21 @@ export default function Chat() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (!latestSaheliMessage) {
+      return;
+    }
+
+    const signature = latestSaheliMessage.toLowerCase().replace(/\s+/g, " ").trim();
+    if (!signature || signature === lastSpokenMessageRef.current) {
+      return;
+    }
+
+    lastSpokenMessageRef.current = signature;
+
+    speakSaheli(latestSaheliMessage);
+  }, [latestSaheliMessage]);
 
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
@@ -1225,8 +1066,6 @@ export default function Chat() {
   }, []);
 
   const handleLogout = async () => {
-    stopBrowserTtsPlayback();
-    stopInworldTtsPlayback();
     await signOut(auth);
     sessionStorage.removeItem("devMode");
     navigate("/login");
@@ -1246,29 +1085,6 @@ export default function Chat() {
     }));
     setMemoryStatus(enabled ? t.statuses.memoryOn : t.statuses.memoryOff);
   };
-
-  const playVoice = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    const mobile = isMobile();
-    if (mobile) {
-      stopInworldTtsPlayback();
-      stopBrowserTtsPlayback();
-      setIsSwaraSpeaking(true);
-      try {
-        await speakHindi(trimmed);
-      } finally {
-        setIsSwaraSpeaking(false);
-      }
-      return;
-    }
-
-    setIsSwaraSpeaking(true);
-    await speakWithInworldTts(trimmed);
-  }, []);
 
   const refreshMemoryState = useCallback(async () => {
     try {
@@ -1783,49 +1599,9 @@ export default function Chat() {
       }
       return next;
     });
+    setLatestSaheliMessage(content);
     storeSaveFinalMessage(chatId, { role: "model", content });
   }, [storeSaveFinalMessage]);
-
-  const queueVoicePlayback = useCallback((text: string, contextTag: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || isMuted) {
-      return;
-    }
-
-    const mobile = isMobile();
-    if (mobile && !mobileTtsInteractionRef.current) {
-      return;
-    }
-
-    const playbackGeneration = ttsPlaybackGenerationRef.current;
-    if (!mobile) {
-      void Promise.resolve()
-        .then(async () => {
-          if (playbackGeneration !== ttsPlaybackGenerationRef.current) {
-            return;
-          }
-          await playVoice(trimmed);
-        })
-        .catch((error) => {
-          console.error(`TTS playback failed (${contextTag})`, error);
-          setIsSwaraSpeaking(false);
-        });
-      return;
-    }
-
-    ttsPlaybackQueueRef.current = ttsPlaybackQueueRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (playbackGeneration !== ttsPlaybackGenerationRef.current) {
-          return;
-        }
-        await playVoice(trimmed);
-      })
-      .catch((error) => {
-        console.error(`TTS playback failed (${contextTag})`, error);
-        setIsSwaraSpeaking(false);
-      });
-  }, [isMuted, playVoice]);
 
   const streamResponse = useCallback(async (
     _prompt: string,
@@ -1910,8 +1686,6 @@ export default function Chat() {
         : request.history;
 
       lastMsgCountRef.current = request.history.length;
-      let spokenLeadSentence = "";
-      let firstSentenceQueued = false;
       const responseText = await streamResponse(
         visionPromptHistory[visionPromptHistory.length - 1]?.content ?? "",
         request.chatId,
@@ -1920,27 +1694,9 @@ export default function Chat() {
         analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         request.memoryProfile,
-        (partialText) => {
-          if (firstSentenceQueued || isMuted) {
-            return;
-          }
-
-          const firstSentence = extractFirstSentence(partialText);
-          if (!firstSentence) {
-            return;
-          }
-
-          firstSentenceQueued = true;
-          spokenLeadSentence = firstSentence;
-          queueVoicePlayback(firstSentence, "mobile-first-sentence");
-        },
       );
       saveFinalMessage(request.chatId, responseText);
       setIsLoading(false);
-      if (!isMuted) {
-        const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
-        queueVoicePlayback(remainingText, "mobile-final");
-      }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
@@ -1997,23 +1753,13 @@ export default function Chat() {
       return;
     }
 
-    ttsPlaybackGenerationRef.current += 1;
-    ttsPlaybackQueueRef.current = Promise.resolve();
-    stopBrowserTtsPlayback();
-    stopInworldTtsPlayback();
-    setIsSwaraSpeaking(false);
+    stopSaheliSpeech();
+    resetSaheliSpeechDedup();
+    lastSpokenMessageRef.current = "";
 
     const userText = input.trim();
     setInput("");
     const mobile = isMobile();
-    if (mobile) {
-      mobileTtsInteractionRef.current = true;
-      primeBrowserTtsVoices();
-    } else {
-      void primeInworldTtsPlayback().catch((error) => {
-        console.error("Failed to prime desktop TTS", error);
-      });
-    }
 
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
@@ -2106,9 +1852,6 @@ export default function Chat() {
 
     try {
       lastMsgCountRef.current = nextHistory.length;
-      let spokenLeadSentence = "";
-      let firstSentenceQueued = false;
-      const desktopVoiceStream = mobile ? null : createDesktopTtsStreamController(queueVoicePlayback);
       const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
       let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
 
@@ -2172,38 +1915,10 @@ export default function Chat() {
         analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         nextMemoryProfile,
-        mobile
-          ? (partialText) => {
-              if (firstSentenceQueued || isMuted) {
-                return;
-              }
-
-              const firstSentence = extractFirstSentence(partialText);
-              if (!firstSentence) {
-                return;
-              }
-
-              firstSentenceQueued = true;
-              spokenLeadSentence = firstSentence;
-              queueVoicePlayback(firstSentence, "chat-first-sentence");
-            }
-          : (partialText) => {
-              desktopVoiceStream?.push(partialText);
-            },
       );
 
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
-      if (!isMuted) {
-        if (mobile) {
-          const remainingText = firstSentenceQueued ? removePrefixSentence(responseText, spokenLeadSentence) : responseText;
-          queueVoicePlayback(remainingText, "chat-final");
-        } else if (desktopVoiceStream) {
-          desktopVoiceStream.flush(responseText);
-        } else {
-          queueVoicePlayback(responseText, "desktop-final");
-        }
-      }
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
       const finalHistory = [...nextHistory, aiMessage];
@@ -2245,26 +1960,6 @@ export default function Chat() {
     setSettingsPanelOpen(open);
   }, []);
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
-  const handleSidebarMuteToggle = useCallback(() => {
-    setIsMuted((previous) => {
-      const nextMuted = !previous;
-      if (nextMuted) {
-        stopBrowserTtsPlayback();
-        stopInworldTtsPlayback();
-        setIsSwaraSpeaking(false);
-      }
-      return nextMuted;
-    });
-  }, []);
-
-  const handleSendInteraction = useCallback(() => {
-    if (!isMobile()) {
-      return;
-    }
-
-    mobileTtsInteractionRef.current = true;
-    primeBrowserTtsVoices();
-  }, []);
 
   return (
     <div
@@ -2279,15 +1974,11 @@ export default function Chat() {
         chatSessions={chatSessions}
         currentChatId={currentChatId}
         isGuest={isGuest}
-        isMuted={isMuted}
-        isSpeaking={isSwaraSpeaking}
         isLightMode={isSidebarLightMode}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}
         noChatsGuestLabel={t.sidebar.noChatsGuest}
         noChatsAccountLabel={t.sidebar.noChatsAccount}
-        muteLabel={t.header.muteVoice}
-        unmuteLabel={t.header.unmuteVoice}
         settingsLabel={t.settings.title}
         userName={effectiveUserName}
         userPhotoUrl={profileDraftPhotoUrl || profilePhotoUrl}
@@ -2298,7 +1989,6 @@ export default function Chat() {
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
         onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
-        onToggleMute={handleSidebarMuteToggle}
         onOpenSettings={() => setSettingsPanelOpen(true)}
       />
 
@@ -2376,7 +2066,6 @@ export default function Chat() {
             </button>
             <button
               type="submit"
-              onPointerDown={handleSendInteraction}
               aria-label={t.composer.sendMessage}
               disabled={!input.trim() || isLoading}
               className="mr-3 saheli-send-btn saheli-btn-hover"

@@ -1,10 +1,6 @@
-export const runtime = "edge";
+export const runtime = "nodejs";
 
-const INWORLD_TTS_STREAM_URL = "https://api.inworld.ai/tts/v1/voice:stream";
-const DEFAULT_MODEL_ID = "inworld-tts-1.5-max";
-const DEFAULT_VOICE_ID = "default-exsg-odgaqb9kgydhmbw-w__gemini";
-const DEFAULT_SPEAKING_RATE = 0.91;
-const DEFAULT_TEMPERATURE = 0.89;
+import { synthesizePollyAudioBase64 } from "../lib/pollyTts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,14 +22,8 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function getAuthHeader() {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env || {};
-  const key = String(env.INWORLD_TTS_AUTH || "").trim();
-  if (!key) {
-    return "";
-  }
-
-  return key.startsWith("Basic ") ? key : `Basic ${key}`;
+function hasAwsCredentials() {
+  return Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_REGION);
 }
 
 export default async function handler(request: Request) {
@@ -45,52 +35,26 @@ export default async function handler(request: Request) {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const authHeader = getAuthHeader();
-  if (!authHeader) {
-    return jsonResponse({ error: "Missing INWORLD_TTS_AUTH" }, 500);
+  if (!hasAwsCredentials()) {
+    return jsonResponse({ error: "Missing AWS Polly environment variables" }, 500);
   }
 
   try {
     const payload = (await request.json()) as TtsRequest;
-    const text = payload.text?.trim() || "";
-    if (!text) {
-      return jsonResponse({ error: "Text is required" }, 400);
+    const rawText = payload.text?.trim() || "";
+
+    if (!rawText) {
+      return jsonResponse({ audio: null });
     }
 
-    const response = await fetch(INWORLD_TTS_STREAM_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: authHeader,
-      },
-      body: JSON.stringify({
-        text,
-        voice_id: DEFAULT_VOICE_ID,
-        model_id: DEFAULT_MODEL_ID,
-        audio_config: {
-          audio_encoding: "MP3",
-          speaking_rate: DEFAULT_SPEAKING_RATE,
-        },
-        temperature: DEFAULT_TEMPERATURE,
-      }),
-    });
-
-    if (!response.ok || !response.body) {
-      const errText = await response.text();
-      return jsonResponse({ error: `Inworld TTS failed: ${response.status}`, details: errText }, 502);
+    const audio = await synthesizePollyAudioBase64(rawText);
+    if (!audio) {
+      return jsonResponse({ audio: null }, 200);
     }
 
-    return new Response(response.body, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/x-ndjson",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    return jsonResponse({ audio }, 200);
   } catch (error) {
-    console.error("TTS route failed", error);
-    return jsonResponse({ error: "TTS route failed" }, 500);
+    console.error("Polly TTS route failed", error);
+    return jsonResponse({ error: "TTS Failed" }, 500);
   }
 }

@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { MessageCircle, Pencil, Plus, Settings, Trash2, Volume2, VolumeX } from "lucide-react";
+import { MessageCircle, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -11,15 +11,11 @@ interface SidebarProps {
   chatSessions: ChatSessionListItem[];
   currentChatId: string | null;
   isGuest: boolean;
-  isMuted: boolean;
-  isSpeaking?: boolean;
   isLightMode: boolean;
   newChatLabel: string;
   recentChatsLabel: string;
   noChatsGuestLabel: string;
   noChatsAccountLabel: string;
-  muteLabel: string;
-  unmuteLabel: string;
   settingsLabel: string;
   userName: string;
   userPhotoUrl?: string;
@@ -30,7 +26,6 @@ interface SidebarProps {
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
-  onToggleMute: () => void;
   onOpenSettings: () => void;
 }
 
@@ -141,15 +136,11 @@ export default function Sidebar({
   chatSessions,
   currentChatId,
   isGuest,
-  isMuted,
-  isSpeaking = false,
   isLightMode,
   newChatLabel,
   recentChatsLabel,
   noChatsGuestLabel,
   noChatsAccountLabel,
-  muteLabel,
-  unmuteLabel,
   settingsLabel,
   userName,
   userPhotoUrl,
@@ -160,7 +151,6 @@ export default function Sidebar({
   onDeleteChat,
   onRenameChat,
   onCloseSidebar,
-  onToggleMute,
   onOpenSettings,
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -279,24 +269,6 @@ export default function Sidebar({
             </div>
 
             <div className={`mt-3 space-y-1 border-t border-pink-500/8 pt-3 ${profileBorderTone}`}>
-              <button
-                type="button"
-                onClick={onToggleMute}
-                aria-label={isMuted ? unmuteLabel : muteLabel}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
-              >
-                {isMuted ? (
-                  <VolumeX className="h-4 w-4 shrink-0 text-pink-300/60" />
-                ) : (
-                  <div className="relative flex h-4 w-4 items-center justify-center">
-                    {isSpeaking ? (
-                      <span className="absolute inline-flex h-4 w-4 rounded-full bg-pink-400/30 animate-ping" />
-                    ) : null}
-                    <Volume2 className={`h-4 w-4 shrink-0 ${isSpeaking ? "text-pink-300" : "text-pink-300/60"}`} />
-                  </div>
-                )}
-                <span>{isMuted ? unmuteLabel : muteLabel}</span>
-              </button>
               <button
                 type="button"
                 onClick={onOpenSettings}
