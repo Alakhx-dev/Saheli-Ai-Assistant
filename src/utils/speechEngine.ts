@@ -1,13 +1,16 @@
 let currentSaheliAudio: HTMLAudioElement | null = null;
+let currentSaheliAudioUrl: string | null = null;
+let prefetchedContinuationAudio: HTMLAudioElement | null = null;
+let prefetchedContinuationUrl: string | null = null;
 let currentTtsAbortController: AbortController | null = null;
 let lastSpokenSignature = "";
 let speakToken = 0;
 
 const TTS_ENDPOINT = import.meta.env.VITE_TTS_API_URL?.trim() || "/api/tts";
-const MAX_SPEAK_CHARS = 170;
 const SAHELI_PLAYBACK_RATE = 1.0;
-const PLAYBACK_SMOOTHING_DELAY_MS = 50;
+const PLAYBACK_SMOOTHING_DELAY_MS = 30;
 const EMOJI_REGEX = /(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|[\u{1F3FB}-\u{1F3FF}]|[#*0-9]\uFE0F?\u20E3)+/gu;
+const FIRST_SENTENCE_REGEX = /[^.!?]+[.!?]+/;
 
 function buildSpeechSignature(text: string) {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
@@ -43,17 +46,69 @@ function normalizeForSpeech(raw: string) {
     .trim();
 }
 
-function toSpeakableSnippet(text: string) {
-  if (text.length <= MAX_SPEAK_CHARS) {
-    return text;
+export function splitFastText(text: string) {
+  const clean = text.trim();
+  if (!clean) {
+    return { firstSentence: "", remainingText: "" };
   }
 
-  const firstSentence = text.match(/^(.{1,140}?[.!?])(?:\s|$)/)?.[1]?.trim();
-  if (firstSentence) {
-    return firstSentence;
+  const firstMatch = clean.match(FIRST_SENTENCE_REGEX);
+  if (!firstMatch || !firstMatch[0]) {
+    return { firstSentence: clean, remainingText: "" };
   }
 
-  return `${text.slice(0, MAX_SPEAK_CHARS).trimEnd()}...`;
+  const firstSentence = firstMatch[0].trim();
+  const remainingText = clean.slice(firstSentence.length).trim();
+  return { firstSentence, remainingText };
+}
+
+function revokeUrl(url: string | null) {
+  if (url) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function createConfiguredAudioFromBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  audio.preload = "auto";
+  audio.defaultPlaybackRate = SAHELI_PLAYBACK_RATE;
+  audio.playbackRate = SAHELI_PLAYBACK_RATE;
+
+  const pitchAdjustedAudio = audio as HTMLAudioElement & {
+    preservesPitch?: boolean;
+    mozPreservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+  };
+  pitchAdjustedAudio.preservesPitch = false;
+  pitchAdjustedAudio.mozPreservesPitch = false;
+  pitchAdjustedAudio.webkitPreservesPitch = false;
+
+  return { audio, url };
+}
+
+function clearCurrentAudio() {
+  if (currentSaheliAudio) {
+    currentSaheliAudio.pause();
+    currentSaheliAudio.currentTime = 0;
+    currentSaheliAudio.src = "";
+    currentSaheliAudio.load();
+    currentSaheliAudio = null;
+  }
+  revokeUrl(currentSaheliAudioUrl);
+  currentSaheliAudioUrl = null;
+}
+
+function clearPrefetchedAudio() {
+  if (prefetchedContinuationAudio) {
+    prefetchedContinuationAudio.pause();
+    prefetchedContinuationAudio.currentTime = 0;
+    prefetchedContinuationAudio.src = "";
+    prefetchedContinuationAudio.load();
+    prefetchedContinuationAudio = null;
+  }
+  revokeUrl(prefetchedContinuationUrl);
+  prefetchedContinuationUrl = null;
 }
 
 function stopCurrentPlayback() {
@@ -64,16 +119,11 @@ function stopCurrentPlayback() {
     currentTtsAbortController = null;
   }
 
-  if (currentSaheliAudio) {
-    currentSaheliAudio.pause();
-    currentSaheliAudio.currentTime = 0;
-    currentSaheliAudio.src = "";
-    currentSaheliAudio.load();
-    currentSaheliAudio = null;
-  }
+  clearCurrentAudio();
+  clearPrefetchedAudio();
 }
 
-async function fetchPollyAudio(text: string, token: number) {
+async function fetchPollyBlob(text: string, token: number) {
   const controller = new AbortController();
   currentTtsAbortController = controller;
 
@@ -95,8 +145,29 @@ async function fetchPollyAudio(text: string, token: number) {
     throw new Error(`Polly TTS failed: ${response.status} ${errorText}`);
   }
 
-  const data = (await response.json()) as { audio?: string | null };
-  return data.audio?.trim() || null;
+  const blob = await response.blob();
+  if (!blob || blob.size === 0) {
+    return null;
+  }
+
+  return blob;
+}
+
+async function buildAudioFromPolly(text: string, token: number) {
+  const blob = await fetchPollyBlob(text, token);
+  if (!blob || token !== speakToken) {
+    return null;
+  }
+
+  return createConfiguredAudioFromBlob(blob);
+}
+
+function playAudioNow(audio: HTMLAudioElement, token: number) {
+  void audio.play().catch((error) => {
+    if (token === speakToken) {
+      console.error("Playback blocked:", error);
+    }
+  });
 }
 
 export async function speakSaheli(text: string) {
@@ -109,9 +180,7 @@ export async function speakSaheli(text: string) {
     return;
   }
 
-  const speakText = toSpeakableSnippet(cleanText);
-
-  const signature = buildSpeechSignature(speakText);
+  const signature = buildSpeechSignature(cleanText);
   if (signature && signature === lastSpokenSignature) {
     return;
   }
@@ -120,47 +189,71 @@ export async function speakSaheli(text: string) {
   const token = speakToken;
   lastSpokenSignature = signature;
 
+  const { firstSentence, remainingText } = splitFastText(cleanText);
+  if (!firstSentence) {
+    return;
+  }
+
+  const continuationPromise = remainingText
+    ? buildAudioFromPolly(remainingText, token).then((result) => {
+      if (!result || token !== speakToken) {
+        return null;
+      }
+
+      clearPrefetchedAudio();
+      prefetchedContinuationAudio = result.audio;
+      prefetchedContinuationUrl = result.url;
+      return result;
+    })
+    : Promise.resolve(null);
+
   try {
-    const audioBase64 = await fetchPollyAudio(speakText, token);
-    if (!audioBase64 || token !== speakToken) {
+    const firstAudioResult = await buildAudioFromPolly(firstSentence, token);
+    if (!firstAudioResult || token !== speakToken) {
       return;
     }
 
-    const audio = new Audio(`data:audio/mp3;base64,${audioBase64}`);
-    audio.preload = "auto";
-    audio.defaultPlaybackRate = SAHELI_PLAYBACK_RATE;
-    audio.playbackRate = SAHELI_PLAYBACK_RATE;
-    const pitchAdjustedAudio = audio as HTMLAudioElement & {
-      preservesPitch?: boolean;
-      mozPreservesPitch?: boolean;
-      webkitPreservesPitch?: boolean;
-    };
-    pitchAdjustedAudio.preservesPitch = false;
-    pitchAdjustedAudio.mozPreservesPitch = false;
-    pitchAdjustedAudio.webkitPreservesPitch = false;
-    audio.onended = () => {
-      if (currentSaheliAudio === audio) {
-        currentSaheliAudio = null;
-      }
-    };
-    audio.onerror = () => {
-      if (currentSaheliAudio === audio) {
-        currentSaheliAudio = null;
-      }
-    };
+    clearCurrentAudio();
+    currentSaheliAudio = firstAudioResult.audio;
+    currentSaheliAudioUrl = firstAudioResult.url;
 
-    currentSaheliAudio = audio;
-    window.setTimeout(() => {
-      if (token !== speakToken || currentSaheliAudio !== audio) {
+    firstAudioResult.audio.onended = () => {
+      if (token !== speakToken) {
         return;
       }
 
-      void audio.play().catch((error) => {
-        if (token === speakToken) {
-          console.error("Playback blocked:", error);
+      clearCurrentAudio();
+
+      void continuationPromise.then((continuationResult) => {
+        if (!continuationResult || token !== speakToken) {
+          return;
         }
+
+        currentSaheliAudio = continuationResult.audio;
+        currentSaheliAudioUrl = continuationResult.url;
+        prefetchedContinuationAudio = null;
+        prefetchedContinuationUrl = null;
+        playAudioNow(continuationResult.audio, token);
       });
+    };
+
+    firstAudioResult.audio.onerror = () => {
+      if (currentSaheliAudio === firstAudioResult.audio) {
+        clearCurrentAudio();
+      }
+    };
+
+    window.setTimeout(() => {
+      if (token === speakToken && currentSaheliAudio === firstAudioResult.audio) {
+        playAudioNow(firstAudioResult.audio, token);
+      }
     }, PLAYBACK_SMOOTHING_DELAY_MS);
+
+    void continuationPromise.catch((error) => {
+      if (token === speakToken) {
+        console.error("Polly continuation preload failed:", error);
+      }
+    });
   } catch (error) {
     if (token === speakToken) {
       console.error("Polly Frontend Error:", error);

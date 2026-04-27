@@ -70,8 +70,8 @@ export default defineConfig(({ mode }) => {
             const parsed = rawBody ? JSON.parse(rawBody) : {};
             const text = String(parsed.text || "").trim();
             if (!text) {
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ audio: null }));
+              res.statusCode = 204;
+              res.end();
               return;
             }
 
@@ -81,17 +81,17 @@ export default defineConfig(({ mode }) => {
               AWS_REGION: env.AWS_REGION,
             });
             if (!audio) {
-              res.statusCode = 200;
-              res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ audio: null }));
+              res.statusCode = 204;
+              res.end();
               return;
             }
 
+            const bytes = Buffer.from(audio, "base64");
             res.statusCode = 200;
             res.setHeader("Access-Control-Allow-Origin", "*");
-            res.setHeader("Content-Type", "application/json");
+            res.setHeader("Content-Type", "audio/mpeg");
             res.setHeader("Cache-Control", "no-cache");
-            res.end(JSON.stringify({ audio }));
+            res.end(bytes);
           } catch (error: any) {
             res.statusCode = 500;
             res.setHeader("Content-Type", "application/json");

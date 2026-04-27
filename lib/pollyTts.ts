@@ -2,14 +2,15 @@ import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
 
 const DEFAULT_VOICE_ID = "Kajal";
 const DEFAULT_ENGINE = "neural";
-const SWARA_CALL_PLAYBACK_RATE = "90%";
-const SWARA_CALL_PITCH = "+28%";
-const SWARA_CALL_VOLUME = "-3dB";
-const SWARA_ULTRA_SOFT_PLAYBACK_RATE = "88%";
-const SWARA_ULTRA_SOFT_PITCH = "+32%";
-const SWARA_ULTRA_SOFT_VOLUME = "-6dB";
+const BUBBLY_PLAYBACK_RATE = "0.88";
+const BUBBLY_PITCH = "+35%";
+const BUBBLY_VOLUME = "-6dB";
+const FALLBACK_PLAYBACK_RATE = "100%";
+const FALLBACK_PITCH = "+28%";
+const FALLBACK_VOLUME = "-4dB";
 
 const EMOJI_REGEX = /(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|[\u{1F3FB}-\u{1F3FF}]|[#*0-9]\uFE0F?\u20E3)+/gu;
+const INERT_CHAR_REGEX = /[\u200B-\u200F\u2060\uFE00-\uFE0F\u00AD]/g;
 
 type PollyEnv = {
   AWS_ACCESS_KEY_ID?: string;
@@ -40,12 +41,14 @@ function getPollyClient(env: PollyEnv | NodeJS.ProcessEnv = process.env) {
 
 export function normalizeTtsText(rawText: string) {
   return rawText
+    .normalize("NFKC")
     .replace(/```[\s\S]*?```/g, " ")
     .replace(/`([^`]+)`/g, "$1")
     .replace(/https?:\/\/\S+/gi, " ")
     .replace(/www\.[^\s]+/gi, " ")
     .replace(/[\r\n\t]+/g, " ")
     .replace(EMOJI_REGEX, " ")
+    .replace(INERT_CHAR_REGEX, "")
     .replace(/['"’“”]/g, "")
     .replace(/[\u200D\uFE0E\uFE0F]/g, "")
     .replace(/[*_#~]/g, "")
@@ -65,10 +68,13 @@ function applyHinglishPhoneticFixes(text: string) {
   return text
     .toLowerCase()
     .replace(EMOJI_REGEX, " ")
-    .replace(/\bache\b/g, "achhe")
-    .replace(/\bachhe\b/g, "achh-che")
+    .replace(INERT_CHAR_REGEX, "")
+    .replace(/\bhelo\b/g, "helow")
+    .replace(/\bhi\b/g, "heyy")
+    .replace(/\bachhe\b/g, "ach-chey")
     .replace(/\bkaise\b/g, "kaisay")
     .replace(/\bkr\b/g, "kar")
+    .replace(/\bkar\b/g, "karr")
     .replace(/\brhe\b/g, "rahe")
     .replace(/\bh\b/g, "hai")
     .replace(/\bhu\b/g, "hoon")
@@ -77,12 +83,16 @@ function applyHinglishPhoneticFixes(text: string) {
     .replace(/\btm\b/g, "tum")
     .replace(/\btum\b/g, "tummm")
     .replace(/\bthik\b/g, "theek")
-    .replace(/\btheek\b/g, "theeyk")
+    .replace(/\btheek\b/g, "theeyk hai")
     .replace(/\bkya\b/g, "kyaa")
     .replace(/['"’“”]/g, "")
     .replace(/[*_#~]/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+export function preparePollyText(rawText: string) {
+  return applyHinglishPhoneticFixes(normalizeTtsText(rawText));
 }
 
 function escapeForSsml(text: string) {
@@ -94,19 +104,18 @@ function escapeForSsml(text: string) {
     .replace(/'/g, "&apos;");
 }
 
-function toEmotionalSsml(text: string) {
+export function buildBubblySsml(text: string) {
   const escaped = escapeForSsml(text);
-  return `<speak><amazon:domain name="conversational"><prosody pitch="${SWARA_CALL_PITCH}" rate="${SWARA_CALL_PLAYBACK_RATE}" volume="${SWARA_CALL_VOLUME}"><amazon:effect name="softened">${escaped}</amazon:effect></prosody></amazon:domain></speak>`;
+  return `<speak><amazon:domain name="conversational"><prosody pitch="${BUBBLY_PITCH}" rate="${BUBBLY_PLAYBACK_RATE}" volume="${BUBBLY_VOLUME}"><amazon:effect name="softened"><amazon:breath duration="short" volume="soft"/>${escaped}<amazon:breath duration="short" volume="soft"/></amazon:effect></prosody></amazon:domain></speak>`;
 }
 
-function toUltraSoftSwaraSsml(text: string) {
+function buildFallbackSsml(text: string) {
   const escaped = escapeForSsml(text);
-  return `<speak><amazon:domain name="conversational"><prosody pitch="${SWARA_ULTRA_SOFT_PITCH}" rate="${SWARA_ULTRA_SOFT_PLAYBACK_RATE}" volume="${SWARA_ULTRA_SOFT_VOLUME}"><amazon:effect name="softened"><amazon:effect name="whispered"><emphasis level="reduced">${escaped}</emphasis></amazon:effect></amazon:effect></prosody></amazon:domain></speak>`;
+  return `<speak><amazon:domain name="conversational"><prosody pitch="${FALLBACK_PITCH}" rate="${FALLBACK_PLAYBACK_RATE}" volume="${FALLBACK_VOLUME}">${escaped}</prosody></amazon:domain></speak>`;
 }
 
 export async function synthesizePollyAudioBase64(text: string, env?: PollyEnv) {
-  const normalizedText = normalizeTtsText(text);
-  const cleanText = applyHinglishPhoneticFixes(normalizedText);
+  const cleanText = preparePollyText(text);
   if (!cleanText) {
     return null;
   }
@@ -115,7 +124,7 @@ export async function synthesizePollyAudioBase64(text: string, env?: PollyEnv) {
   let response;
   try {
     response = await pollyClient.send(new SynthesizeSpeechCommand({
-      Text: toUltraSoftSwaraSsml(cleanText),
+      Text: buildBubblySsml(cleanText),
       TextType: "ssml",
       OutputFormat: "mp3",
       SampleRate: "22050",
@@ -124,9 +133,9 @@ export async function synthesizePollyAudioBase64(text: string, env?: PollyEnv) {
       LanguageCode: "hi-IN",
     }));
   } catch {
-    // Some voices/regions reject whispered SSML combinations; fallback to softened SSML.
+    // Some voices/regions reject richer SSML combinations; fall back to a lighter SSML variant.
     response = await pollyClient.send(new SynthesizeSpeechCommand({
-      Text: toEmotionalSsml(cleanText),
+      Text: buildFallbackSsml(cleanText),
       TextType: "ssml",
       OutputFormat: "mp3",
       SampleRate: "22050",

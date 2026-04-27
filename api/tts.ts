@@ -22,6 +22,18 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
+function audioResponse(base64Audio: string) {
+  const bytes = Buffer.from(base64Audio, "base64");
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "no-cache",
+    },
+  });
+}
+
 function hasAwsCredentials() {
   return Boolean(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_REGION);
 }
@@ -44,15 +56,25 @@ export default async function handler(request: Request) {
     const rawText = payload.text?.trim() || "";
 
     if (!rawText) {
-      return jsonResponse({ audio: null });
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...corsHeaders,
+        },
+      });
     }
 
     const audio = await synthesizePollyAudioBase64(rawText);
     if (!audio) {
-      return jsonResponse({ audio: null }, 200);
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...corsHeaders,
+        },
+      });
     }
 
-    return jsonResponse({ audio }, 200);
+    return audioResponse(audio);
   } catch (error) {
     console.error("Polly TTS route failed", error);
     return jsonResponse({ error: "TTS Failed" }, 500);
