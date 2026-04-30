@@ -169,6 +169,32 @@ export async function saveImageMemoryDB(imageUrl: string, userId?: string) {
   }
 }
 
+/**
+ * Save a vision-captured image directly to Firestore as base64.
+ * No Firebase Storage upload — avoids CORS preflight issues entirely.
+ * Only the raw image is stored; analysis text is NOT saved.
+ */
+export async function saveVisionImageMemory(base64Image: string, userId?: string, description?: string) {
+  if (!userId || !base64Image) return;
+  try {
+    const cleanBase64 = base64Image.startsWith("data:image")
+      ? base64Image.split(",")[1]
+      : base64Image;
+    await addDoc(collection(db, "image_memories"), {
+      userId,
+      type: "image",
+      timestamp: Date.now(),
+      base64: cleanBase64,
+      image: cleanBase64,
+      description: description?.trim() || "",
+      createdAt: serverTimestamp(),
+    });
+    console.log("Image saved to memory");
+  } catch (err) {
+    console.error("Failed to save vision image memory", err);
+  }
+}
+
 export async function deleteChatDoc(id: string) {
   await deleteDoc(doc(db, "chats", id));
 }

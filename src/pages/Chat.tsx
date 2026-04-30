@@ -1,10 +1,14 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 import {
+  Camera,
+  ImagePlus,
   Menu,
   Mic,
   Send,
   Heart,
   X,
+  Plus,
+  Upload,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -12,7 +16,8 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { FALLBACK_MESSAGE, sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
+import { toast } from "sonner";
+import { sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -23,7 +28,7 @@ import {
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
-import { analyzeFaceImage } from "@/lib/emotion-service";
+
 import { formatText, getLang, getStoredLanguage, UI_LANGUAGE_STORAGE_KEY } from "@/lib/useLanguage";
 import {
   CREATOR_NAME,
@@ -40,7 +45,7 @@ import {
   setMemoryEnabled,
   type MemoryProfile,
 } from "@/lib/memory";
-import { detectMemory, saveImageMemoryDB, saveMemoryToDB } from "@/lib/chatService";
+import { detectMemory, saveImageMemoryDB, saveMemoryToDB, saveVisionImageMemory } from "@/lib/chatService";
 import { resetSaheliSpeechDedup, speakSaheli, stopSaheliSpeech } from "@/utils/speechEngine";
 
 import { isMobile } from "@/lib/utils";
@@ -48,18 +53,30 @@ import Sidebar from "@/components/Sidebar";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
 import { useAppStore } from "@/store/app-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const SettingsPanel = lazy(() => import("@/components/settings/SettingsPanel"));
 
-const VISION_TRIGGER_PATTERNS = [
-  /\bdekho\b/i,
-  /\bdekh\s*ke\s*batao\b/i,
-  /\bkais[aei]?\s+lag\s+rah[aei]\b/i,
-  /\bkapd[ae]\b/i,
-  /\bfit\b/i,
-  /\bfit\s*check\b/i,
-  /\bcamera\b/i,
-];
+// Intent-based vision trigger — matches natural Hindi/English phrases asking to be looked at.
+const isVisionIntent = (text: string) => {
+  const input = text.toLowerCase();
+  
+  // Pattern 1: Action (dekho, dkeho, dekh, btao, look, check, see)
+  const action = /(de[k|kh|gh|k]o|d[k|kh]o|look|check|see|batao|btao)/i.test(input);
+  
+  // Pattern 2: Subject (mujhe, mera, meri, mai, main, camera, look, outfit, me, ham, hum)
+  const subject = /(mujhe|mera|meri|mai|main|camera|look|outfit|me|ham|hum)/i.test(input);
+
+  // Pattern 3: Direct Style Queries
+  const direct = /(kaisa lag raha|kaisi lag rahi|how do i look|fit check|kaisa hai ham)/i.test(input);
+
+  return (action && subject) || direct || (input.includes("camera") && action);
+};
 const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
 const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
@@ -206,8 +223,6 @@ interface PendingMobileVisionRequest {
   memoryProfile: MemoryProfile | null;
   identity: UserIdentityContext;
 }
-
-const CAMERA_ANALYSIS_FALLBACK_MESSAGE = "Camera analysis failed, try again";
 
 type TitleMood = "flirty" | "sad" | "funny" | "serious" | "neutral";
 
@@ -722,10 +737,18 @@ export default function Chat() {
   const mobileVisionProcessingRequestIdRef = useRef<number | null>(null);
   const memoryCleanupDoneRef = useRef(false);
   const lastSpokenMessageRef = useRef("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const selectedImageRef = useRef<string | null>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
   const messagesRef = useRef<ChatMessage[]>([]);
+
+  const setSelectedImageValue = useCallback((value: string | null) => {
+    selectedImageRef.current = value;
+    setSelectedImage(value);
+  }, []);
 
   useEffect(() => {
     const moveCursor = (event: MouseEvent) => {
@@ -1183,13 +1206,13 @@ export default function Chat() {
       return;
     }
 
-    const imageDataUrl = base64OrDataUrl.startsWith("data:image")
-      ? base64OrDataUrl
-      : `data:image/jpeg;base64,${base64OrDataUrl}`;
+    const base64Data = base64OrDataUrl.startsWith("data:image")
+      ? base64OrDataUrl.split(",")[1]
+      : base64OrDataUrl;
     const path = `memory/${user.uid}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
     const imageRef = storageRef(storage, path);
 
-    await uploadString(imageRef, imageDataUrl, "data_url");
+    await uploadString(imageRef, base64Data, "base64", { contentType: "image/jpeg" });
     const url = await getDownloadURL(imageRef);
     await persistMemoryImage({
       type,
@@ -1296,8 +1319,9 @@ export default function Chat() {
         );
 
         if (user) {
+          const base64Data = croppedDataUrl.split(",")[1];
           const avatarRef = storageRef(storage, `profile-pictures/${user.uid}.jpg`);
-          await uploadString(avatarRef, croppedDataUrl, "data_url");
+          await uploadString(avatarRef, base64Data, "base64", { contentType: "image/jpeg" });
           nextPhotoUrl = await getDownloadURL(avatarRef);
         } else {
           nextPhotoUrl = croppedDataUrl;
@@ -1354,8 +1378,7 @@ export default function Chat() {
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        console.error("Camera capture unavailable: mediaDevices.getUserMedia is not supported on this browser");
-        return undefined;
+        throw new Error("Camera access nahi mila. Please allow camera and try again.");
       }
 
       stream = await navigator.mediaDevices.getUserMedia({
@@ -1380,12 +1403,25 @@ export default function Chat() {
           return;
         }
 
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Camera metadata failed to load"));
-      });
+        video.onloadedmetadata = () => {
+          video?.play().catch(console.warn);
+        };
+        video.onerror = () => reject(new Error("Camera failed to load"));
 
-      await video.play();
-      await new Promise((resolve) => setTimeout(resolve, 250));
+        let attempts = 0;
+        const checkReady = setInterval(() => {
+          attempts++;
+          if (video && video.readyState === 4 && video.videoWidth > 0) {
+            clearInterval(checkReady);
+            // Give an extra 200ms for auto-exposure to settle
+            setTimeout(resolve, 200);
+          } else if (attempts > 50) {
+            clearInterval(checkReady);
+            console.error("❌ Camera not ready or video feed inactive after 5 seconds");
+            reject(new Error("Camera timed out waiting for readyState"));
+          }
+        }, 100);
+      });
 
       const frameWidth = video.videoWidth || 320;
       const frameHeight = video.videoHeight || 240;
@@ -1403,7 +1439,7 @@ export default function Chat() {
       return dataUrl.split(",")[1];
     } catch (error) {
       logCameraFailure(error);
-      return undefined;
+      throw new Error("Camera access nahi mila. Please allow camera and try again.");
     } finally {
       if (video) {
         video.pause();
@@ -1618,15 +1654,26 @@ export default function Chat() {
       onPartialText?.(partialText);
     };
 
-    return sendMessage(
-      history,
-      imageBase64,
-      detectedEmotion,
-      memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
-      requestIdentity,
-      memoryEnabled ? "enabled" : "disabled",
-      handleChunk,
-    );
+    try {
+      const response = await sendMessage(
+        history,
+        imageBase64,
+        detectedEmotion,
+        memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
+        requestIdentity,
+        memoryEnabled ? "enabled" : "disabled",
+        handleChunk,
+      );
+      
+      if (response.warning) {
+        toast.warning(response.warning);
+      }
+      
+      return response.text;
+    } catch (error: any) {
+      console.error("Stream response error:", error);
+      throw error;
+    }
   }, [memoryEnabled, updateStreamingMessage]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
@@ -1639,8 +1686,6 @@ export default function Chat() {
     }
 
     mobileVisionProcessingRequestIdRef.current = request.id;
-    let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
-
     pendingMobileVisionRequestRef.current = null;
     setPendingMobileVisionRequest(null);
     setIsLoading(true);
@@ -1648,54 +1693,20 @@ export default function Chat() {
     try {
       const requestIdentity = getRequestIdentityContext();
 
-      if (imageBase64) {
-        if (memoryEnabled) {
-          try {
-            await uploadMemoryImage(imageBase64, "upload");
-          } catch (error) {
-            console.error("Failed to save memory image", error);
-          }
-        }
-
-        analysisResult = await analyzeFaceImage(imageBase64);
-        if (!analysisResult.ok) {
-          saveFinalMessage(request.chatId, analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE);
-          if (isGuest) {
-            saveLocal({ role: "assistant", content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE });
-          }
-          void persistChatMessage(request.chatId, {
-            role: "model",
-            content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE,
-            createdAt: Date.now(),
-          }).catch((error) => {
-            console.error("Failed to persist camera fallback reply", error);
-          });
-          return;
-        }
-      }
-
-      const visionAnalysis = analysisResult?.analysis?.trim() || "";
-      const visionPromptHistory = visionAnalysis
-        ? [
-            ...request.history.slice(0, -1),
-            {
-              role: "user" as const,
-              content: `${request.history[request.history.length - 1]?.content ?? ""}\n\nUser image analysis: ${visionAnalysis}`,
-            },
-          ]
-        : request.history;
-
       lastMsgCountRef.current = request.history.length;
       const responseText = await streamResponse(
-        visionPromptHistory[visionPromptHistory.length - 1]?.content ?? "",
+        request.history[request.history.length - 1]?.content ?? "",
         request.chatId,
-        visionPromptHistory,
-        undefined,
-        analysisResult?.emotion ?? undefined,
+        request.history,
+        imageBase64,
+        undefined, // emotion no longer used from Rekognition
         requestIdentity as any,
         request.memoryProfile,
       );
       saveFinalMessage(request.chatId, responseText);
+      if (imageBase64) {
+        void saveVisionImageMemory(imageBase64, user?.uid, responseText);
+      }
       setIsLoading(false);
       const nextMood = detectMood(responseText);
       const aiMessage = { role: "model" as const, content: responseText };
@@ -1715,6 +1726,8 @@ export default function Chat() {
 
     } catch (error) {
       console.error("Failed to complete pending vision request", error);
+      const errorMessage = error instanceof Error ? error.message : "AI model currently unavailable hai. Thodi der baad try karo.";
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
@@ -1727,7 +1740,20 @@ export default function Chat() {
 
   const handleMobileCameraChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !pendingMobileVisionRequest) {
+    if (!file) {
+      return;
+    }
+
+    if (!pendingMobileVisionRequest) {
+      try {
+        await handleImageFileSelection(file);
+      } catch (error) {
+        console.error("Mobile camera auto-send failed", error);
+        const message = error instanceof Error ? error.message : "Camera access nahi mila. Please allow camera and try again.";
+        toast.error(message, { duration: 5000 });
+      } finally {
+        event.target.value = "";
+      }
       return;
     }
 
@@ -1742,14 +1768,30 @@ export default function Chat() {
       await completePendingVisionRequest(pendingMobileVisionRequest, base64);
     } catch (error) {
       console.error("Mobile camera capture failed", error);
+      const message = error instanceof Error ? error.message : "Camera access nahi mila. Please allow camera and try again.";
+      toast.error(message, { duration: 5000 });
       setIsLoading(false);
       submitLockRef.current = false;
+    } finally {
+      event.target.value = "";
     }
+  };
+
+  const handleImageFileSelection = async (file: File) => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+      reader.readAsDataURL(file);
+    });
+
+    setSelectedImageValue(dataUrl);
+    void handleSubmit();
   };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!input.trim() || isLoading || submitLockRef.current) {
+    if ((!(input.trim() || selectedImageRef.current)) || isLoading || submitLockRef.current) {
       return;
     }
 
@@ -1757,9 +1799,10 @@ export default function Chat() {
     resetSaheliSpeechDedup();
     lastSpokenMessageRef.current = "";
 
-    const userText = input.trim();
+    const userText = input.trim() || (selectedImageRef.current ? "Please analyze this image carefully." : "");
     setInput("");
     const mobile = isMobile();
+    console.log("STEP 1: User message:", userText);
 
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
@@ -1828,12 +1871,15 @@ export default function Chat() {
       };
       setMemoryProfile(nextMemoryProfile);
 
-      void saveMemoryFields(user, nextMemoryFields).catch((error) => {
+      // skipAiFilter: deriveMemoryFields already applies strict validation,
+      // so the secondary AI-based filter was silently dropping valid memories.
+      void saveMemoryFields(user, nextMemoryFields, { skipAiFilter: true }).catch((error) => {
         console.error("Failed to persist memory fields", error);
       });
     }
 
-    const shouldUseVision = VISION_TRIGGER_PATTERNS.some((pattern) => pattern.test(userText));
+    const shouldUseVision = isVisionIntent(userText);
+    console.log("🎯 STEP 2: Smart Intent Triggered:", shouldUseVision, "| Mobile:", mobile);
 
     if (mobile && shouldUseVision) {
       const pendingRequest: PendingMobileVisionRequest = {
@@ -1852,71 +1898,40 @@ export default function Chat() {
 
     try {
       lastMsgCountRef.current = nextHistory.length;
-      const base64Image = shouldUseVision ? await captureVisionFrame() : undefined;
-      let analysisResult: { ok: boolean; emotion: EmotionLabel | null; analysis: string; fallbackMessage?: string } | null = null;
+      let base64Image: string | undefined;
 
-      if (shouldUseVision) {
-        if (!base64Image) {
-          saveFinalMessage(chatId, CAMERA_ANALYSIS_FALLBACK_MESSAGE);
-          if (isGuest) {
-            saveLocal({ role: "assistant", content: CAMERA_ANALYSIS_FALLBACK_MESSAGE });
-          }
-          void persistChatMessage(chatId, {
-            role: "model",
-            content: CAMERA_ANALYSIS_FALLBACK_MESSAGE,
-            createdAt: Date.now(),
-          }).catch((error) => {
-            console.error("Failed to persist camera fallback reply", error);
-          });
-          return;
-        }
-
-        analysisResult = await analyzeFaceImage(base64Image);
-        if (!analysisResult.ok) {
-          saveFinalMessage(chatId, analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE);
-          if (isGuest) {
-            saveLocal({ role: "assistant", content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE });
-          }
-          void persistChatMessage(chatId, {
-            role: "model",
-            content: analysisResult.fallbackMessage || CAMERA_ANALYSIS_FALLBACK_MESSAGE,
-            createdAt: Date.now(),
-          }).catch((error) => {
-            console.error("Failed to persist camera fallback reply", error);
-          });
-          return;
-        }
+      if (selectedImageRef.current) {
+        base64Image = selectedImageRef.current;
+        setSelectedImageValue(null);
+      } else if (shouldUseVision) {
+        base64Image = await captureVisionFrame();
+        console.log("Image captured");
       }
 
-      if (base64Image && memoryEnabled) {
-        try {
-          await uploadMemoryImage(base64Image, "upload", userText);
-        } catch (error) {
-          console.error("Failed to save memory image", error);
-        }
+      let responseText: string;
+
+      if (shouldUseVision && !base64Image) {
+        throw new Error("Image clear nahi hai. Please dubara try karo.");
       }
 
-      const visionAnalysis = analysisResult?.analysis?.trim() || "";
-      const visionPromptHistory = visionAnalysis
-        ? [
-            ...nextHistory.slice(0, -1),
-            {
-              role: "user" as const,
-              content: `${userText}\n\nUser image analysis: ${visionAnalysis}`,
-            },
-          ]
-        : nextHistory;
-
-      const responseText = await streamResponse(
-        visionPromptHistory[visionPromptHistory.length - 1]?.content ?? userText,
+      const finalContent = nextHistory[nextHistory.length - 1]?.content ?? userText;
+      console.log("STEP 4: Final text to Model:", finalContent);
+      
+      responseText = await streamResponse(
+        finalContent,
         chatId,
-        visionPromptHistory,
+        nextHistory,
+        base64Image,
         undefined,
-        analysisResult?.emotion ?? undefined,
         requestIdentity as any,
         nextMemoryProfile,
       );
 
+      if (base64Image) {
+        void saveVisionImageMemory(base64Image, user?.uid, responseText);
+      }
+
+      console.log("STEP 5: Model response:", responseText);
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
       const nextMood = detectMood(responseText);
@@ -1938,6 +1953,8 @@ export default function Chat() {
 
     } catch (error) {
       console.error("Failed to complete chat response", error);
+      const errorMessage = error instanceof Error ? error.message : "AI model currently unavailable hai. Thodi der baad try karo.";
+      toast.error(errorMessage, { duration: 5000 });
     } finally {
       setIsLoading(false);
       submitLockRef.current = false;
@@ -2044,6 +2061,92 @@ export default function Chat() {
             onSubmit={handleSubmit}
             className="relative mx-auto flex w-full items-center saheli-input-bar glass-input-container"
           >
+            {selectedImage && (
+              <div className="absolute -top-24 left-4 p-2 bg-[#1a0b2e]/80 backdrop-blur-xl border border-pink-500/30 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+                <div className="relative group">
+                  <img src={selectedImage} alt="Preview" className="w-16 h-16 object-cover rounded-xl border border-pink-500/20" />
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedImageValue(null)}
+                    className="absolute -top-2 -right-2 bg-pink-600 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  void handleImageFileSelection(file);
+                }
+                e.target.value = "";
+              }}
+            />
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="ml-3 flex items-center justify-center w-[35px] h-[35px] rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white transition-all duration-300 shadow-[0_0_10px_rgba(138,43,226,0.3)] hover:bg-[rgba(138,43,226,0.4)] hover:scale-110 hover:shadow-[0_0_20px_rgba(138,43,226,0.6)]"
+                  aria-label="Add image"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="border border-white/10 bg-[#120b1f]/95 text-white shadow-2xl backdrop-blur-xl">
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    if (isMobile()) {
+                      mobileCameraInputRef.current?.click();
+                      return;
+                    }
+
+                    void captureVisionFrame()
+                      .then((base64) => {
+                        if (!base64) {
+                          throw new Error("Camera access nahi mila. Please allow camera and try again.");
+                        }
+                        setSelectedImageValue(`data:image/jpeg;base64,${base64}`);
+                        void handleSubmit();
+                      })
+                      .catch((error) => {
+                        const message = error instanceof Error ? error.message : "Camera access nahi mila. Please allow camera and try again.";
+                        toast.error(message, { duration: 5000 });
+                      });
+                  }}
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  Camera
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                  Gallery
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  File Upload
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
             <input
               type="text"
               value={input}
@@ -2067,12 +2170,21 @@ export default function Chat() {
             <button
               type="submit"
               aria-label={t.composer.sendMessage}
-              disabled={!input.trim() || isLoading}
+              disabled={(!(input.trim() || selectedImage) || isLoading)}
               className="mr-3 saheli-send-btn saheli-btn-hover"
             >
               <Send className="w-5 h-5" />
             </button>
           </form>
+          <input
+            ref={mobileCameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="user"
+            className="hidden"
+            aria-label="Capture photo"
+            onChange={handleMobileCameraChange}
+          />
           {pendingMobileVisionRequest && isMobile() && (
             <div className="mt-3 flex justify-center">
               <button
@@ -2082,15 +2194,6 @@ export default function Chat() {
               >
                 {t.composer.openCamera}
               </button>
-              <input
-                ref={mobileCameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="user"
-                className="hidden"
-                aria-label="Capture photo"
-                onChange={handleMobileCameraChange}
-              />
             </div>
           )}
           <div className="text-center mt-3 text-[10px] tracking-widest uppercase text-white/40 font-medium pb-2">

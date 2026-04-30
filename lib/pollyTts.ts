@@ -31,7 +31,7 @@ function getPollyClient(env: PollyEnv | NodeJS.ProcessEnv = process.env) {
   }
 
   return new PollyClient({
-    region,
+    region: "us-east-1",
     credentials: {
       accessKeyId,
       secretAccessKey,

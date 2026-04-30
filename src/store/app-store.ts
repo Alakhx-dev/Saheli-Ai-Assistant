@@ -13,6 +13,7 @@ type AppState = {
     language: string;
     speakingRate: number;
     temperature: number;
+    selectedModelId: string;
   };
   setUser: (user: AppUser) => void;
   setChats: (chats: AppChat[]) => void;
@@ -32,6 +33,7 @@ export const useAppStore = create<AppState>((set) => ({
     language: "auto",
     speakingRate: 0.96,
     temperature: 1.29,
+    selectedModelId: "meta-llama/llama-4-scout-17b-16e-instruct",
   },
   setUser: (user) => set({ user }),
   setChats: (chats) => set({ chats }),

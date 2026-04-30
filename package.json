@@ -14,7 +14,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1037.0",
     "@aws-sdk/client-polly": "^3.1037.0",
+    "@aws-sdk/client-rekognition": "^3.1037.0",
     "@hookform/resolvers": "^3.10.0",
     "@inworld/web-sdk": "^1.9.3",
     "@radix-ui/react-accordion": "^1.2.11",

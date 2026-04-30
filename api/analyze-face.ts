@@ -1,6 +1,6 @@
-export const runtime = "edge";
+import { RekognitionClient, DetectFacesCommand } from "@aws-sdk/client-rekognition";
 
-const LUXAND_API_URL = "https://api.luxand.cloud/photo/emotions";
+export const runtime = "edge";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,16 +22,6 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
-function getLuxandKey() {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env || {};
-  const key = String(env.LUXAND_API_KEY || env.VITE_LUXAND_API_KEY || "").trim();
-  if (!key) {
-    return "";
-  }
-
-  return key;
-}
-
 function decodeBase64Image(base64: string): Uint8Array {
   const cleanBase64 = base64.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "");
   const binary = atob(cleanBase64);
@@ -44,87 +34,83 @@ function decodeBase64Image(base64: string): Uint8Array {
   return bytes;
 }
 
-function buildAnalysis(emotions?: Record<string, number>) {
-  const supported: Array<[string, string]> = [
-    ["happiness", "happy"],
-    ["neutral", "neutral"],
-    ["sadness", "sad"],
-    ["anger", "angry"],
-  ];
-
-  let bestEmotion = "neutral";
-  let bestScore = -Infinity;
-
-  for (const [sourceKey, mappedEmotion] of supported) {
-    const score = emotions?.[sourceKey];
-    if (typeof score === "number" && score > bestScore) {
-      bestScore = score;
-      bestEmotion = mappedEmotion;
-    }
-  }
-
-  const confidence = Number.isFinite(bestScore) && bestScore >= 0 ? bestScore : null;
-  const analysis = confidence !== null
-    ? `Luxand detected a ${bestEmotion} expression with confidence ${confidence.toFixed(2)}.`
-    : `Luxand detected a ${bestEmotion} expression.`;
-
-  return { emotion: bestEmotion, analysis };
-}
-
 export default async function handler(request: Request) {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   if (request.method !== "POST") {
-    return jsonResponse({ ok: false, error: "Method not allowed", fallbackMessage: "Camera analysis failed, try again" }, 405);
+    return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
   }
 
-  const luxandApiKey = getLuxandKey();
-  if (!luxandApiKey) {
-    return jsonResponse({ ok: false, error: "Missing LUXAND_API_KEY", fallbackMessage: "Camera analysis failed, try again" }, 500);
+  const env = (globalThis as any).process?.env || {};
+  const clean = (val: string | undefined) => val?.trim().replace(/['"]+/g, '') || "";
+
+  // 🔥 DEDICATED VISION CONFIGURATION
+  const VISION_CONFIG = {
+    region: clean(env.AWS_REKOGNITION_REGION) || "ap-south-1",
+    credentials: {
+      accessKeyId: clean(env.AWS_REKOGNITION_ACCESS_KEY || env.AWS_REKOGNITION_ACCESS_KEY_ID),
+      secretAccessKey: clean(env.AWS_REKOGNITION_SECRET_KEY || env.AWS_REKOGNITION_SECRET_ACCESS_KEY),
+    },
+  };
+
+  if (!VISION_CONFIG.credentials.accessKeyId || !VISION_CONFIG.credentials.secretAccessKey) {
+    console.error("❌ CRITICAL: AWS_REKOGNITION_ACCESS_KEY is missing from .env!");
+    return jsonResponse({ ok: false, error: "Missing AWS Rekognition Credentials" }, 500);
   }
+
+  // Log masked keys to verify they are loaded
+  console.log("AWS Config Loaded:", {
+    region: VISION_CONFIG.region,
+    key: VISION_CONFIG.credentials.accessKeyId.substring(0, 4) + "...****",
+  });
 
   try {
     const payload = (await request.json()) as AnalyzeFaceRequest;
     if (!payload.image) {
-      return jsonResponse({ ok: false, error: "Image is required", fallbackMessage: "Camera analysis failed, try again" }, 400);
+      return jsonResponse({ ok: false, error: "Image is required" }, 400);
     }
 
     const imageBytes = decodeBase64Image(payload.image);
-    const formData = new FormData();
-    formData.append("photo", new Blob([imageBytes], { type: "image/jpeg" }), "image.jpg");
 
-    const luxandResponse = await fetch(LUXAND_API_URL, {
-      method: "POST",
-      headers: {
-        token: luxandApiKey,
-      },
-      body: formData,
-    });
-
-    if (!luxandResponse.ok) {
-      const errorText = await luxandResponse.text();
-      return jsonResponse({
-        ok: false,
-        analysis: "Camera analysis failed, try again",
-        fallbackMessage: "Camera analysis failed, try again",
-        details: errorText,
-      }, 200);
+    if (imageBytes.length < 1000) {
+      console.error("❌ AWS ACTUAL ERROR: Image buffer is too small, capture might have failed.");
+      return jsonResponse({ ok: false, error: "Image buffer is too small", details: "Image buffer is too small" }, 400);
     }
 
-    const result = (await luxandResponse.json()) as {
-      faces?: Array<{ emotions?: Record<string, number> }>;
-    };
+    const rekognition = new RekognitionClient(VISION_CONFIG);
 
-    const faceAnalysis = buildAnalysis(result.faces?.[0]?.emotions);
-    return jsonResponse({ ok: true, ...faceAnalysis }, 200);
-  } catch (error) {
-    console.error("Analyze face route failed", error);
-    return jsonResponse({
-      ok: false,
-      analysis: "Camera analysis failed, try again",
-      fallbackMessage: "Camera analysis failed, try again",
+    const command = new DetectFacesCommand({
+      Image: { Bytes: imageBytes },
+      Attributes: ["ALL"], // CRITICAL for emotions/age
+    });
+
+    const response = await rekognition.send(command);
+    
+    if (!response.FaceDetails || response.FaceDetails.length === 0) {
+      console.log("⚠️ AWS VISION RESULT: No faces detected.");
+      return jsonResponse({ ok: false, error: "No face detected" }, 422);
+    }
+
+    const face = response.FaceDetails[0];
+    const primaryEmotion = face.Emotions?.reduce((prev: any, current: any) => 
+      (prev.Confidence! > current.Confidence!) ? prev : current
+    ).Type;
+
+    const gender = face.Gender?.Value;
+    const ageLow = face.AgeRange?.Low;
+    const ageHigh = face.AgeRange?.High;
+
+    const analysis = `User appears to be ${primaryEmotion?.toLowerCase()}, ${gender?.toLowerCase()}, aged between ${ageLow}-${ageHigh}.`;
+
+    return jsonResponse({ 
+      ok: true, 
+      emotion: primaryEmotion?.toLowerCase() || "neutral", 
+      analysis 
     }, 200);
+  } catch (error: any) {
+    console.error("❌ AWS ACTUAL ERROR:", error?.message || error);
+    return jsonResponse({ ok: false, error: error?.message || "AWS Rekognition failed" }, 500);
   }
 }
