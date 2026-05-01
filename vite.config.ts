@@ -181,8 +181,6 @@ export default defineConfig(({ mode }) => {
           return;
         }
  
-        console.log("Incoming chat request to dev server /api/chat (Groq)");
- 
         let rawBody = "";
         req.on("data", (chunk: Buffer) => {
           rawBody += chunk.toString();

@@ -181,8 +181,6 @@ export async function processGroqChat(
     }
   }
 
-  console.log(`🚀 Groq request → model: ${GROQ_MODEL}, messages: ${groqMessages.length}, hasImage: ${!!latestImage}`);
-
   const response = await fetch(GROQ_API_URL, {
     method: "POST",
     headers: {
@@ -213,6 +211,5 @@ export async function processGroqChat(
   }
 
   const finalText = textOutput.trim();
-  console.log(`✅ Groq success → ${finalText.length} chars`);
   return finalText;
 }

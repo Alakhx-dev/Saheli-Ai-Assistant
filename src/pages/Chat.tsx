@@ -83,6 +83,8 @@ const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
+const STREAM_TTS_MIN_WORDS = 4;
+const STREAM_TTS_PREVIEW_WORDS = 10;
 const BESTIE_GREETINGS = [
   "Aa gaye? Badi jaldi yaad aa gayi meri!",
   "Batao Alakh, aaj kya kaand kiya tumne?",
@@ -94,6 +96,20 @@ const BESTIE_GREETINGS = [
 
 function pickRandomGreeting() {
   return BESTIE_GREETINGS[Math.floor(Math.random() * BESTIE_GREETINGS.length)];
+}
+
+function getStreamingTtsPreview(text: string) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) {
+    return "";
+  }
+
+  const words = clean.split(" ").filter(Boolean);
+  if (words.length < STREAM_TTS_MIN_WORDS) {
+    return "";
+  }
+
+  return words.slice(0, STREAM_TTS_PREVIEW_WORDS).join(" ");
 }
 
 type LanguageOption = AppLanguage;
@@ -1649,8 +1665,19 @@ export default function Chat() {
     nextMemoryProfile?: MemoryProfile | null,
     onPartialText?: (partialText: string) => void,
   ) => {
+    let didTriggerEarlyTts = false;
+
     const handleChunk = (partialText: string) => {
       updateStreamingMessage(chatId, partialText);
+
+      if (!didTriggerEarlyTts) {
+        const preview = getStreamingTtsPreview(partialText);
+        if (preview) {
+          didTriggerEarlyTts = true;
+          void speakSaheli(preview);
+        }
+      }
+
       onPartialText?.(partialText);
     };
 

@@ -1,4 +1,6 @@
 import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { Agent as HttpsAgent } from "node:https";
 
 const DEFAULT_VOICE_ID = "Kajal";
 const DEFAULT_ENGINE = "neural";
@@ -8,6 +10,13 @@ const BUBBLY_VOLUME = "-6dB";
 const FALLBACK_PLAYBACK_RATE = "100%";
 const FALLBACK_PITCH = "+28%";
 const FALLBACK_VOLUME = "-4dB";
+const POLLY_REGION = "ap-south-1";
+
+const keepAliveAgent = new HttpsAgent({
+  keepAlive: true,
+  maxSockets: 50,
+  keepAliveMsecs: 60_000,
+});
 
 const EMOJI_REGEX = /(?:\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|[\u{1F3FB}-\u{1F3FF}]|[#*0-9]\uFE0F?\u20E3)+/gu;
 const INERT_CHAR_REGEX = /[\u200B-\u200F\u2060\uFE00-\uFE0F\u00AD]/g;
@@ -19,11 +28,6 @@ type PollyEnv = {
 };
 
 function getPollyClient(env: PollyEnv | NodeJS.ProcessEnv = process.env) {
-  const region = env.AWS_REGION?.trim();
-  if (!region) {
-    throw new Error("Missing AWS_REGION");
-  }
-
   const accessKeyId = env.AWS_ACCESS_KEY_ID?.trim();
   const secretAccessKey = env.AWS_SECRET_ACCESS_KEY?.trim();
   if (!accessKeyId || !secretAccessKey) {
@@ -31,7 +35,10 @@ function getPollyClient(env: PollyEnv | NodeJS.ProcessEnv = process.env) {
   }
 
   return new PollyClient({
-    region: "us-east-1",
+    region: POLLY_REGION,
+    requestHandler: new NodeHttpHandler({
+      httpsAgent: keepAliveAgent,
+    }),
     credentials: {
       accessKeyId,
       secretAccessKey,
