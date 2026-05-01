@@ -189,7 +189,6 @@ export async function saveVisionImageMemory(base64Image: string, userId?: string
       description: description?.trim() || "",
       createdAt: serverTimestamp(),
     });
-    console.log("Image saved to memory");
   } catch (err) {
     console.error("Failed to save vision image memory", err);
   }

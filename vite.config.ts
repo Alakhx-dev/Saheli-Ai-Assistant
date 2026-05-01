@@ -201,11 +201,30 @@ export default defineConfig(({ mode }) => {
             }
  
             const payload = rawBody ? JSON.parse(rawBody) : {};
-            const text = await processGroqChat(payload, { GROQ_API_KEY: groqApiKey });
- 
             res.statusCode = 200;
-            res.setHeader("Content-Type", "application/json");
-            res.end(JSON.stringify({ ok: true, text }));
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.setHeader("Access-Control-Allow-Headers", "authorization, x-client-info, apikey, content-type");
+            res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+            res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+            res.setHeader("Cache-Control", "no-cache, no-transform");
+            res.setHeader("Connection", "keep-alive");
+            res.setHeader("X-Accel-Buffering", "no");
+            res.flushHeaders?.();
+
+            try {
+              const text = await processGroqChat(payload, { GROQ_API_KEY: groqApiKey }, {
+                onChunk: (chunkText, fullText) => {
+                  res.write(`data: ${JSON.stringify({ type: "chunk", delta: chunkText, text: fullText })}\n\n`);
+                },
+              });
+
+              res.write(`data: ${JSON.stringify({ type: "done", text })}\n\n`);
+              res.end();
+            } catch (error: any) {
+              console.error("❌ Groq Dev Middleware Error:", error);
+              res.write(`data: ${JSON.stringify({ type: "error", error: error?.message || "Internal Server Error" })}\n\n`);
+              res.end();
+            }
           } catch (error: any) {
             console.error("❌ Groq Dev Middleware Error:", error);
             res.statusCode = 500;

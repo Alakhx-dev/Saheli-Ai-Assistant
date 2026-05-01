@@ -255,11 +255,9 @@ function extractImplicitMemories(text: string) {
 }
 
 function logMemoryDecision(message: string, save: boolean, type: string) {
-  console.log("Memory Decision:", {
-    message,
-    save,
-    type,
-  });
+  void message;
+  void save;
+  void type;
 }
 
 function uniqueValues(values: string[], max: number) {
@@ -415,7 +413,15 @@ function mapImageEntry(id: string, raw: unknown): MemoryImageEntry | null {
   }
 
   const type = raw.type === "generated" ? "generated" : raw.type === "upload" ? "upload" : null;
-  const url = typeof raw.url === "string" ? raw.url.trim() : "";
+  const storedUrl = typeof raw.url === "string" ? raw.url.trim() : "";
+  const storedBase64 = typeof raw.base64 === "string" ? raw.base64.trim() : "";
+  const storedImage = typeof raw.image === "string" ? raw.image.trim() : "";
+  const source = storedUrl || storedBase64 || storedImage;
+  const url = source
+    ? /^(data:|https?:|blob:|file:)/i.test(source)
+      ? source
+      : `data:image/jpeg;base64,${source}`
+    : "";
   const prompt = typeof raw.prompt === "string" ? raw.prompt : undefined;
   const caption = typeof raw.caption === "string" ? raw.caption : undefined;
   const storagePath = typeof raw.storagePath === "string" ? raw.storagePath : undefined;

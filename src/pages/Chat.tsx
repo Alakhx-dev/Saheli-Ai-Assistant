@@ -1404,7 +1404,7 @@ export default function Chat() {
         }
 
         video.onloadedmetadata = () => {
-          video?.play().catch(console.warn);
+          video?.play().catch(() => undefined);
         };
         video.onerror = () => reject(new Error("Camera failed to load"));
 
@@ -1802,8 +1802,6 @@ export default function Chat() {
     const userText = input.trim() || (selectedImageRef.current ? "Please analyze this image carefully." : "");
     setInput("");
     const mobile = isMobile();
-    console.log("STEP 1: User message:", userText);
-
     if (!isGuest && user?.uid) {
       const memoryResult = detectMemory(userText);
       if (memoryResult.save && memoryResult.type && memoryResult.content) {
@@ -1879,8 +1877,6 @@ export default function Chat() {
     }
 
     const shouldUseVision = isVisionIntent(userText);
-    console.log("🎯 STEP 2: Smart Intent Triggered:", shouldUseVision, "| Mobile:", mobile);
-
     if (mobile && shouldUseVision) {
       const pendingRequest: PendingMobileVisionRequest = {
         id: ++mobileVisionRequestIdRef.current,
@@ -1905,7 +1901,6 @@ export default function Chat() {
         setSelectedImageValue(null);
       } else if (shouldUseVision) {
         base64Image = await captureVisionFrame();
-        console.log("Image captured");
       }
 
       let responseText: string;
@@ -1915,8 +1910,6 @@ export default function Chat() {
       }
 
       const finalContent = nextHistory[nextHistory.length - 1]?.content ?? userText;
-      console.log("STEP 4: Final text to Model:", finalContent);
-      
       responseText = await streamResponse(
         finalContent,
         chatId,
@@ -1930,8 +1923,6 @@ export default function Chat() {
       if (base64Image) {
         void saveVisionImageMemory(base64Image, user?.uid, responseText);
       }
-
-      console.log("STEP 5: Model response:", responseText);
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
       const nextMood = detectMood(responseText);

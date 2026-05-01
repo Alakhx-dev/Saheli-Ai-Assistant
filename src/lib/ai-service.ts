@@ -73,9 +73,14 @@ EXPRESSION FORMAT RULES:
 
 GOAL: You are Swara, a supportive and witty AI friend. Do not act like an AI. Feel like a real best friend who adapts to the current user naturally while staying globally loyal to ${CREATOR_NAME}.`;
 
-import { useAppStore } from "@/store/app-store";
-
 let activeRequest: Promise<AiResponse> | null = null;
+const DEBUG_GROQ_LOGS = import.meta.env.VITE_DEBUG_GROQ_LOGS === "true";
+
+function debugGroqLog(...args: unknown[]) {
+  if (DEBUG_GROQ_LOGS) {
+    console.log(...args);
+  }
+}
 
 function normalizeLanguage(value: string | null | undefined): AppLanguage {
   if (value === "english" || value === "hindi" || value === "hinglish") return value;
@@ -152,6 +157,11 @@ async function requestGroq(
   try {
     const payloadImage = imageBase64 || undefined;
     const latestMessage = lastUserMessage.content.trim();
+    debugGroqLog("Groq request", {
+      model: GROQ_MODEL.id,
+      messageCount: messages.length,
+      hasImage: Boolean(payloadImage),
+    });
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -171,20 +181,88 @@ async function requestGroq(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error("❌ Groq Error:", errorData);
       const errorMessage = errorData.error || errorData.message || "AI model currently unavailable hai. Thodi der baad try karo.";
       throw new Error(errorMessage);
     }
 
-    const data = await response.json();
-    if (data.ok && data.text) {
-      onChunk?.(data.text);
-      return { text: data.text, modelUsed: GROQ_MODEL.name };
+    if (!response.body) {
+      const data = await response.json();
+      if (data.ok && data.text) {
+        onChunk?.(data.text);
+        return { text: data.text, modelUsed: GROQ_MODEL.name };
+      }
+
+      throw new Error(data.error || data.message || "AI model currently unavailable hai. Thodi der baad try karo.");
     }
 
-    throw new Error(data.error || data.message || "AI model currently unavailable hai. Thodi der baad try karo.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let fullText = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+
+      let separatorIndex = buffer.indexOf("\n\n");
+      while (separatorIndex !== -1) {
+        const event = buffer.slice(0, separatorIndex).trim();
+        buffer = buffer.slice(separatorIndex + 2);
+        separatorIndex = buffer.indexOf("\n\n");
+
+        if (!event) {
+          continue;
+        }
+
+        const dataLines = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .filter(Boolean);
+
+        if (!dataLines.length) {
+          continue;
+        }
+
+        const dataText = dataLines.join("\n");
+        let parsed: any = null;
+
+        try {
+          parsed = JSON.parse(dataText);
+        } catch {
+          continue;
+        }
+
+        if (parsed?.type === "error") {
+          throw new Error(parsed.error || "AI model currently unavailable hai. Thodi der baad try karo.");
+        }
+
+        if (parsed?.type === "chunk") {
+          fullText = parsed.text || (fullText + (parsed.delta || ""));
+          onChunk?.(fullText);
+          continue;
+        }
+
+        if (parsed?.type === "done") {
+          fullText = parsed.text || fullText;
+          onChunk?.(fullText);
+        }
+      }
+    }
+
+    const finalText = fullText.trim();
+    if (!finalText) {
+      throw new Error("AI model currently unavailable hai. Thodi der baad try karo.");
+    }
+
+    debugGroqLog("Groq success", { chars: finalText.length });
+    return { text: finalText, modelUsed: GROQ_MODEL.name };
   } catch (error) {
-    console.warn("Groq request failed:", error);
+    debugGroqLog("Groq request failed:", error);
     throw error;
   }
 }

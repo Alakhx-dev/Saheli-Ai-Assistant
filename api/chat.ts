@@ -39,8 +39,45 @@ export default async function handler(request: Request) {
   try {
     console.log("Incoming chat request to /api/chat (Groq)");
     const payload = await request.json();
-    const text = await processGroqChat(payload, { GROQ_API_KEY: groqApiKey });
-    return jsonResponse({ ok: true, text });
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream({
+      start(controller) {
+        void processGroqChat(
+          payload,
+          { GROQ_API_KEY: groqApiKey },
+          {
+            onChunk: (chunkText, fullText) => {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ type: "chunk", delta: chunkText, text: fullText })}\n\n`),
+              );
+            },
+          },
+        )
+          .then((text) => {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", text })}\n\n`));
+            controller.close();
+          })
+          .catch((error) => {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ type: "error", error: error?.message || "Internal Server Error" })}\n\n`,
+              ),
+            );
+            controller.close();
+          });
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (error: any) {
     console.error("Groq error:", error);
     return jsonResponse({ 

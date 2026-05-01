@@ -8,6 +8,10 @@ export interface GroqChatConfig {
   GROQ_API_KEY: string;
 }
 
+export interface GroqChatHandlers {
+  onChunk?: (chunkText: string, fullText: string) => void;
+}
+
 export interface GroqChatRequest {
   systemPrompt: string;
   message?: string;
@@ -22,7 +26,109 @@ export interface GroqChatRequest {
 const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
-export async function processGroqChat(payload: GroqChatRequest, config: GroqChatConfig): Promise<string> {
+function extractGroqDelta(data: any): string {
+  const choice = data?.choices?.[0];
+  return (
+    choice?.delta?.content ||
+    choice?.message?.content ||
+    data?.delta?.content ||
+    data?.content ||
+    ""
+  );
+}
+
+async function readGroqResponseStream(response: Response, onChunk?: GroqChatHandlers["onChunk"]): Promise<string> {
+  if (!response.body) {
+    const fallbackData = await response.json();
+    const fallbackText = fallbackData?.choices?.[0]?.message?.content?.trim() || "";
+    if (fallbackText && onChunk) {
+      onChunk(fallbackText, fallbackText);
+    }
+    return fallbackText;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let separatorIndex = buffer.indexOf("\n\n");
+    while (separatorIndex !== -1) {
+      const event = buffer.slice(0, separatorIndex).trim();
+      buffer = buffer.slice(separatorIndex + 2);
+      separatorIndex = buffer.indexOf("\n\n");
+
+      if (!event) {
+        continue;
+      }
+
+      const dataLines = event
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .filter(Boolean);
+
+      if (!dataLines.length) {
+        continue;
+      }
+
+      const dataText = dataLines.join("\n");
+      if (dataText === "[DONE]") {
+        return fullText;
+      }
+
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(dataText);
+      } catch {
+        continue;
+      }
+
+      const delta = extractGroqDelta(parsed);
+      if (!delta) {
+        const finalText = parsed?.choices?.[0]?.message?.content?.trim();
+        if (finalText && !fullText) {
+          fullText = finalText;
+          onChunk?.(fullText, fullText);
+        }
+        continue;
+      }
+
+      fullText += delta;
+      onChunk?.(delta, fullText);
+    }
+  }
+
+  const trailingText = buffer.trim();
+  if (trailingText) {
+    try {
+      const parsed = JSON.parse(trailingText);
+      const delta = extractGroqDelta(parsed);
+      if (delta) {
+        fullText += delta;
+        onChunk?.(delta, fullText);
+      }
+    } catch {
+      // Ignore trailing partial frames.
+    }
+  }
+
+  return fullText;
+}
+
+export async function processGroqChat(
+  payload: GroqChatRequest,
+  config: GroqChatConfig,
+  handlers?: GroqChatHandlers,
+): Promise<string> {
   const { systemPrompt, message, messages, history, image, imageBase64, maxTokens, temperature } = payload;
 
   const latestImage = imageBase64 || image;
@@ -88,6 +194,7 @@ export async function processGroqChat(payload: GroqChatRequest, config: GroqChat
       messages: groqMessages,
       max_tokens: maxTokens || 320,
       temperature: temperature || 0.8,
+      stream: true,
     }),
   });
 
@@ -98,14 +205,14 @@ export async function processGroqChat(payload: GroqChatRequest, config: GroqChat
     throw new Error(errorMessage);
   }
 
-  const data = await response.json();
-  const textOutput = data?.choices?.[0]?.message?.content?.trim();
+  const textOutput = await readGroqResponseStream(response, handlers?.onChunk);
 
-  if (!textOutput) {
+  if (!textOutput.trim()) {
     console.warn("⚠️ Groq returned empty response");
     throw new Error("AI se koi response nahi aaya. Dobara try karo.");
   }
 
-  console.log(`✅ Groq success → ${textOutput.length} chars`);
-  return textOutput;
+  const finalText = textOutput.trim();
+  console.log(`✅ Groq success → ${finalText.length} chars`);
+  return finalText;
 }
