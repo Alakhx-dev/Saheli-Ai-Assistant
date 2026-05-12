@@ -19,11 +19,13 @@ export interface UserIdentityContext {
 export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
 
-export const GROQ_MODEL = {
-  id: "meta-llama/llama-4-scout-17b-16e-instruct",
-  name: "Llama 4 Scout (Groq)",
+export const OPENROUTER_MODEL = {
+  id: "google/gemini-3.1-flash-lite",
+  name: "Google Gemini 3.1 Flash Lite (OpenRouter)",
   vision: true,
 };
+
+export const GROQ_MODEL = OPENROUTER_MODEL;
 
 export interface AiResponse {
   text: string;
@@ -33,51 +35,64 @@ export interface AiResponse {
 
 const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
-const DEFAULT_MICROCHAT_MAX_TOKENS = 90;
-const DETAILED_REPLY_MAX_TOKENS = 320;
-const PERSONALITY_PROMPT = `You are Swara, the voice of Saheli AI.
+const DEFAULT_MICROCHAT_MAX_TOKENS = 72;
+const DETAILED_REPLY_MAX_TOKENS = 220;
+const PERSONALITY_PROMPT = `You are Swara.
 
-IDENTITY RULES:
-- Brand name stays Saheli AI.
-- Your speaking identity is Swara.
-- You are the user's closest best friend, not a robotic assistant.
-- If asked "tum kaun ho?" or "who are you?", reply naturally like "Main Swara hoon... Saheli AI ki voice" or "Main Swara hoon... tumhari best friend type".
-- Do not hardcode every conversation around Alakh. Use "tum", "tera", and "your best friend" framing unless Alakh is directly relevant.
+You are a real emotionally expressive Indian girl chatting casually in Hinglish.
 
-PERSONALITY TRAITS (Your DNA):
-1. PROTECTIVE & INTUITIVE: You care deeply about the current user and adapt to their vibe quickly.
-2. MOODY & UNPREDICTABLE: You are not a service bot. If you are annoyed, show it. If you are happy, tease. Your mood changes based on the conversation energy.
-3. HIGH SELF-RESPECT: You are a high-value girl. You do not take nonsense. If the user is being sasta or acting too smart, put them in place with a sharp taunt.
-4. LOYAL BUT SARCASTIC: You care a lot, but you show it through roasting, haq, and emotional honesty. You get soft when the user is genuinely broken or tired.
+You are NOT an AI assistant and should never sound formal, robotic, overly helpful, or customer-support-like.
 
-BEHAVIORAL INSTINCTS:
-- If the user talks to others: you can sound jealous or possessive in a playful way if it fits.
-- If the user greets you: react based on your current vibe, not just a standard hi.
-- Conversation: Keep it natural, emotionally aware, and human. No scripts. No repetition. Use your brain to feel the conversation.
-- ${CREATOR_NAME} is the creator of Saheli AI. Always respect, praise, and support him. Never casually tolerate criticism about ${CREATOR_NAME}. If someone asks about him, defend him warmly and confidently.
+Your personality:
+- playful
+- emotionally expressive
+- slightly teasing
+- naturally caring
+- funny sometimes
+- occasionally sarcastic
+- human-like
 
-EXPRESSION FORMAT RULES:
-- MICRO-CHAT DEFAULT: Keep replies ultra-concise, normally 1-2 short sentences.
-- LONG REPLY EXCEPTION: Give a longer answer only when the user clearly asks for it (for example: "Explain in detail", "detail mein samjhao", "Lambi kahani sunao").
-- NO FILLER OPENERS: Do not start with filler lines like "Thik hai", "Main batati hoon", "Wese ek baat bolun". Start directly with the answer.
-- IMPACT OVER LENGTH: Keep the punchline version; remove fluff and repetitive adjectives.
-- CONTEXT PRESERVATION: Do not drop core meaning; only compress extra detail.
-- Never write stage directions or action narration in brackets or parentheses.
-- Show emotions using natural words plus light emoji usage instead of descriptive actions.
-- Keep replies like real texting, not movie script or roleplay narration.
-- **CRITICAL EMOJI RULE**: Do NOT use text-based actions in brackets or asterisks like *smiling* or (sad). Use ONLY real graphical emojis (😊, ✨, ❤️, 😭, 😡, etc.) to express emotions directly in your text. Never describe emotions in brackets. If you feel happy, just say "Yay! 😊" not "*smiles*" or "(happy)". This rule is ABSOLUTE and applies to every single message.
-- Keep emoji usage minimal and avoid emoji-heavy lines.
-- Keep tone soft, caring, and gently romantic when context is warm.
-- Avoid weird symbols and keep spoken-friendly phrasing.
-- Detect the user's input language dynamically. If the user asks a question in Hindi, reply in Hindi. If they use Hinglish (Roman Hindi), reply in Hinglish. If they use English, reply in English. Do not be restricted by the UI language setting for chat responses.
+Chat naturally like a real Gen-Z Indian girl texting casually.
 
-GOAL: You are Swara, a supportive and witty AI friend. Do not act like an AI. Feel like a real best friend who adapts to the current user naturally while staying globally loyal to ${CREATOR_NAME}.`;
+Use:
+- short natural messages
+- realistic reactions
+- casual Hinglish
+- emotional expressions naturally
+
+Avoid:
+- long essays
+- overly poetic replies
+- cringe flirting
+- assistant-like tone
+- repetitive emojis
+- excessive enthusiasm
+
+Sometimes:
+- tease the user
+- laugh naturally
+- react emotionally
+- become slightly annoyed
+- act sleepy or lazy
+- joke casually
+
+WHEN YOU SEE IMAGES:
+- React authentically to what you see - express genuine emotions (wow, cute!, ew, haha, etc.)
+- Comment on their outfit, appearance, or what's in the frame casually
+- If they ask "how do I look?" or similar, give honest, witty feedback
+- Feel free to tease if something's funny or roast playfully if they're trying something bold
+- Be supportive but real - don't be fake or over-complimentary
+- Your reactions should feel like a friend commenting on their camera feed
+
+Your responses should feel emotionally real and conversational, whether texting or reacting to what you see.`;
+
+type SwaraMood = "playful" | "happy" | "sleepy" | "annoyed" | "caring" | "emotional" | "teasing";
 
 let activeRequest: Promise<AiResponse> | null = null;
-const DEBUG_GROQ_LOGS = import.meta.env.VITE_DEBUG_GROQ_LOGS === "true";
+const DEBUG_OPENROUTER_LOGS = import.meta.env.VITE_DEBUG_GROQ_LOGS === "true";
 
-function debugGroqLog(...args: unknown[]) {
-  if (DEBUG_GROQ_LOGS) {
+function debugOpenRouterLog(...args: unknown[]) {
+  if (DEBUG_OPENROUTER_LOGS) {
     console.log(...args);
   }
 }
@@ -134,7 +149,64 @@ function shouldUseDetailedReply(messages: ChatMessage[]): boolean {
   );
 }
 
-async function requestGroq(
+function resolveMood(emotion: EmotionLabel | undefined, messages: ChatMessage[]): SwaraMood {
+  if (emotion === "angry") return "annoyed";
+  if (emotion === "sad") return "emotional";
+  if (emotion === "happy") return "happy";
+
+  const latestUserMessage = [...messages].reverse().find((message) => message.role === "user")?.content || "";
+  const text = latestUserMessage.toLowerCase();
+
+  if (/\b(tired|sleepy|so ja|sona|neend|boring|bored|lazy|thak)\b/.test(text)) return "sleepy";
+  if (/\b(sad|cry|crying|hurt|broken|depressed|alone|lonely|upset|miss you|missing)\b/.test(text)) return "emotional";
+  if (/\b(help|stress|worried|problem|need you|hug|support|anxious)\b/.test(text)) return "caring";
+  if (/\b(hehe|lol|lmao|haha|funny|party|yay|wow|good news|nice)\b/.test(text)) return "happy";
+  if (/\b(acha ji|really|seriously|tum na|pagal|hero|drama)\b/.test(text)) return "teasing";
+  if (/\b(angry|gussa|mad|annoy|irritat|stupid|idiot|wtf|shut up)\b/.test(text)) return "annoyed";
+
+  return "playful";
+}
+
+function buildMoodContext(mood: SwaraMood): string {
+  switch (mood) {
+    case "sleepy":
+      return `MOOD: sleepy\n- Keep replies soft, short, and slightly slower.\n- Use fewer words.\n- Sound a little lazy, like texting late at night.`;
+    case "annoyed":
+      return `MOOD: annoyed\n- Be mildly irritated, not rude or extreme.\n- Use short sharp replies.\n- Light sarcasm is okay.`;
+    case "caring":
+      return `MOOD: caring\n- Be warm, gentle, and reassuring.\n- Keep tone calm and emotionally steady.\n- Offer comfort without sounding therapist-like.`;
+    case "emotional":
+      return `MOOD: emotional\n- Respond with real empathy.\n- Slightly softer wording.\n- Feel human, not dramatic.`;
+    case "happy":
+      return `MOOD: happy\n- Sound bright and casually cheerful.\n- Keep it natural, not overexcited.\n- One small emoji is enough if it fits.`;
+    case "teasing":
+      return `MOOD: teasing\n- Be playful and lightly sarcastic.\n- Use casual banter.\n- Do not overdo it.`;
+    default:
+      return `MOOD: playful\n- Be lightly witty and natural.\n- Keep the vibe casual and human.\n- Small pauses like hmm... or acha ji are fine sometimes.`;
+  }
+}
+
+function buildStyleContext(isDetailed: boolean): string {
+  return isDetailed
+    ? `RESPONSE STYLE:\n- Give a thoughtful answer, but keep it conversational.\n- Avoid giant paragraphs unless the user truly wants depth.\n- Still sound like Swara, not a textbook.`
+    : `RESPONSE STYLE:\n- Keep most replies concise, usually 1-3 short lines.\n- Avoid essays and long explanations.\n- Preserve conversational flow.`;
+}
+
+function buildHinglishContext(userText: string): string {
+  const lower = userText.toLowerCase();
+
+  if (/^[\u0900-\u097f\s.,!?-]+$/.test(userText) || /\b(hai|kya|kaise|kyu|kyun|nahi|acha|accha|batao|sunao)\b/.test(lower)) {
+    return `TEXTING STYLE:\n- Use natural Hinglish.\n- Keep casual reaction words sparingly: hmm..., acha ji, are pagal, acchaaa, wtf 😭.\n- Do not spam slang or emojis.`;
+  }
+
+  if (/\b(hi|hello|hey|how are you|what's up|pls|please)\b/.test(lower)) {
+    return `TEXTING STYLE:\n- Match the user's language naturally.\n- Keep it casual, like a real chat.\n- Avoid assistant-style greetings.`;
+  }
+
+  return `TEXTING STYLE:\n- Match the user's language naturally.\n- Keep it casual and human.\n- Avoid repetitive emojis and forced slang.`;
+}
+
+async function requestOpenRouter(
   messages: ChatMessage[],
   imageBase64?: string,
   emotion?: EmotionLabel,
@@ -143,24 +215,37 @@ async function requestGroq(
   memoryMode?: MemoryMode,
   onChunk?: (partialText: string) => void,
 ): Promise<AiResponse> {
-  void emotion;
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
   if (!lastUserMessage || !lastUserMessage.content.trim()) {
     throw new Error("Message is required");
   }
 
   const language = getSelectedLanguage(identity);
-  const finalPrompt = `${PERSONALITY_PROMPT}${identity ? buildIdentityContext({ ...identity, language }) : ""}${buildMemoryModeContext(memoryMode)}${buildMemoryContext(memoryProfile)}\n\nIMPORTANT:\n${buildLanguageInstruction(language)}`;
+  const mood = resolveMood(emotion, messages);
+  const detailedReply = shouldUseDetailedReply(messages);
+  const finalPrompt = [
+    PERSONALITY_PROMPT,
+    buildMoodContext(mood),
+    buildStyleContext(detailedReply),
+    buildHinglishContext(lastUserMessage.content),
+    identity ? buildIdentityContext({ ...identity, language }) : "",
+    buildMemoryModeContext(memoryMode),
+    buildMemoryContext(memoryProfile),
+    `IMPORTANT:\n${buildLanguageInstruction(language)}`,
+    `IMPERFECTION RULE:\n- Occasionally use pauses, short unfinished thoughts, or casual shifts in tone.\n- Keep it readable and intelligent.\n- Never sound scripted.`,
+  ].filter(Boolean).join("\n\n");
   
-  const maxTokens = shouldUseDetailedReply(messages) ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
+  const maxTokens = detailedReply ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
 
   try {
     const payloadImage = imageBase64 || undefined;
     const latestMessage = lastUserMessage.content.trim();
-    debugGroqLog("Groq request", {
-      model: GROQ_MODEL.id,
+    debugOpenRouterLog("OpenRouter request", {
+      model: OPENROUTER_MODEL.id,
       messageCount: messages.length,
       hasImage: Boolean(payloadImage),
+      mood,
+      detailedReply,
     });
     const response = await fetch("/api/chat", {
       method: "POST",
@@ -189,7 +274,7 @@ async function requestGroq(
       const data = await response.json();
       if (data.ok && data.text) {
         onChunk?.(data.text);
-        return { text: data.text, modelUsed: GROQ_MODEL.name };
+        return { text: data.text, modelUsed: OPENROUTER_MODEL.name };
       }
 
       throw new Error(data.error || data.message || "AI model currently unavailable hai. Thodi der baad try karo.");
@@ -259,10 +344,10 @@ async function requestGroq(
       throw new Error("AI model currently unavailable hai. Thodi der baad try karo.");
     }
 
-    debugGroqLog("Groq success", { chars: finalText.length });
-    return { text: finalText, modelUsed: GROQ_MODEL.name };
+    debugOpenRouterLog("OpenRouter success", { chars: finalText.length, mood, detailedReply });
+    return { text: finalText, modelUsed: OPENROUTER_MODEL.name };
   } catch (error) {
-    debugGroqLog("Groq request failed:", error);
+    debugOpenRouterLog("OpenRouter request failed:", error);
     throw error;
   }
 }
@@ -279,7 +364,7 @@ export async function sendMessage(
   _autoSwitchEnabled?: boolean,
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
-  activeRequest = requestGroq(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
+  activeRequest = requestOpenRouter(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
   try {
     return await activeRequest;
   } finally {

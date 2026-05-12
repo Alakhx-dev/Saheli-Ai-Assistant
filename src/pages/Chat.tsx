@@ -50,6 +50,7 @@ import { resetSaheliSpeechDedup, speakSaheli, stopSaheliSpeech } from "@/utils/s
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "@/components/Sidebar";
+import CinematicAtmosphere from "@/components/CinematicAtmosphere";
 import Profile from "@/components/Profile";
 import MemoryModal from "@/components/memory/MemoryModal";
 import { useAppStore } from "@/store/app-store";
@@ -85,19 +86,6 @@ const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
 const STREAM_TTS_MIN_WORDS = 4;
 const STREAM_TTS_PREVIEW_WORDS = 10;
-const BESTIE_GREETINGS = [
-  "Aa gaye? Badi jaldi yaad aa gayi meri!",
-  "Batao Alakh, aaj kya kaand kiya tumne?",
-  "Tumhare bina boring lag raha tha... bolo kya help karu?",
-  "Aree bestie! Chalo baatein karte hain, kya chal raha hai?",
-  "Wapas aa gaye? Pakka kuch help chahiye hogi... pucho!",
-  "Suno, aaj main bahut khush hoon, chalo kuch mast karte hain!",
-];
-
-function pickRandomGreeting() {
-  return BESTIE_GREETINGS[Math.floor(Math.random() * BESTIE_GREETINGS.length)];
-}
-
 function getStreamingTtsPreview(text: string) {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) {
@@ -491,25 +479,27 @@ function getMessageKey(msg: ChatMessage, index: number) {
 
 const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean }>(
   function ScrollFadeMessageItem({ msg, isNew }, ref) {
+    const isUser = msg.role === "user";
     return (
       <motion.div
-      ref={ref}
-      layout={false}
-      initial={isNew ? { opacity: 0, y: 18, scale: 0.92 } : false}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -12, scale: 0.96 }}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-      style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
-    >
+        ref={ref}
+        layout={false}
+        initial={isNew ? { opacity: 0, y: 10, scale: 0.96 } : false}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.38, ease: [0.22, 0.8, 0.2, 1] }}
+        className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+        style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
+      >
       <div
+        data-role={isUser ? 'user' : 'assistant'}
         className={`
         max-w-[84%] md:max-w-[72%] px-5 py-3.5 text-sm leading-relaxed font-medium relative text-neutral-50
-        transition-all duration-300 saheli-bubble-float
+        transition-all duration-300 saheli-bubble saheli-bubble-float backdrop-blur-[20px]
         ${isNew ? "msg-sheen" : ""}
-        ${msg.role === "user"
-          ? "saheli-user-bubble rounded-2xl rounded-br-sm"
-          : "saheli-ai-bubble rounded-2xl rounded-bl-sm"
+        ${isUser
+          ? "rounded-3xl rounded-br-md bg-black/60 border border-white/10 shadow-[0_4px_24px_rgba(255,255,255,0.05)]"
+          : "rounded-3xl rounded-bl-md bg-[#2d0f3e]/70 border border-pink-500/30 shadow-[0_8px_32px_rgba(255,79,216,0.2)]"
         }
       `}
         style={{ fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
@@ -540,7 +530,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   return (
     <div
       ref={containerRef}
-      className="max-w-3xl mx-auto space-y-3 overflow-y-auto w-full h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="w-full md:w-[60%] lg:w-[55%] mx-auto space-y-3 overflow-y-auto h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       style={{
         overflowAnchor: "none",
         scrollBehavior: "auto",
@@ -733,9 +723,10 @@ export default function Chat() {
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobile());
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
+  const [isTtsMuted, setIsTtsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [mood, setMood] = useState("neutral");
-  const [randomGreeting, setRandomGreeting] = useState(() => pickRandomGreeting());
+  const [isScrolling, setIsScrolling] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
@@ -756,6 +747,12 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
+  const [isIdle, setIsIdle] = useState(false);
+  // Track recently saved images to prevent duplicates
+  const recentlySavedImageHashesRef = useRef<Map<string, number>>(new Map());
+  const imageSaveLockRef = useRef(false);
+  const IMAGE_DUPLICATE_WINDOW_MS = 2000; // 2 second window to detect duplicates
+  const idleTimerRef = useRef<number | null>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { chatId: routeChatId } = useParams<{ chatId?: string }>();
@@ -764,7 +761,15 @@ export default function Chat() {
   const setSelectedImageValue = useCallback((value: string | null) => {
     selectedImageRef.current = value;
     setSelectedImage(value);
-  }, []);
+    // Immediately persist any newly selected/captured image to image memory (falls back to 'guest')
+    if (value) {
+      try {
+        void saveVisionImageMemory(value, user?.uid || "guest");
+      } catch (err) {
+        console.error("Failed to auto-save selected image to memory:", err);
+      }
+    }
+  }, [user?.uid]);
 
   useEffect(() => {
     const moveCursor = (event: MouseEvent) => {
@@ -779,6 +784,44 @@ export default function Chat() {
     window.addEventListener("mousemove", moveCursor);
     return () => {
       window.removeEventListener("mousemove", moveCursor);
+    };
+  }, []);
+
+  // ─── Idle Ghost Mode: Fade sidebar/logo after 10 seconds inactivity ───
+  useEffect(() => {
+    const handleActivity = () => {
+      // Wake up from idle state immediately
+      setIsIdle(false);
+      
+      // Clear existing timer
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
+      
+      // Set new idle timer (10 seconds)
+      idleTimerRef.current = window.setTimeout(() => {
+        setIsIdle(true);
+      }, 10000);
+    };
+
+    // Attach to multiple events for robust detection
+    window.addEventListener("mousemove", handleActivity);
+    window.addEventListener("mousedown", handleActivity);
+    window.addEventListener("keydown", handleActivity);
+    window.addEventListener("touchstart", handleActivity);
+    
+    // Initialize idle timer on mount
+    handleActivity();
+
+    return () => {
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("mousedown", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
+      
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+      }
     };
   }, []);
 
@@ -799,6 +842,20 @@ export default function Chat() {
       mediaQuery.removeEventListener("change", syncSidebarState);
     };
   }, []);
+
+  useEffect(() => {
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target.classList && target.classList.contains('overflow-y-auto')) {
+        setIsScrolling(true);
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => setIsScrolling(false), 400);
+      }
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, []);
   const currentChatIdRef = useRef<string | null>(null);
   const titleUpdateTimeoutRef = useRef<number | null>(null);
   const pendingTitleUpdateRef = useRef<{ chatId: string; title: string } | null>(null);
@@ -806,6 +863,7 @@ export default function Chat() {
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
   const setStoreSettings = useAppStore((state) => state.setSettings);
+  const selectedModelId = useAppStore((state) => state.settings.selectedModelId);
   const storeAddMessage = useAppStore((state) => state.addMessage);
   const storeUpdateStreamingMessage = useAppStore((state) => state.updateStreamingMessage);
   const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
@@ -858,8 +916,13 @@ export default function Chat() {
 
     lastSpokenMessageRef.current = signature;
 
+    if (isTtsMuted) {
+      stopSaheliSpeech();
+      return;
+    }
+
     speakSaheli(latestSaheliMessage);
-  }, [latestSaheliMessage]);
+  }, [isTtsMuted, latestSaheliMessage]);
 
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
@@ -1050,11 +1113,7 @@ export default function Chat() {
     sessionStorage.removeItem(ACTIVE_CHAT_SESSION_KEY);
   }, [currentChatId]);
 
-  useEffect(() => {
-    if (!isLoading && messages.length === 0) {
-      setRandomGreeting(pickRandomGreeting());
-    }
-  }, [currentChatId, isLoading, messages.length]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -1485,6 +1544,102 @@ export default function Chat() {
     });
   };
 
+  // Helper: Compute simple hash of base64 image for duplicate detection
+  const getImageHash = (base64Image: string): string => {
+    // Use first 100 + last 100 chars of base64 as fingerprint
+    const head = base64Image.slice(0, 100);
+    const tail = base64Image.slice(-100);
+    return `${head}_${tail}`;
+  };
+
+  // Helper: Check if image was recently saved to prevent duplicates
+  const isDuplicateImage = (base64Image: string): boolean => {
+    const hash = getImageHash(base64Image);
+    const recentMap = recentlySavedImageHashesRef.current;
+    const lastSavedTime = recentMap.get(hash);
+
+    if (!lastSavedTime) {
+      return false; // Not found, not a duplicate
+    }
+
+    const timeSinceLastSave = Date.now() - lastSavedTime;
+    if (timeSinceLastSave < IMAGE_DUPLICATE_WINDOW_MS) {
+      console.warn("⚠️ [DUPLICATE] Image already saved recently (within 2 seconds), skipping...", {
+        hash: hash.slice(0, 20) + "...",
+        timeSinceLastSave,
+      });
+      return true; // Duplicate within window
+    }
+
+    return false; // Not a recent duplicate
+  };
+
+  // Helper: Mark image as saved
+  const markImageAsSaved = (base64Image: string) => {
+    const hash = getImageHash(base64Image);
+    recentlySavedImageHashesRef.current.set(hash, Date.now());
+
+    // Clean up old entries (older than 5 seconds)
+    const now = Date.now();
+    for (const [key, timestamp] of recentlySavedImageHashesRef.current.entries()) {
+      if (now - timestamp > 5000) {
+        recentlySavedImageHashesRef.current.delete(key);
+      }
+    }
+  };
+
+  // Helper function to save image and immediately refresh memory UI
+  const saveImageAndRefreshMemory = useCallback(async (base64Image: string, userId?: string) => {
+    if (!base64Image) {
+      console.warn("⚠️ [MEMORY] No base64 image provided for save and refresh");
+      return;
+    }
+
+    // Check for duplicates within short time window
+    if (isDuplicateImage(base64Image)) {
+      console.log("🚫 [MEMORY] Skipping duplicate image save");
+      return;
+    }
+
+    // Acquire save lock to prevent concurrent saves of same image
+    if (imageSaveLockRef.current) {
+      console.warn("⚠️ [MEMORY] Save already in progress, skipping duplicate save attempt");
+      return;
+    }
+
+    imageSaveLockRef.current = true;
+    console.log("💾 [MEMORY] Starting image save with real-time UI refresh...");
+
+    try {
+      // Save the image to storage
+      await saveVisionImageMemory(base64Image, userId || user?.uid);
+      console.log("✅ [MEMORY] Image saved to storage, fetching fresh memory profile...");
+
+      // Mark this image as saved to prevent future duplicates
+      markImageAsSaved(base64Image);
+
+      // Refresh memory profile from storage to get the new image immediately
+      if (user) {
+        const freshMemory = await fetchMemory(user);
+        console.log("🔄 [MEMORY] Memory refreshed from Firestore", {
+          imageCount: freshMemory.images.length,
+          latestImage: freshMemory.images[0]?.id,
+        });
+        setMemoryProfile(freshMemory);
+        console.log("✨ [MEMORY] UI state updated, new image should appear instantly");
+      } else if (!isGuest) {
+        console.warn("⚠️ [MEMORY] No user context for memory refresh");
+      }
+    } catch (err) {
+      console.error("❌ [MEMORY] Failed to save and refresh memory:", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      // Release save lock to allow future saves
+      imageSaveLockRef.current = false;
+    }
+  }, [user, isGuest]);
+
   const refreshChatSessions = useCallback(async (nextChatId?: string | null) => {
     const sessions = await loadChatSessions(user);
     chatSessionsRef.current = sessions;
@@ -1674,7 +1829,11 @@ export default function Chat() {
         const preview = getStreamingTtsPreview(partialText);
         if (preview) {
           didTriggerEarlyTts = true;
-          void speakSaheli(preview);
+          if (!isTtsMuted) {
+            void speakSaheli(preview);
+          } else {
+            stopSaheliSpeech();
+          }
         }
       }
 
@@ -1701,7 +1860,7 @@ export default function Chat() {
       console.error("Stream response error:", error);
       throw error;
     }
-  }, [memoryEnabled, updateStreamingMessage]);
+  }, [isTtsMuted, memoryEnabled, updateStreamingMessage]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
@@ -1731,8 +1890,9 @@ export default function Chat() {
         request.memoryProfile,
       );
       saveFinalMessage(request.chatId, responseText);
+      // Note: Image was already saved during capture, no need to save again
       if (imageBase64) {
-        void saveVisionImageMemory(imageBase64, user?.uid, responseText);
+        console.log("📝 [DEBUG] Mobile vision response completed (image already saved during capture)");
       }
       setIsLoading(false);
       const nextMood = detectMood(responseText);
@@ -1791,6 +1951,22 @@ export default function Chat() {
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+
+      console.log("📱 [DEBUG] Mobile camera capture successful", {
+        fileSize: file.size,
+        base64Length: base64.length,
+        userId: user?.uid,
+      });
+
+      // Save immediately to image memory with real-time UI update
+      if (base64 && user?.uid) {
+        try {
+          console.log("🖼️ [DEBUG] Saving mobile-captured image to Image Memory");
+          await saveImageAndRefreshMemory(base64, user.uid);
+        } catch (err) {
+          console.error("❌ [DEBUG] Failed to auto-save mobile-captured image to memory:", err);
+        }
+      }
 
       await completePendingVisionRequest(pendingMobileVisionRequest, base64);
     } catch (error) {
@@ -1926,8 +2102,38 @@ export default function Chat() {
       if (selectedImageRef.current) {
         base64Image = selectedImageRef.current;
         setSelectedImageValue(null);
+        // Immediately save camera-selected image to Image Memory with real-time UI update
+        if (base64Image && !isGuest && user?.uid) {
+          console.log("🖼️ [DEBUG] Selected image detected, saving to Image Memory", {
+            userId: user.uid,
+            imageLength: base64Image.length,
+            isGuest,
+          });
+          try {
+            await saveImageAndRefreshMemory(base64Image, user.uid);
+          } catch (err) {
+            console.error("❌ [DEBUG] Failed to auto-save selected image to memory:", err);
+          }
+        }
       } else if (shouldUseVision) {
+        console.log("🎥 [DEBUG] Vision intent detected, capturing frame...");
         base64Image = await captureVisionFrame();
+        console.log("🎥 [DEBUG] Frame captured", {
+          success: !!base64Image,
+          imageLength: base64Image?.length || 0,
+        });
+        if (base64Image) {
+          try {
+            console.log("🖼️ [DEBUG] Saving captured image to Image Memory", {
+              userId: user?.uid || "guest",
+              imageLength: base64Image.length,
+            });
+            // Save under user id if available, otherwise use 'guest'
+            await saveImageAndRefreshMemory(base64Image, user?.uid || "guest");
+          } catch (err) {
+            console.error("❌ [DEBUG] Failed to auto-save captured image to memory:", err);
+          }
+        }
       }
 
       let responseText: string;
@@ -1936,7 +2142,10 @@ export default function Chat() {
         throw new Error("Image clear nahi hai. Please dubara try karo.");
       }
 
+      // Send image directly to OpenRouter as multimodal payload
+      // The model (google/gemini-3.1-flash-lite) will analyze it natively
       const finalContent = nextHistory[nextHistory.length - 1]?.content ?? userText;
+
       responseText = await streamResponse(
         finalContent,
         chatId,
@@ -1947,8 +2156,9 @@ export default function Chat() {
         nextMemoryProfile,
       );
 
+      // Note: Image was already saved immediately after capture, no need to save again
       if (base64Image) {
-        void saveVisionImageMemory(base64Image, user?.uid, responseText);
+        console.log("📝 [DEBUG] AI response completed for vision request (image already saved during capture)");
       }
       saveFinalMessage(chatId, responseText);
       setIsLoading(false);
@@ -1994,22 +2204,49 @@ export default function Chat() {
   const handleSettingsOpenChange = useCallback((open: boolean) => {
     setSettingsPanelOpen(open);
   }, []);
+  const handleToggleTtsMute = useCallback(() => {
+    setIsTtsMuted((previous) => {
+      const nextValue = !previous;
+      if (nextValue) {
+        stopSaheliSpeech();
+      }
+
+      return nextValue;
+    });
+  }, []);
+  const handleToggleSidebarTheme = useCallback((nextValue: boolean) => {
+    setIsSidebarLightMode(nextValue);
+  }, []);
+  const handleSelectModel = useCallback((modelId: string) => {
+    setStoreSettings({ selectedModelId: modelId });
+  }, [setStoreSettings]);
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
   return (
     <div
-      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#0a0a0f] text-white selection:bg-pink-500/30"
+      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
       <div ref={cursorRef} className="cursor-glow" />
-      <BackgroundComponent />
+      <CinematicAtmosphere layer="ambient" />
+      
+      {/* ── Garden Floor with Rising Dust ── */}
+      <div className="garden-floor-container">
+        <div className="garden-petals-blur" />
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={`dust-${i}`} className="dust-particle" />
+        ))}
+      </div>
+      
       <Sidebar
         isOpen={isSidebarOpen}
         chatSessions={chatSessions}
         currentChatId={currentChatId}
         isGuest={isGuest}
         isLightMode={isSidebarLightMode}
+        isTtsMuted={isTtsMuted}
+        memoryEnabled={memoryEnabled}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}
         noChatsGuestLabel={t.sidebar.noChatsGuest}
@@ -2024,7 +2261,15 @@ export default function Chat() {
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
         onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
+        onToggleTtsMute={handleToggleTtsMute}
+        onToggleSidebarTheme={handleToggleSidebarTheme}
+        onToggleMemory={handleMemoryToggle}
+        onOpenMemory={handleOpenMemoryFromSettings}
+        onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
+        selectedModelId={selectedModelId}
+        onSelectModel={handleSelectModel}
+        className={isIdle ? 'ghost-mode' : ''}
       />
 
       <button
@@ -2044,7 +2289,59 @@ export default function Chat() {
           </div>
         </header>
 
-        <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6">
+        {/* --- LAYER 1 & 2: MASCOT CONTAINER & BACKGROUND --- */}
+        <div 
+          className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-0 overflow-hidden"
+          style={{ 
+            opacity: isScrolling ? 0.1 : 0.3, 
+            transition: 'opacity 0.5s ease-in-out',
+            transform: 'translateY(calc(var(--scroll-y, 0px) * -0.15))' // Subtle Parallax Effect
+          }}
+        >
+          {/* Layer 1 (z-0): Studio Light from Top & Nebula Background */}
+          <div className="absolute top-[-10%] w-[70vw] max-w-[800px] h-[40vh] bg-white/15 rounded-full blur-[120px] mix-blend-overlay" />
+          <div className="absolute z-0 w-[50vw] max-w-[600px] h-[50vh] bg-pink-500/10 rounded-full blur-[120px] mix-blend-screen" />
+          <div className="absolute z-0 w-[40vw] max-w-[500px] h-[40vh] bg-purple-600/15 rounded-full blur-[140px] mix-blend-screen" />
+          
+          {/* Layer 2 (z-5): Mascot Container */}
+          <div className="relative z-[5] flex flex-col items-center justify-center w-full h-full">
+            <CinematicAtmosphere layer="characterBack" />
+            
+            <motion.div
+              className="relative z-[5] flex justify-center w-full h-[75vh]"
+              animate={{ y: [-10, 10, -10] }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <img 
+                src="/butterfly.png" 
+                alt="Big Swara Mascot"
+                className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
+              />
+            </motion.div>
+
+            {/* The Feet Shadow */}
+            <motion.div
+              className="relative z-[4] rounded-[50%] -mt-6"
+              style={{
+                width: '350px',
+                height: '35px',
+                background: 'rgba(0,0,0,0.5)',
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px rgba(236,72,153,0.4)',
+              }}
+              animate={{ 
+                scale: [1, 1.2, 1], 
+                opacity: [0.6, 0.4, 0.6] 
+              }}
+              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </div>
+        </div>
+
+        <CinematicAtmosphere layer="foreground" />
+
+        <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6 relative z-20">
           {messages.length === 0 && !isLoading && !submitLockRef.current ? (
             <div className="h-full" />
           ) : (
@@ -2058,26 +2355,26 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="flex-none p-4 max-w-4xl mx-auto w-full group relative mt-auto z-10 backdrop-blur-sm pt-8">
+        <div className="flex-none p-4 w-full md:w-[60%] lg:w-[55%] mx-auto group relative mt-auto z-30 pt-8">
           {dbStatus ? (
             <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
               {dbStatus}
             </div>
           ) : null}
-          {messages.length === 0 && !isLoading && !submitLockRef.current ? (
-            <motion.p
-              key={randomGreeting}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.45, ease: "easeOut" }}
-              className="welcome-hint"
-            >
-              &quot;{randomGreeting}&quot;
-            </motion.p>
-          ) : null}
           <form
             onSubmit={handleSubmit}
-            className="relative mx-auto flex w-full items-center saheli-input-bar glass-input-container"
+            className={`relative mx-auto flex items-center transition-all duration-300 ${
+              input.trim() ? "shadow-[0_0_40px_rgba(255,20,147,0.4)] scale-[1.01]" : "shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
+            }`}
+            style={{
+              width: "min(100%, 600px)",
+              background: "rgba(10, 5, 15, 0.6)",
+              backdropFilter: "blur(30px) saturate(150%)",
+              WebkitBackdropFilter: "blur(30px) saturate(150%)",
+              borderRadius: "999px",
+              padding: "4px 8px",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+            }}
           >
             {selectedImage && (
               <div className="absolute -top-24 left-4 p-2 bg-[#1a0b2e]/80 backdrop-blur-xl border border-pink-500/30 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -2112,7 +2409,7 @@ export default function Chat() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="ml-3 flex items-center justify-center w-[35px] h-[35px] rounded-full bg-white/10 border border-white/20 backdrop-blur-md text-white transition-all duration-300 shadow-[0_0_10px_rgba(138,43,226,0.3)] hover:bg-[rgba(138,43,226,0.4)] hover:scale-110 hover:shadow-[0_0_20px_rgba(138,43,226,0.6)]"
+                  className="ml-2 flex items-center justify-center w-[38px] h-[38px] rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-white transition-all duration-300 hover:scale-125 hover:bg-white/10 origin-center"
                   aria-label="Add image"
                 >
                   <Plus className="w-5 h-5" />
@@ -2170,29 +2467,35 @@ export default function Chat() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={inputPlaceholder}
-              className="flex-1 bg-transparent px-6 py-4 text-white placeholder-white/55 focus:outline-none font-sans focus:ring-0 border-none"
+              className="flex-1 bg-transparent px-4 py-3 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 border-none"
               style={{ fontSize: "15px" }}
             />
-            <button
-              type="button"
-              onClick={toggleMic}
-              aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
-              className={`p-2 ml-1 rounded-full saheli-icon-hover ${
-                isListening
-                  ? "bg-pink-500/20 text-pink-400 animate-pulse"
-                  : "bg-pink-500/5 text-pink-300/50 hover:text-pink-200 hover:bg-pink-500/10"
-              }`}
-            >
-              <Mic className="w-5 h-5" />
-            </button>
-            <button
-              type="submit"
-              aria-label={t.composer.sendMessage}
-              disabled={(!(input.trim() || selectedImage) || isLoading)}
-              className="mr-3 saheli-send-btn saheli-btn-hover"
-            >
-              <Send className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1 mr-1">
+              <button
+                type="button"
+                onClick={toggleMic}
+                aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
+                className={`flex items-center justify-center w-[38px] h-[38px] rounded-full transition-all duration-300 hover:scale-125 origin-center ${
+                  isListening
+                    ? "bg-pink-500 text-white shadow-[0_0_20px_rgba(255,105,180,0.6)] animate-pulse"
+                    : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+              <button
+                type="submit"
+                aria-label={t.composer.sendMessage}
+                disabled={(!(input.trim() || selectedImage) || isLoading)}
+                className={`flex items-center justify-center w-[38px] h-[38px] rounded-full transition-all duration-300 origin-center ${
+                  (input.trim() || selectedImage) && !isLoading
+                    ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-[0_0_15px_rgba(255,105,180,0.4)] hover:scale-125"
+                    : "bg-white/5 text-white/30"
+                }`}
+              >
+                <Send className="w-4 h-4 ml-1" />
+              </button>
+            </div>
           </form>
           <input
             ref={mobileCameraInputRef}
@@ -2214,9 +2517,6 @@ export default function Chat() {
               </button>
             </div>
           )}
-          <div className="text-center mt-3 text-[10px] tracking-widest uppercase text-white/40 font-medium pb-2">
-            {t.composer.footer}
-          </div>
         </div>
 
         <Suspense fallback={null}>

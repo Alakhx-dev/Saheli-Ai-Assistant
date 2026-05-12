@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,8 @@ import {
 import type { MemoryProfile } from "@/lib/memory";
 import MemoryList from "@/components/memory/MemoryList";
 import ImageGrid from "@/components/memory/ImageGrid";
+import { motion, AnimatePresence } from "framer-motion";
+import { MessageSquareText, ImageIcon } from "lucide-react";
 
 interface MemoryModalProps {
   open: boolean;
@@ -22,6 +24,8 @@ interface MemoryModalProps {
   onPreviewImage: (url: string) => void;
 }
 
+type MemoryTab = "chat" | "image";
+
 export default function MemoryModal({
   open,
   onOpenChange,
@@ -33,6 +37,19 @@ export default function MemoryModal({
   onClearAll,
   onPreviewImage,
 }: MemoryModalProps) {
+  const [activeTab, setActiveTab] = useState<MemoryTab>("chat");
+
+  useEffect(() => {
+    const handleTabSwitch = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail === "chat" || customEvent.detail === "image") {
+        setActiveTab(customEvent.detail);
+      }
+    };
+    window.addEventListener("saheli-memory-tab", handleTabSwitch);
+    return () => window.removeEventListener("saheli-memory-tab", handleTabSwitch);
+  }, []);
+
   const profile = memory ?? {
     preferences: [],
     facts: [],
@@ -43,7 +60,8 @@ export default function MemoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[min(64rem,calc(100vw-2rem))] max-w-5xl overflow-y-auto rounded-xl border border-white/10 bg-[#1e1e1e] p-0 text-white">
+      <DialogContent className="memory-modal-content">
+        {/* Header */}
         <div className="border-b border-white/10 px-6 py-5">
           <DialogHeader className="space-y-2 text-left">
             <DialogTitle className="text-xl font-semibold text-white">Manage Memory</DialogTitle>
@@ -51,25 +69,69 @@ export default function MemoryModal({
               Review long-term memory insights, image memory, and storage controls.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Tab Bar */}
+          <div className="memory-tab-bar mt-4">
+            <button
+              type="button"
+              className={`memory-tab ${activeTab === "chat" ? "memory-tab-active" : ""}`}
+              onClick={() => setActiveTab("chat")}
+            >
+              <MessageSquareText className="h-4 w-4" />
+              <span>Chat Memory</span>
+              <span className="memory-tab-count">{profile.chat_history.length}</span>
+            </button>
+            <button
+              type="button"
+              className={`memory-tab ${activeTab === "image" ? "memory-tab-active" : ""}`}
+              onClick={() => setActiveTab("image")}
+            >
+              <ImageIcon className="h-4 w-4" />
+              <span>Image Memory</span>
+              <span className="memory-tab-count">{profile.images.length}</span>
+            </button>
+          </div>
         </div>
 
+        {/* Tab Content */}
         <div className="space-y-5 p-6">
-          <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-white/40">Insights</p>
-              <p className="text-xs text-white/45">{profile.chat_history.length}</p>
-            </div>
-            <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />
-          </section>
+          <AnimatePresence mode="wait">
+            {activeTab === "chat" ? (
+              <motion.div
+                key="chat-tab"
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">Insights</p>
+                    <p className="text-xs text-white/45">{profile.chat_history.length}</p>
+                  </div>
+                  <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />
+                </section>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="image-tab"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">Images</p>
+                    <p className="text-xs text-white/45">{profile.images.length}</p>
+                  </div>
+                  <ImageGrid items={profile.images} onDelete={onDeleteImage} onPreview={onPreviewImage} />
+                </section>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-              <p className="text-xs uppercase tracking-[0.2em] text-white/40">Images</p>
-              <p className="text-xs text-white/45">{profile.images.length}</p>
-            </div>
-            <ImageGrid items={profile.images} onDelete={onDeleteImage} onPreview={onPreviewImage} />
-          </section>
-
+          {/* Controls Section */}
           <section className="rounded-xl border border-white/10 bg-[#242424] p-4">
             <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">Controls</p>
             <div className="flex flex-wrap items-center justify-between gap-3">

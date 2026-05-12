@@ -1,4 +1,4 @@
-import { processGroqChat } from "../lib/groqChat";
+import { processOpenRouterChat } from "../lib/openrouterChat";
 
 export const runtime = "edge";
 
@@ -30,22 +30,23 @@ export default async function handler(request: Request) {
   const env = (globalThis as any).process?.env || {};
   const clean = (val: string | undefined) => val?.trim().replace(/['"]+/g, '') || "";
 
-  const groqApiKey = clean(env.GROQ_API_KEY);
+  const openrouterApiKey = clean(env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY);
+  const siteUrl = clean(env.SITE_URL || env.VITE_SITE_URL) || "http://localhost:3000";
 
-  if (!groqApiKey) {
-    return jsonResponse({ error: "Missing GROQ_API_KEY in environment" }, 500);
+  if (!openrouterApiKey) {
+    return jsonResponse({ error: "Missing OPENROUTER_API_KEY in environment" }, 500);
   }
 
   try {
-    console.log("Incoming chat request to /api/chat (Groq)");
+    console.log("Incoming chat request to /api/chat (OpenRouter)");
     const payload = await request.json();
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({
       start(controller) {
-        void processGroqChat(
+        void processOpenRouterChat(
           payload,
-          { GROQ_API_KEY: groqApiKey },
+          { OPENROUTER_API_KEY: openrouterApiKey, SITE_URL: siteUrl },
           {
             onChunk: (chunkText, fullText) => {
               controller.enqueue(
@@ -79,7 +80,7 @@ export default async function handler(request: Request) {
       },
     });
   } catch (error: any) {
-    console.error("Groq error:", error);
+    console.error("OpenRouter error:", error);
     return jsonResponse({ 
       ok: false, 
       error: error?.message || "Internal Server Error",

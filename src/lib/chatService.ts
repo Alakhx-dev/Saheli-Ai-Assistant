@@ -1,5 +1,7 @@
 import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { saveImage, type MemoryImageType } from "@/lib/memory";
+import { auth } from "@/lib/firebase";
 
 export type ChatMemoryItem = {
   type: "explicit" | "implicit";
@@ -175,22 +177,62 @@ export async function saveImageMemoryDB(imageUrl: string, userId?: string) {
  * Only the raw image is stored; analysis text is NOT saved.
  */
 export async function saveVisionImageMemory(base64Image: string, userId?: string, description?: string) {
-  if (!userId || !base64Image) return;
+  if (!base64Image) {
+    console.warn("⚠️ [Image Memory] No base64 image provided");
+    return;
+  }
+
+  console.log("📸 [Image Memory] Starting save for captured image", { userId, hasDescription: !!description });
+
   try {
+    // Get current user to ensure we're saving with correct user context
+    const currentUser = auth.currentUser;
+    if (!currentUser && !userId) {
+      console.error("❌ [Image Memory] No user context and no userId provided");
+      return;
+    }
+
+    const uid = userId || currentUser?.uid || "guest";
+    console.log("📸 [Image Memory] Using uid:", uid);
+
+    // Prepare image data
     const cleanBase64 = base64Image.startsWith("data:image")
       ? base64Image.split(",")[1]
       : base64Image;
-    await addDoc(collection(db, "image_memories"), {
-      userId,
-      type: "image",
-      timestamp: Date.now(),
-      base64: cleanBase64,
-      image: cleanBase64,
-      description: description?.trim() || "",
-      createdAt: serverTimestamp(),
-    });
+
+    // Create data URL for storage
+    const imageUrl = `data:image/jpeg;base64,${cleanBase64}`;
+
+    console.log("📸 [Image Memory] Prepared image data, length:", cleanBase64.length);
+
+    // If we have a full user object, use the proper saveImage function
+    if (currentUser) {
+      console.log("📸 [Image Memory] Using saveImage() with proper user context");
+      await saveImage(currentUser, {
+        type: "upload" as MemoryImageType,
+        url: imageUrl,
+        caption: description?.trim() || undefined,
+      });
+      console.log("✅ [Image Memory] Image saved successfully via saveImage()");
+    } else {
+      // Fallback for guest or missing user - save to legacy collection
+      console.log("📸 [Image Memory] Using fallback legacy collection for guest user");
+      await addDoc(collection(db, "image_memories"), {
+        userId: uid,
+        type: "image",
+        timestamp: Date.now(),
+        base64: cleanBase64,
+        image: cleanBase64,
+        description: description?.trim() || "",
+        createdAt: serverTimestamp(),
+      });
+      console.log("✅ [Image Memory] Image saved to legacy collection");
+    }
   } catch (err) {
-    console.error("Failed to save vision image memory", err);
+    console.error("❌ [Image Memory] Failed to save vision image memory:", {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
   }
 }
 

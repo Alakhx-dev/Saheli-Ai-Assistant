@@ -1,5 +1,9 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { MessageCircle, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { MessageCircle, Pencil, Plus, Settings, Trash2, Sparkles, Sun, Moon } from "lucide-react";
+import SettingsBubble from "@/components/settings/SettingsBubble";
+import MuteButton from "@/components/settings/MuteButton";
+import ProfileBubble from "@/components/settings/ProfileBubble";
 
 export interface ChatSessionListItem {
   id: string;
@@ -12,6 +16,8 @@ interface SidebarProps {
   currentChatId: string | null;
   isGuest: boolean;
   isLightMode: boolean;
+  isTtsMuted: boolean;
+  memoryEnabled: boolean;
   newChatLabel: string;
   recentChatsLabel: string;
   noChatsGuestLabel: string;
@@ -26,7 +32,15 @@ interface SidebarProps {
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
+  onToggleTtsMute: () => void;
+  onToggleSidebarTheme: (nextValue: boolean) => void;
+  onToggleMemory: (nextValue: boolean) => void;
+  onOpenMemory: () => void;
+  onOpenProfile: () => void;
   onOpenSettings: () => void;
+  selectedModelId: string;
+  onSelectModel: (modelId: string) => void;
+  className?: string;
 }
 
 interface ChatItemProps {
@@ -69,7 +83,12 @@ const ChatItem = memo(function ChatItem({
   }, [isEditing]);
 
   return (
-    <div className={`history-item group ${isActive ? "active" : ""}`}>
+    <motion.div
+      layout
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.99 }}
+      className={`history-item group ${isActive ? "active" : ""}`}
+    >
       <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
       {isEditing ? (
         <input
@@ -97,7 +116,8 @@ const ChatItem = memo(function ChatItem({
           onDoubleClick={() => onStartEdit(chat.id, title)}
           className="min-w-0 flex-1 truncate text-left text-sm"
         >
-          {title}
+            {title}
+            {isActive ? <span className="chat-item-butterfly" aria-hidden /> : null}
         </button>
       )}
 
@@ -127,7 +147,7 @@ const ChatItem = memo(function ChatItem({
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 });
 
@@ -137,6 +157,8 @@ export default function Sidebar({
   currentChatId,
   isGuest,
   isLightMode,
+  isTtsMuted,
+  memoryEnabled,
   newChatLabel,
   recentChatsLabel,
   noChatsGuestLabel,
@@ -151,10 +173,24 @@ export default function Sidebar({
   onDeleteChat,
   onRenameChat,
   onCloseSidebar,
+  onToggleTtsMute,
+  onToggleSidebarTheme,
+  onToggleMemory,
+  onOpenMemory,
+  onOpenProfile,
   onOpenSettings,
+  selectedModelId,
+  onSelectModel,
+  className = "",
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [isSettingsBubbleOpen, setIsSettingsBubbleOpen] = useState(false);
+  const [isProfileBubbleOpen, setIsProfileBubbleOpen] = useState(false);
+  const settingsBubbleRef = useRef<HTMLDivElement>(null);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const profileBubbleRef = useRef<HTMLDivElement>(null);
+  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleStartEdit = (chatId: string, title: string) => {
     setEditingId(chatId);
@@ -179,14 +215,86 @@ export default function Sidebar({
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
   const sidebarTone = isLightMode ? "text-neutral-900" : "text-white";
-  const surfaceTone = isLightMode ? "border-neutral-300/80 bg-white/95" : "border-pink-500/10 bg-[#1a0a14]/40";
-  const rowTone = isLightMode
-    ? "text-neutral-700 hover:bg-neutral-200/80 hover:text-neutral-900"
-    : "text-neutral-300 hover:bg-pink-500/5 hover:text-white";
+  const surfaceTone = isLightMode ? "border-white/35 bg-white/90" : "border-white/10 bg-[#120814]/72";
   const subtleTextTone = isLightMode ? "text-neutral-500" : "text-white/45";
   const defaultTextTone = isLightMode ? "text-neutral-900" : "text-white";
-  const profileBorderTone = isLightMode ? "border-neutral-300/80" : "border-pink-500/10";
-  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-pink-500/10";
+  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      
+      if (isSettingsBubbleOpen && !settingsBubbleRef.current?.contains(target) && !settingsButtonRef.current?.contains(target)) {
+        setIsSettingsBubbleOpen(false);
+      }
+      
+      if (isProfileBubbleOpen && !profileBubbleRef.current?.contains(target) && !profileButtonRef.current?.contains(target)) {
+        setIsProfileBubbleOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsSettingsBubbleOpen(false);
+        setIsProfileBubbleOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isSettingsBubbleOpen, isProfileBubbleOpen]);
+
+  const playPopSound = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    try {
+      const context = new AudioContextCtor();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(540, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.12);
+
+      oscillator.onended = () => {
+        void context.close();
+      };
+    } catch {
+      // ignore audio pop failures
+    }
+  };
+
+  const handleToggleSettingsBubble = () => {
+    playPopSound();
+    setIsSettingsBubbleOpen((prev) => !prev);
+    setIsProfileBubbleOpen(false);
+  };
+
+  const handleToggleProfileBubble = () => {
+    playPopSound();
+    setIsProfileBubbleOpen((prev) => !prev);
+    setIsSettingsBubbleOpen(false);
+  };
 
   return (
     <>
@@ -197,27 +305,37 @@ export default function Sidebar({
         }`}
       />
       <aside
-        className={`sidebar sidebar-glass z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"}`}
+        className={`sidebar sidebar-glass z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
       >
-        <div>
-          <div className="mb-10 px-2 opacity-60">
-            <h1 className="heading-cinematic text-[10px] tracking-[0.4em] text-white">
-              SAHELI AI
-            </h1>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void onCreateChat()}
-            className="new-chat-pill group mb-8"
+        {/* ── Premium Logo Section ── */}
+        <div className="saheli-logo-section">
+          <motion.div 
+            className="saheli-logo-text-wrap"
+            animate={{ opacity: [1, 0.7, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
           >
-            <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
-            {newChatLabel}
-          </button>
+            <span className="saheli-logo-name">Saheli</span>
+            <span className="saheli-sparkle-icon">✨</span>
+            <span className="saheli-logo-butterfly" aria-hidden />
+            <span className="saheli-logo-badge ml-1">AI</span>
+          </motion.div>
         </div>
 
+        {/* ── New Chat Button ── */}
+        <motion.button
+          type="button"
+          onClick={() => void onCreateChat()}
+          whileHover={{ y: -1, scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          className="new-chat-pill group"
+        >
+          <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+          {newChatLabel}
+        </motion.button>
+
+        {/* ── Chat History ── */}
         <div className="custom-scrollbar flex-1 overflow-y-auto scroll-smooth">
-          <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-gray-600">
+          <div className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
             {recentChatsLabel}
           </div>
           {chatSessions.length === 0 ? (
@@ -244,39 +362,102 @@ export default function Sidebar({
           )}
         </div>
 
-        <div className={`mt-auto border-t pt-6 ${dividerTone}`}>
-          <div className={`rounded-2xl border p-3 backdrop-blur-md ${surfaceTone}`}>
-            <div className="flex items-center gap-3" title={userEmail || ""}>
+        {/* ── Bottom Controls ── */}
+        <div className={`mt-auto border-t pt-4 pb-2 flex flex-col gap-4 ${dividerTone}`}>
+          
+          {/* Top Row: Setting, Mute, Theme */}
+          <div className="flex items-center justify-between px-2 gap-4">
+            
+            {/* 1. Settings Toggle */}
+            <div className="relative flex">
+              <motion.button
+                ref={settingsButtonRef}
+                type="button"
+                whileHover={{ y: -2, scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleToggleSettingsBubble}
+                aria-label={settingsLabel}
+                className={`sidebar-footer-btn ${isSettingsBubbleOpen ? "settings-active" : ""}`}
+              >
+                <motion.div
+                  animate={{ rotate: isSettingsBubbleOpen ? 90 : 0 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                >
+                  <Settings className="h-5 w-5 text-white/90" />
+                </motion.div>
+              </motion.button>
+
+              {/* Settings Bubble - positioned to the right */}
+              <div
+                ref={settingsBubbleRef}
+                className="absolute left-[calc(100%+1.25rem)] bottom-0 z-50"
+              >
+                <SettingsBubble
+                  open={isSettingsBubbleOpen}
+                  isLightMode={isLightMode}
+                  memoryEnabled={memoryEnabled}
+                  profileName={userName || "User"}
+                  profileEmail={userEmail}
+                  profileInitial={profileInitial}
+                  selectedModelId={selectedModelId}
+                  onClose={() => setIsSettingsBubbleOpen(false)}
+                  onThemeToggle={onToggleSidebarTheme}
+                  onMemoryToggle={onToggleMemory}
+                  onOpenMemory={onOpenMemory}
+                  onOpenProfile={onOpenProfile}
+                  onOpenSettings={onOpenSettings}
+                  onSelectModel={onSelectModel}
+                />
+              </div>
+            </div>
+
+            {/* 2. Mute Toggle */}
+            <MuteButton muted={isTtsMuted} onToggle={onToggleTtsMute} />
+
+            {/* 3. Theme Toggle */}
+            <motion.button
+              type="button"
+              whileHover={{ y: -2, scale: 1.05 }}
+              whileTap={{ scaleX: 1.2, scaleY: 0.8 }}
+              onClick={() => onToggleSidebarTheme(!isLightMode)}
+              className="sidebar-footer-btn"
+              aria-label="Toggle theme"
+            >
+              {isLightMode ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+            </motion.button>
+          </div>
+
+          {/* Bottom Row: Profile */}
+          <div className="flex justify-center relative">
+            <motion.button
+              ref={profileButtonRef}
+              type="button"
+              whileHover={{ y: -2, scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleToggleProfileBubble}
+              className="sidebar-footer-btn profile-btn relative w-12 h-12"
+              aria-label="Open profile"
+            >
               {userPhotoUrl ? (
                 <img
                   src={userPhotoUrl}
                   alt="avatar"
-                  className="h-10 w-10 rounded-full object-cover"
+                  className="h-full w-full rounded-full object-cover border border-white/20"
                 />
               ) : (
-                <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold ${
-                    isLightMode ? "bg-neutral-200 text-neutral-800" : "bg-white/10 text-white"
-                  }`}
-                >
-                  {profileInitial}
-                </div>
+                <span className="text-lg font-bold text-white">{profileInitial}</span>
               )}
-              <div className="min-w-0">
-                <p className={`truncate text-sm font-semibold ${defaultTextTone}`}>{userName || "User"}</p>
-                <p className={`truncate text-xs ${subtleTextTone}`}>{userEmail || "guest@saheli.ai"}</p>
-              </div>
-            </div>
-
-            <div className={`mt-3 space-y-1 border-t border-pink-500/8 pt-3 ${profileBorderTone}`}>
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition ${rowTone}`}
-              >
-                <Settings className="h-4 w-4 shrink-0 text-pink-300/60" />
-                <span>{settingsLabel}</span>
-              </button>
+            </motion.button>
+            <div ref={profileBubbleRef}>
+              <ProfileBubble
+                open={isProfileBubbleOpen}
+                profileName={userName || "User"}
+                profileEmail={userEmail}
+                profileInitial={profileInitial}
+                userPhotoUrl={userPhotoUrl}
+                isGuest={isGuest}
+                onClose={() => setIsProfileBubbleOpen(false)}
+              />
             </div>
           </div>
         </div>

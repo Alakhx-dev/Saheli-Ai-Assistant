@@ -309,7 +309,7 @@ export default function Login() {
 
           {/* Character Image with Multi-Layered Animations */}
           <img
-            src="/saheli-ai-logo.png"
+            src="/saheli-ai-logo.svg"
 
             alt="Saheli AI Bestie"
             className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
@@ -371,7 +371,7 @@ export default function Login() {
               willChange: "transform, filter",
             }}
             onError={(e) => {
-              e.currentTarget.src = "/saheli-ai-logo.png";
+              e.currentTarget.src = "/saheli-ai-logo.svg";
             }}
           />
 

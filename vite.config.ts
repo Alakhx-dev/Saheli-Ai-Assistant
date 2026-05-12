@@ -5,7 +5,8 @@ import dns from "node:dns";
 import { componentTagger } from "lovable-tagger";
 import { generateChatTitle } from "./lib/generateChatTitle";
 import { synthesizePollyAudioBase64 } from "./lib/pollyTts";
-import { processGroqChat } from "./lib/groqChat";
+import { processOpenRouterChat } from "./lib/openrouterChat";
+// Fallback: import { processGroqChat } from "./lib/groqChat";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -189,12 +190,14 @@ export default defineConfig(({ mode }) => {
         req.on("end", async () => {
           try {
             const clean = (val: string | undefined) => val?.trim().replace(/['"]+/g, '') || "";
-            const groqApiKey = clean(env.GROQ_API_KEY);
+            const openrouterApiKey = clean(env.VITE_OPENROUTER_API_KEY);
+            const siteUrl = clean(env.VITE_SITE_URL) || "http://localhost:3000";
  
-            if (!groqApiKey) {
+            if (!openrouterApiKey) {
+              console.error("❌ Missing VITE_OPENROUTER_API_KEY");
               res.statusCode = 500;
               res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ error: "Missing GROQ_API_KEY in .env" }));
+              res.end(JSON.stringify({ error: "Missing VITE_OPENROUTER_API_KEY in .env" }));
               return;
             }
  
@@ -209,22 +212,33 @@ export default defineConfig(({ mode }) => {
             res.setHeader("X-Accel-Buffering", "no");
             res.flushHeaders?.();
 
+            let chunksSent = 0;
             try {
-              const text = await processGroqChat(payload, { GROQ_API_KEY: groqApiKey }, {
+              const text = await processOpenRouterChat(payload, { OPENROUTER_API_KEY: openrouterApiKey, SITE_URL: siteUrl }, {
                 onChunk: (chunkText, fullText) => {
+                  chunksSent++;
                   res.write(`data: ${JSON.stringify({ type: "chunk", delta: chunkText, text: fullText })}\n\n`);
                 },
               });
 
+              console.log(`✓ OpenRouter response: ${chunksSent} chunks, ${text.length} chars`);
               res.write(`data: ${JSON.stringify({ type: "done", text })}\n\n`);
               res.end();
             } catch (error: any) {
-              console.error("❌ Groq Dev Middleware Error:", error);
-              res.write(`data: ${JSON.stringify({ type: "error", error: error?.message || "Internal Server Error" })}\n\n`);
-              res.end();
+              console.error("❌ OpenRouter Dev Middleware Error:", { 
+                message: error?.message, 
+                chunksSent,
+                stack: error?.stack?.split('\n').slice(0, 3).join(' ')
+              });
+              if (!res.writableEnded) {
+                res.write(`data: ${JSON.stringify({ type: "error", error: error?.message || "Internal Server Error" })}\n\n`);
+              }
+              if (!res.writableEnded) {
+                res.end();
+              }
             }
           } catch (error: any) {
-            console.error("❌ Groq Dev Middleware Error:", error);
+            console.error("❌ OpenRouter Dev Middleware Parse Error:", error);
             res.statusCode = 500;
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify({ ok: false, error: error?.message || "Internal Server Error" }));
@@ -259,9 +273,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [react(), mode === "development" && componentTagger(), mode === "development" && devPollyTtsMiddleware, mode === "development" && devTitleMiddleware, mode === "development" && devChatMiddleware].filter(Boolean),
-    optimizeDeps: {
-      force: true,
-    },
+    optimizeDeps: {},
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

@@ -1,6 +1,6 @@
 import React from "react";
 import type { AppLanguage } from "@/lib/ai-service";
-import { GROQ_MODEL } from "@/lib/ai-service";
+import { OPENROUTER_MODEL } from "@/lib/ai-service";
 import SettingsRow from "@/components/settings/SettingsRow";
 import SettingsSection from "@/components/settings/SettingsSection";
 import { useAppStore } from "@/store/app-store";
@@ -23,8 +23,8 @@ function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettings
     <div className="space-y-6">
       <SettingsSection
         label="AI Model"
-        title="Groq Cloud"
-        description="Swara is powered by Groq's lightning-fast inference engine."
+        title="OpenRouter"
+        description="Swara is powered through OpenRouter for model routing and fallback."
       >
         <SettingsRow
           title="Active Model"
@@ -33,11 +33,11 @@ function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettings
           <div className="flex flex-col gap-2 w-full max-w-xs">
             <div className="rounded-xl border border-pink-500/20 bg-white/5 px-4 py-2 text-sm text-pink-100 font-medium tracking-wide flex items-center gap-2">
               <Eye className="w-4 h-4 text-pink-400" />
-              {GROQ_MODEL.name}
+              {OPENROUTER_MODEL.name}
             </div>
             <div className="flex items-center gap-2 text-xs mt-1">
               <span className="text-white/60">Status:</span>
-              <span className="text-green-400 font-medium">⚡ Ready (Free & Fast)</span>
+              <span className="text-green-400 font-medium">⚡ Ready (OpenRouter)</span>
             </div>
           </div>
         </SettingsRow>
