@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Atom,
@@ -8,6 +8,7 @@ import {
   UserRound,
   ArrowLeft,
 } from "lucide-react";
+import type { AIProvider } from "@/lib/ai-service";
 
 interface SettingsBubbleProps {
   open: boolean;
@@ -16,23 +17,17 @@ interface SettingsBubbleProps {
   profileName: string;
   profileEmail?: string;
   profileInitial: string;
-  selectedModelId: string;
   onClose: () => void;
   onThemeToggle: (nextValue: boolean) => void;
   onMemoryToggle: (nextValue: boolean) => void;
   onOpenMemory: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onSelectModel: (modelId: string) => void;
+  activeProvider: AIProvider;
+  onSelectProvider: (provider: AIProvider) => void;
 }
 
 type BubbleSection = "home" | "personalization" | "model" | "memory" | "account";
-
-const MODEL_OPTIONS = [
-  { id: "qwen/qwen-2.5-72b-instruct", label: "Qwen 2.5 72B" },
-  { id: "qwen/qwen-2.5-32b-instruct", label: "Qwen 2.5 32B" },
-  { id: "auto", label: "Auto" },
-] as const;
 
 function playPopSound() {
   if (typeof window === "undefined") return;
@@ -106,12 +101,12 @@ function BubbleAction({
 export default function SettingsBubble({
   open,
   isLightMode,
-  selectedModelId,
+  activeProvider,
   onClose,
   onThemeToggle,
   onOpenMemory,
   onOpenProfile,
-  onSelectModel,
+  onSelectProvider,
 }: SettingsBubbleProps) {
   const [section, setSection] = useState<BubbleSection>("home");
 
@@ -189,15 +184,25 @@ export default function SettingsBubble({
 
   const renderModel = () => (
     <motion.div layout className="space-y-1.5">
-      {MODEL_OPTIONS.map((option) => (
-        <BubbleAction
-          key={option.id}
-          label={option.label}
-          icon={<Atom className="h-4 w-4 text-pink-300" />}
-          active={selectedModelId === option.id}
-          onClick={() => onSelectModel(option.id)}
+      <div className="bubble-action-glass justify-between cursor-default">
+        <div className="min-w-0 pr-4">
+          <div className="bubble-label-text">OpenRouter</div>
+          <div className="text-[11px] text-white/45">Off = OpenRouter</div>
+        </div>
+        <LiquidSwitch
+          checked={activeProvider === "Groq"}
+          onChange={(checked) => onSelectProvider(checked ? "Groq" : "OpenRouter")}
         />
-      ))}
+      </div>
+      <div className="bubble-action-glass justify-between cursor-default">
+        <div className="min-w-0 pr-4">
+          <div className="bubble-label-text">Groq</div>
+          <div className="text-[11px] text-white/45">On = Groq only</div>
+        </div>
+        <div className="text-xs font-semibold text-pink-100">
+          {activeProvider === "Groq" ? "Selected" : ""}
+        </div>
+      </div>
     </motion.div>
   );
 

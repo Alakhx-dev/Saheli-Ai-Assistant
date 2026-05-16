@@ -17,7 +17,7 @@ import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "fi
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { sendMessage, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
+import { sendMessage, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -731,6 +731,7 @@ export default function Chat() {
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const firstChunkReceivedRef = useRef(false);
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
@@ -863,7 +864,7 @@ export default function Chat() {
   const setStoreChats = useAppStore((state) => state.setChats);
   const setStoreMemory = useAppStore((state) => state.setMemory);
   const setStoreSettings = useAppStore((state) => state.setSettings);
-  const selectedModelId = useAppStore((state) => state.settings.selectedModelId);
+  const activeProvider = useAppStore((state) => state.settings.activeProvider);
   const storeAddMessage = useAppStore((state) => state.addMessage);
   const storeUpdateStreamingMessage = useAppStore((state) => state.updateStreamingMessage);
   const storeSaveFinalMessage = useAppStore((state) => state.saveFinalMessage);
@@ -1823,6 +1824,12 @@ export default function Chat() {
     let didTriggerEarlyTts = false;
 
     const handleChunk = (partialText: string) => {
+      // On first chunk arrival, hide the typing animation so streaming text appears instantly
+      if (!firstChunkReceivedRef.current) {
+        firstChunkReceivedRef.current = true;
+        setIsLoading(false);
+      }
+
       updateStreamingMessage(chatId, partialText);
 
       if (!didTriggerEarlyTts) {
@@ -2217,8 +2224,8 @@ export default function Chat() {
   const handleToggleSidebarTheme = useCallback((nextValue: boolean) => {
     setIsSidebarLightMode(nextValue);
   }, []);
-  const handleSelectModel = useCallback((modelId: string) => {
-    setStoreSettings({ selectedModelId: modelId });
+  const handleSelectProvider = useCallback((provider: AIProvider) => {
+    setStoreSettings({ activeProvider: provider });
   }, [setStoreSettings]);
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
@@ -2267,8 +2274,8 @@ export default function Chat() {
         onOpenMemory={handleOpenMemoryFromSettings}
         onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
-        selectedModelId={selectedModelId}
-        onSelectModel={handleSelectModel}
+        activeProvider={activeProvider}
+        onSelectProvider={handleSelectProvider}
         className={isIdle ? 'ghost-mode' : ''}
       />
 
@@ -2356,6 +2363,12 @@ export default function Chat() {
         </div>
 
         <div className="flex-none p-4 w-full md:w-[60%] lg:w-[55%] mx-auto group relative mt-auto z-30 pt-8">
+          <div className="mb-3 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-black/35 px-3 py-1.5 text-xs font-medium text-pink-100 backdrop-blur-xl">
+              <span className="h-2 w-2 rounded-full bg-pink-400 shadow-[0_0_12px_rgba(244,114,182,0.75)]" />
+              via {activeProvider}
+            </div>
+          </div>
           {dbStatus ? (
             <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
               {dbStatus}

@@ -1,0 +1,694 @@
+
+/* ===== MOBILE: GLOBAL LAYOUT ===== */
+@media (max-width: 768px) {
+
+  /* ─── Full-screen chat wrapper ─── */
+  .chat-page-wrapper,
+  .chat-screen-bg {
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  /* ─── Chat content flex container ─── */
+  .chat-content {
+    width: 100% !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* ─── Header: Saheli AI branding ─── */
+  .chat-content > header {
+    position: relative !important;
+    top: auto !important;
+    padding: 12px 16px !important;
+    z-index: 30 !important;
+    pointer-events: auto !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* ─── Hamburger menu button ─── */
+  .chat-content ~ button[aria-label],
+  button.fixed.left-4.top-4 {
+    top: 10px !important;
+    left: 10px !important;
+    width: 40px !important;
+    height: 40px !important;
+    z-index: 120 !important;
+  }
+}
+
+/* ===== MOBILE: SIDEBAR ===== */
+@media (max-width: 768px) {
+
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 85vw !important;
+    max-width: 300px !important;
+    max-height: 100dvh !important;
+    height: 100dvh !important;
+    border-radius: 0 20px 20px 0 !important;
+    padding: 16px 12px !important;
+    transform: none !important;
+    animation: none !important;
+    overflow-y: auto !important;
+    z-index: 110 !important;
+  }
+
+  .sidebar.sidebar-open {
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+    animation: mobileSlideIn 0.3s ease-out forwards !important;
+  }
+
+  .sidebar.sidebar-closed {
+    transform: translateX(-110%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    animation: none !important;
+  }
+
+  @keyframes mobileSlideIn {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  /* Sidebar float animation off on mobile */
+  .sidebar {
+    animation: none !important;
+  }
+
+  .sidebar:hover {
+    transform: translateX(0) !important;
+  }
+
+  /* Logo section compact */
+  .saheli-logo-section {
+    padding: 0.4rem 0.15rem !important;
+    margin-bottom: 0.15rem !important;
+  }
+
+  .saheli-logo-name {
+    font-size: 1.1rem !important;
+  }
+
+  .saheli-logo-badge {
+    font-size: 0.5rem !important;
+    padding: 3px 6px !important;
+  }
+
+  /* New chat pill */
+  .new-chat-pill {
+    padding: 10px 16px !important;
+    font-size: 12px !important;
+    gap: 6px !important;
+  }
+
+  /* History items */
+  .history-item {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+    gap: 8px !important;
+    margin-bottom: 3px !important;
+  }
+
+  /* Footer buttons compact */
+  .sidebar-footer-btn {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+
+  .sidebar-footer-btn.profile-btn {
+    width: 2.75rem !important;
+    height: 2.75rem !important;
+  }
+
+  /* Settings & Profile bubbles: reposition for mobile */
+  .liquid-bubble-glass {
+    min-width: 14rem !important;
+    max-width: calc(100vw - 2rem) !important;
+    font-size: 0.82rem !important;
+  }
+
+  /* Settings bubble position fix on mobile - show above instead of right */
+  .sidebar .relative.flex > .absolute {
+    left: 0 !important;
+    bottom: calc(100% + 0.75rem) !important;
+    right: auto !important;
+  }
+}
+
+/* ===== MOBILE: MASCOT / BACKGROUND ===== */
+@media (max-width: 768px) {
+
+  /* Background video */
+  .anime-bg-video {
+    min-width: 100% !important;
+    opacity: 0.35 !important;
+    height: 100% !important;
+    object-fit: cover !important;
+  }
+
+  /* Mascot container: smaller on mobile */
+  .chat-content .absolute.inset-0.pointer-events-none.flex {
+    opacity: 0.15 !important;
+  }
+
+  /* Anime girl character */
+  .anime-girl {
+    width: 400px !important;
+    max-width: 75vw !important;
+  }
+
+  /* Ground shadows and lights smaller */
+  .girl-ground-shadow {
+    width: 40% !important;
+    bottom: 0 !important;
+  }
+
+  .girl-ground-light {
+    width: 55% !important;
+  }
+
+  .girl-spotlight {
+    width: 70% !important;
+  }
+
+  .girl-ambient-glow {
+    width: 50% !important;
+  }
+}
+
+/* ===== MOBILE: MESSAGE AREA ===== */
+@media (max-width: 768px) {
+
+  /* Messages scroll area — full width on mobile */
+  .chat-content > .flex-1 {
+    padding: 8px 8px !important;
+    min-height: 0 !important;
+    flex: 1 1 0% !important;
+    overflow: hidden !important;
+  }
+
+  /* Message list container — use full width instead of 60% */
+  .chat-content > .flex-1 > div > .w-full,
+  div[class*="w-full md:w-[60%]"][class*="mx-auto"][class*="space-y-3"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Message bubbles: wider on mobile, readable text */
+  .saheli-bubble {
+    max-width: 88vw !important;
+    min-width: 120px !important;
+    font-size: 0.85rem !important;
+  }
+
+  /* User/AI bubble max-width for mobile */
+  div[data-role="user"],
+  div[data-role="assistant"] {
+    max-width: 85% !important;
+    padding: 12px 14px !important;
+    font-size: 13.5px !important;
+    line-height: 1.55 !important;
+  }
+
+  /* Petal SVG accents on bubbles: hide on mobile to prevent overflow */
+  .saheli-bubble[data-role="assistant"]::after,
+  .saheli-bubble[data-role="user"]::after {
+    display: none !important;
+  }
+
+  /* Typing indicator compact */
+  .saheli-ai-bubble {
+    max-width: 80% !important;
+  }
+
+  .saheli-typing-dot {
+    width: 6px !important;
+    height: 6px !important;
+  }
+}
+
+/* ===== MOBILE: COMPOSER / INPUT BAR ===== */
+@media (max-width: 768px) {
+
+  /* Input bar container — full width */
+  .chat-content > .flex-none {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 8px 10px 12px !important;
+    padding-top: 4px !important;
+    flex-shrink: 0 !important;
+    z-index: 30 !important;
+    margin-top: 0 !important;
+  }
+
+  /* The form itself — full width with compact padding */
+  .chat-content > .flex-none form {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 3px 6px !important;
+    border-radius: 999px !important;
+  }
+
+  /* Text input */
+  .chat-content > .flex-none form input[type="text"] {
+    padding: 10px 12px !important;
+    font-size: 14px !important;
+    min-width: 0 !important;
+  }
+
+  /* Action buttons (plus, mic, send) */
+  .chat-content > .flex-none form button {
+    width: 36px !important;
+    height: 36px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .chat-content > .flex-none form button svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  /* Image preview: position above input */
+  .chat-content > .flex-none form .absolute.-top-24 {
+    top: -68px !important;
+    left: 8px !important;
+  }
+
+  .chat-content > .flex-none form .absolute.-top-24 img {
+    width: 52px !important;
+    height: 52px !important;
+  }
+
+  /* DB status message compact */
+  .chat-content > .flex-none > .mb-2 {
+    font-size: 12px !important;
+    padding: 6px 10px !important;
+    margin-bottom: 4px !important;
+  }
+
+  /* Camera open button */
+  .chat-content > .flex-none .mt-3 button {
+    font-size: 12px !important;
+    padding: 6px 14px !important;
+  }
+}
+
+/* ===== MOBILE: LOGIN PAGE ===== */
+@media (max-width: 768px) {
+
+  /* Full vertical stack */
+  .min-h-screen.w-full.flex {
+    flex-direction: column !important;
+    padding: 12px !important;
+    min-height: 100dvh !important;
+    gap: 0 !important;
+    justify-content: flex-start !important;
+  }
+
+  /* Character section: smaller */
+  .min-h-screen > .w-full.flex.justify-center:first-child {
+    height: 35vh !important;
+    min-height: 200px !important;
+    max-height: 280px !important;
+  }
+
+  /* Anime girl on login: smaller */
+  .min-h-screen .anime-girl {
+    max-height: 55vh !important;
+    width: auto !important;
+  }
+
+  /* Login card section */
+  .min-h-screen > .w-full.flex.justify-center:last-child {
+    flex: 1 !important;
+    align-items: flex-start !important;
+    padding-top: 0 !important;
+  }
+
+  /* Card inner */
+  .card-inner {
+    height: auto !important;
+    min-height: 420px !important;
+    max-height: calc(100dvh - 220px) !important;
+    max-width: calc(100vw - 32px) !important;
+  }
+
+  /* Login card padding */
+  .cinematic-card {
+    padding: 28px 20px !important;
+    border-radius: 28px !important;
+  }
+
+  .cinematic-card h1 {
+    font-size: 1.75rem !important;
+    margin-bottom: 0.5rem !important;
+  }
+
+  .cinematic-card p {
+    font-size: 0.85rem !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .cinematic-card form {
+    gap: 1rem !important;
+  }
+
+  .cinematic-card form input {
+    padding: 12px 0 !important;
+    font-size: 14px !important;
+  }
+
+  .cinematic-card form button[type="submit"] {
+    padding: 14px !important;
+    font-size: 15px !important;
+  }
+
+  /* Speech bubble position fix on mobile login */
+  .min-h-screen .absolute.z-50 {
+    left: 55% !important;
+    top: 5% !important;
+  }
+
+  /* Reaction effects position */
+  .min-h-screen .absolute.z-50.drop-shadow-md {
+    max-width: 160px !important;
+  }
+
+  /* Pink shadow under login card — handled by card-inner sizing above */
+
+  /* Skip login button */
+  #skip-login-btn {
+    padding: 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* Social auth buttons */
+  .cinematic-card .flex.items-center.gap-4 button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
+/* ===== MOBILE: WELCOME / EMPTY STATE ===== */
+@media (max-width: 768px) {
+
+  .welcome-text-cinematic {
+    font-size: clamp(1.5rem, 6vw, 2rem) !important;
+    padding: 0 0.75rem !important;
+  }
+
+  .welcome-hint {
+    font-size: 12px !important;
+    margin-bottom: 0.5rem !important;
+  }
+}
+
+/* ===== MOBILE: SETTINGS PANEL ===== */
+@media (max-width: 768px) {
+
+  /* Settings panel full-screen on mobile */
+  .settings-panel-overlay,
+  [role="dialog"] {
+    padding: 0 !important;
+  }
+
+  [role="dialog"] > div {
+    max-width: 100vw !important;
+    width: 100vw !important;
+    max-height: 100dvh !important;
+    height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+}
+
+/* ===== MOBILE: MEMORY MODAL ===== */
+@media (max-width: 768px) {
+
+  .memory-modal-content {
+    width: calc(100vw - 16px) !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 16px !important;
+    margin: 4dvh auto !important;
+  }
+
+  .memory-tab-bar {
+    padding: 0.15rem !important;
+    gap: 0.25rem !important;
+  }
+
+  .memory-tab {
+    padding: 0.45rem 0.5rem !important;
+    font-size: 0.7rem !important;
+    gap: 0.35rem !important;
+  }
+
+  .memory-tab-count {
+    min-width: 1rem !important;
+    height: 1rem !important;
+    font-size: 0.55rem !important;
+    padding: 0 0.25rem !important;
+  }
+}
+
+/* ===== MOBILE: PROFILE MODAL ===== */
+@media (max-width: 768px) {
+
+  /* Profile modal — maximize on mobile */
+  [aria-label="Profile"] > div,
+  .profile-modal-content {
+    width: calc(100vw - 16px) !important;
+    max-width: 100% !important;
+    max-height: 90dvh !important;
+    border-radius: 16px !important;
+  }
+}
+
+/* ===== MOBILE: CINEMATIC ATMOSPHERE ===== */
+@media (max-width: 768px) {
+
+  .cinematic-atmosphere-root {
+    opacity: 0.6 !important;
+  }
+
+  /* Reduce fog blur for performance */
+  .cinematic-fog {
+    filter: blur(24px) !important;
+    opacity: 0.3 !important;
+  }
+
+  /* Reduce bloom / haze for performance */
+  .cinematic-character-bloom {
+    width: min(80vw, 400px) !important;
+    height: min(60vh, 400px) !important;
+    filter: blur(24px) !important;
+  }
+
+  .cinematic-character-haze {
+    width: min(60vw, 300px) !important;
+    height: min(40vh, 300px) !important;
+    filter: blur(20px) !important;
+  }
+
+  /* Studio aura smaller */
+  .cinematic-studio-aura-left,
+  .cinematic-studio-aura-right {
+    filter: blur(30px) !important;
+    opacity: 0.15 !important;
+  }
+
+  /* Garden floor: shorter on mobile */
+  .garden-floor-container {
+    height: 100px !important;
+  }
+
+  /* Cursor glow — already hidden but ensure */
+  .cursor-glow {
+    display: none !important;
+  }
+}
+
+/* ===== MOBILE: SCROLLBAR FIXES ===== */
+@media (max-width: 768px) {
+
+  /* Hide scrollbar on mobile for cleaner look */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 3px !important;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 0, 200, 0.12) !important;
+  }
+}
+
+/* ===== MOBILE: THOUGHT BUBBLE / SAHELI BUBBLE ===== */
+@media (max-width: 768px) {
+
+  .saheli-bubble {
+    max-width: 200px !important;
+    min-width: 140px !important;
+    font-size: 0.82rem !important;
+  }
+
+  .saheli-bubble-text {
+    font-size: 0.82rem !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Thought dots: compact */
+  .thought-dot-1 {
+    width: 12px !important;
+    height: 12px !important;
+    left: -7px !important;
+  }
+
+  .thought-dot-2 {
+    width: 8px !important;
+    height: 8px !important;
+    left: -16px !important;
+  }
+
+  .thought-dot-3 {
+    width: 5px !important;
+    height: 5px !important;
+    left: -24px !important;
+  }
+}
+
+/* ===== MOBILE: GLASS HEADER / FOOTER LEGACY ===== */
+@media (max-width: 768px) {
+
+  .glass-header {
+    padding: 0.75rem !important;
+    gap: 0.75rem !important;
+  }
+
+  .glass-footer {
+    padding: 0.75rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .glow-input {
+    padding: 0.6rem 0.8rem !important;
+    font-size: 14px !important;
+  }
+
+  .glow-button {
+    padding: 0.6rem 1rem !important;
+    font-size: 14px !important;
+  }
+
+  .glow-button-icon {
+    padding: 0.6rem !important;
+  }
+}
+
+/* ===== MOBILE: DROPDOWN MENU FIX ===== */
+@media (max-width: 768px) {
+
+  /* Ensure dropdown menus don't go off-screen */
+  [role="menu"] {
+    max-width: calc(100vw - 24px) !important;
+    z-index: 200 !important;
+  }
+}
+
+/* ===== MOBILE: IMAGE PREVIEW LIGHTBOX ===== */
+@media (max-width: 768px) {
+
+  /* Memory image preview */
+  .absolute.inset-0.z-40.flex.items-center .relative {
+    max-width: calc(100vw - 24px) !important;
+    border-radius: 18px !important;
+  }
+
+  .absolute.inset-0.z-40.flex.items-center img {
+    max-height: 75dvh !important;
+    border-radius: 14px !important;
+  }
+}
+
+/* ===== MOBILE: MISC TOUCH OPTIMIZATIONS ===== */
+@media (max-width: 768px) {
+
+  /* Better touch targets */
+  button, [role="button"] {
+    min-height: 36px !important;
+    min-width: 36px !important;
+  }
+
+  /* Prevent zoom on double tap */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
+  /* Remove hover effects on touch devices */
+  @media (hover: none) {
+    .glass-btn:hover::before {
+      left: -100% !important;
+    }
+
+    .glass-btn:hover {
+      transform: none !important;
+    }
+
+    .saheli-user-bubble:hover,
+    .saheli-ai-bubble:hover {
+      transform: none !important;
+    }
+
+    .new-chat-pill:hover {
+      transform: none !important;
+    }
+
+    .history-item:hover {
+      transform: none !important;
+    }
+  }
+
+  /* Safe area insets for notched phones */
+  .chat-content {
+    padding-top: env(safe-area-inset-top) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
+  }
+
+  .chat-content > .flex-none {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* ===== MOBILE: COMPOSER BUTTERFLY DECORATIONS ===== */
+@media (max-width: 768px) {
+
+  /* Smaller butterfly decorations on composer */
+  .saheli-composer-shell::before,
+  .saheli-composer-shell::after {
+    width: 18px !important;
+    height: 18px !important;
+    opacity: 0.6 !important;
+  }
+}
+
+/* ===== MOBILE: SPARKLE STARS (Login Page) ===== */
+@media (max-width: 768px) {
+
+  /* Disable sparkle trail on mobile for performance */
+  .sparkle-star {
+    display: none !important;
+  }
+}

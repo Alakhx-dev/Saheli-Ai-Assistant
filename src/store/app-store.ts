@@ -1,8 +1,20 @@
 import { create } from "zustand";
+import type { AIProvider } from "@/lib/ai-service";
 
 type AppUser = any;
 type AppChat = any;
 type AppMemory = any;
+
+const ACTIVE_AI_ENGINE_STORAGE_KEY = "active_ai_engine";
+
+function getStoredActiveProvider(): AIProvider {
+  if (typeof window === "undefined") {
+    return "OpenRouter";
+  }
+
+  const storedValue = window.localStorage.getItem(ACTIVE_AI_ENGINE_STORAGE_KEY);
+  return storedValue === "Groq" ? "Groq" : "OpenRouter";
+}
 
 type AppState = {
   user: AppUser;
@@ -14,6 +26,7 @@ type AppState = {
     speakingRate: number;
     temperature: number;
     selectedModelId: string;
+    activeProvider: AIProvider;
   };
   setUser: (user: AppUser) => void;
   setChats: (chats: AppChat[]) => void;
@@ -34,6 +47,7 @@ export const useAppStore = create<AppState>((set) => ({
     speakingRate: 0.96,
     temperature: 0.8,
     selectedModelId: "qwen/qwen-2.5-72b-instruct",
+    activeProvider: getStoredActiveProvider(),
   },
   setUser: (user) => set({ user }),
   setChats: (chats) => set({ chats }),
@@ -87,10 +101,18 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setMemory: (memory) => set({ memory }),
   setSettings: (settings) =>
-    set((state) => ({
-      settings: {
+    set((state) => {
+      const nextSettings = {
         ...state.settings,
         ...settings,
-      },
-    })),
+      };
+
+      if (typeof window !== "undefined" && settings.activeProvider) {
+        window.localStorage.setItem(ACTIVE_AI_ENGINE_STORAGE_KEY, settings.activeProvider);
+      }
+
+      return {
+        settings: nextSettings,
+      };
+    }),
 }));

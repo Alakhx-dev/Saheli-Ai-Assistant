@@ -4,6 +4,7 @@ import { MessageCircle, Pencil, Plus, Settings, Trash2, Sparkles, Sun, Moon } fr
 import SettingsBubble from "@/components/settings/SettingsBubble";
 import MuteButton from "@/components/settings/MuteButton";
 import ProfileBubble from "@/components/settings/ProfileBubble";
+import type { AIProvider } from "@/lib/ai-service";
 
 export interface ChatSessionListItem {
   id: string;
@@ -38,8 +39,8 @@ interface SidebarProps {
   onOpenMemory: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  selectedModelId: string;
-  onSelectModel: (modelId: string) => void;
+  activeProvider: AIProvider;
+  onSelectProvider: (provider: AIProvider) => void;
   className?: string;
 }
 
@@ -179,8 +180,8 @@ export default function Sidebar({
   onOpenMemory,
   onOpenProfile,
   onOpenSettings,
-  selectedModelId,
-  onSelectModel,
+  activeProvider,
+  onSelectProvider,
   className = "",
 }: SidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -399,14 +400,14 @@ export default function Sidebar({
                   profileName={userName || "User"}
                   profileEmail={userEmail}
                   profileInitial={profileInitial}
-                  selectedModelId={selectedModelId}
                   onClose={() => setIsSettingsBubbleOpen(false)}
                   onThemeToggle={onToggleSidebarTheme}
                   onMemoryToggle={onToggleMemory}
                   onOpenMemory={onOpenMemory}
                   onOpenProfile={onOpenProfile}
                   onOpenSettings={onOpenSettings}
-                  onSelectModel={onSelectModel}
+                  activeProvider={activeProvider}
+                  onSelectProvider={onSelectProvider}
                 />
               </div>
             </div>

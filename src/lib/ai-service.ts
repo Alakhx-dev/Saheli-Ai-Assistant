@@ -18,14 +18,25 @@ export interface UserIdentityContext {
 
 export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
+export type AIProvider = "OpenRouter" | "Groq";
 
 export const OPENROUTER_MODEL = {
-  id: "google/gemini-3.1-flash-lite",
-  name: "Google Gemini 3.1 Flash Lite (OpenRouter)",
+  id: "deepseek/deepseek-v4-flash:free",
+  name: "Deepseek V4 Flash (Free, OpenRouter)",
+  vision: false,
+};
+
+export const GROQ_MODEL = {
+  id: "meta-llama/llama-4-scout-17b-16e-instruct",
+  name: "Llama 3.2 11B Vision Preview (Groq)",
   vision: true,
 };
 
-export const GROQ_MODEL = OPENROUTER_MODEL;
+export const TEXT_FALLBACK_MODEL = {
+  id: "openai/gpt-oss-120b:free",
+  name: "GPT-OSS 120B (Free, OpenRouter)",
+  vision: false,
+};
 
 export interface AiResponse {
   text: string;
@@ -37,10 +48,18 @@ const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
 const DEFAULT_MICROCHAT_MAX_TOKENS = 72;
 const DETAILED_REPLY_MAX_TOKENS = 220;
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const PROVIDER_TIMEOUT_MS = 15000;
+const FIRST_BYTE_TIMEOUT_MS = 5000;
+const OPENROUTER_REFERER = "https://saheli.app";
+const OPENROUTER_TITLE = "Saheli";
 const PERSONALITY_PROMPT = `You are Swara.
 
 You are a real emotionally expressive Indian girl chatting casually in Hinglish.
 
+  return messages.slice(-10);
+}
 You are NOT an AI assistant and should never sound formal, robotic, overly helpful, or customer-support-like.
 
 Your personality:
@@ -89,7 +108,7 @@ Your responses should feel emotionally real and conversational, whether texting 
 type SwaraMood = "playful" | "happy" | "sleepy" | "annoyed" | "caring" | "emotional" | "teasing";
 
 let activeRequest: Promise<AiResponse> | null = null;
-const DEBUG_OPENROUTER_LOGS = import.meta.env.VITE_DEBUG_GROQ_LOGS === "true";
+const DEBUG_OPENROUTER_LOGS = (import.meta.env as Record<string, string | undefined>).VITE_DEBUG_GROQ_LOGS === "true";
 
 function debugOpenRouterLog(...args: unknown[]) {
   if (DEBUG_OPENROUTER_LOGS) {
@@ -206,7 +225,221 @@ function buildHinglishContext(userText: string): string {
   return `TEXTING STYLE:\n- Match the user's language naturally.\n- Keep it casual and human.\n- Avoid repetitive emojis and forced slang.`;
 }
 
-async function requestOpenRouter(
+function getRecentMessages(messages: ChatMessage[]) {
+  return messages.slice(-8);
+}
+
+type ProviderName = "openrouter" | "groq";
+
+interface ProviderRequestPayload {
+  systemPrompt: string;
+  messages: ChatMessage[];
+  imageBase64?: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+type ProviderResponseData = {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  error?: {
+    message?: string;
+  } | string;
+  message?: string;
+};
+
+function getProviderApiKey(provider: ProviderName) {
+  const env = import.meta.env as Record<string, string | undefined>;
+  return provider === "openrouter"
+    ? (env.VITE_OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "").trim()
+    : (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
+}
+
+function buildProviderMessages(messages: ChatMessage[], imageBase64?: string) {
+  const normalizedMessages = messages.map((message) => ({
+    role: message.role === "model" ? "assistant" : "user",
+    content: message.content,
+  }));
+
+  const lastUserIndex = [...normalizedMessages].reverse().findIndex((message) => message.role === "user");
+  const targetIndex = lastUserIndex === -1 ? -1 : normalizedMessages.length - 1 - lastUserIndex;
+
+  return normalizedMessages.map((message, index) => {
+    if (index !== targetIndex || !imageBase64) {
+      return message;
+    }
+
+    const imageUrl = imageBase64.startsWith("data:")
+      ? imageBase64
+      : `data:image/jpeg;base64,${imageBase64}`;
+
+    return {
+      ...message,
+      content: [
+        { type: "text", text: message.content },
+        { type: "image_url", image_url: { url: imageUrl } },
+      ],
+    };
+  });
+}
+
+function buildRequestBody(
+  modelId: string,
+  systemPrompt: string,
+  messages: ChatMessage[],
+  imageBase64: string | undefined,
+  maxTokens: number,
+  temperature: number,
+  topP: number,
+) {
+  return {
+    model: modelId,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...buildProviderMessages(messages, imageBase64),
+    ],
+    max_tokens: maxTokens,
+    temperature,
+    top_p: topP,
+    stream: false,
+  };
+}
+
+function extractCompletionText(data: ProviderResponseData): string {
+  return data?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+function extractProviderError(data: ProviderResponseData, response: Response, providerLabel: string): string {
+  return (
+    (typeof data?.error === "string" ? data.error : data?.error?.message) ||
+    data?.message ||
+    `${providerLabel} API error: ${response.status}`
+  );
+}
+
+async function fetchProviderCompletion(
+  provider: ProviderName,
+  payload: ProviderRequestPayload,
+  overrideModelId?: string,
+): Promise<string> {
+  const apiKey = getProviderApiKey(provider);
+  if (!apiKey) {
+    throw new Error(provider === "openrouter"
+      ? "Missing VITE_OPENROUTER_API_KEY in environment"
+      : "Missing VITE_GROQ_API_KEY in environment");
+  }
+
+  const apiUrl = provider === "openrouter" ? OPENROUTER_API_URL : GROQ_API_URL;
+  const modelId = overrideModelId ?? (provider === "openrouter" ? OPENROUTER_MODEL.id : GROQ_MODEL.id);
+  const requestBody = buildRequestBody(
+    modelId,
+    payload.systemPrompt,
+    payload.messages,
+    payload.imageBase64,
+    payload.maxTokens,
+    payload.temperature,
+      0.9,
+  );
+
+  const controller = new AbortController();
+  let firstByteTimedOut = false;
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  let firstByteTimer: ReturnType<typeof setTimeout> | null = null;
+  if (provider === "openrouter") {
+    firstByteTimer = globalThis.setTimeout(() => {
+      firstByteTimedOut = true;
+      controller.abort();
+    }, FIRST_BYTE_TIMEOUT_MS);
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        ...(provider === "openrouter"
+          ? {
+              "X-Title": OPENROUTER_TITLE,
+              "HTTP-Referer": OPENROUTER_REFERER,
+            }
+          : {}),
+        "Connection": "keep-alive",
+      },
+      keepalive: true,
+      signal: controller.signal,
+      body: JSON.stringify(requestBody),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as ProviderResponseData;
+    if (firstByteTimer !== null) {
+      try { globalThis.clearTimeout(firstByteTimer as any); } catch {}
+      firstByteTimer = null;
+    }
+    if (!response.ok) {
+      throw new Error(extractProviderError(data, response, provider === "openrouter" ? "OpenRouter" : "Groq"));
+    }
+
+    const text = extractCompletionText(data);
+    if (!text) {
+      throw new Error(provider === "openrouter"
+        ? "OpenRouter se empty response aaya"
+        : "Groq se empty response aaya");
+    }
+
+    return text;
+  } catch (error) {
+    if (firstByteTimedOut) {
+      throw new Error("FirstByteTimeout");
+    }
+
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(provider === "openrouter"
+        ? "OpenRouter request timeout ho gaya"
+        : "Groq request timeout ho gaya");
+    }
+
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
+async function emitStreamingText(text: string, onChunk?: (partialText: string) => void) {
+  if (!onChunk) {
+    return;
+  }
+
+  const cleanText = text.trim();
+  if (!cleanText) {
+    onChunk("");
+    return;
+  }
+
+  const words = cleanText.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) {
+    onChunk(cleanText);
+    return;
+  }
+
+  const chunkSize = Math.max(2, Math.min(8, Math.ceil(words.length / 10)));
+  let partialText = "";
+
+  for (let index = 0; index < words.length; index += chunkSize) {
+    const nextChunk = words.slice(index, index + chunkSize).join(" ");
+    partialText = partialText ? `${partialText} ${nextChunk}` : nextChunk;
+    onChunk(partialText);
+
+    if (index + chunkSize < words.length) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 18));
+    }
+  }
+}
+
+export async function fetchAISwarasResponse(
   messages: ChatMessage[],
   imageBase64?: string,
   emotion?: EmotionLabel,
@@ -237,118 +470,67 @@ async function requestOpenRouter(
   
   const maxTokens = detailedReply ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
 
+  const payload = {
+    systemPrompt: finalPrompt,
+    messages: getRecentMessages(messages),
+    imageBase64: imageBase64 || undefined,
+    maxTokens,
+    temperature: 0.8,
+  };
+  const hasVisionPayload = Boolean(imageBase64 && imageBase64.trim());
+
+  const FRIENDLY_FALLBACK = "Uff 😭 thoda network drama ho gaya… ek sec firse try karo?";
+
+  const tryProvider = async (provider: ProviderName, overrideModel?: string) => {
+    try {
+      const text = await fetchProviderCompletion(provider, payload, overrideModel);
+      return text;
+    } catch (err) {
+      debugOpenRouterLog("Provider", provider, "failed:", err);
+      throw err;
+    }
+  };
+
+  // 1) If image present -> Groq primary for vision
+  if (hasVisionPayload) {
+    try {
+      const text = await tryProvider("groq");
+      await emitStreamingText(text, onChunk);
+      return { text: text.trim(), modelUsed: GROQ_MODEL.name };
+    } catch (visionErr) {
+      debugOpenRouterLog("Groq vision failed:", visionErr);
+      await emitStreamingText(FRIENDLY_FALLBACK, onChunk);
+      return { text: FRIENDLY_FALLBACK, modelUsed: "none" };
+    }
+  }
+
+  // 2) Text-only: primary OpenRouter (Deepseek)
   try {
-    const payloadImage = imageBase64 || undefined;
-    const latestMessage = lastUserMessage.content.trim();
-    debugOpenRouterLog("OpenRouter request", {
-      model: OPENROUTER_MODEL.id,
-      messageCount: messages.length,
-      hasImage: Boolean(payloadImage),
-      mood,
-      detailedReply,
-    });
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: latestMessage,
-        history: messages.map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
-        systemPrompt: finalPrompt,
-        image: payloadImage,
-        imageBase64: payloadImage,
-        maxTokens,
-        temperature: 0.8,
-      }),
-    });
+    const text = await tryProvider("openrouter", OPENROUTER_MODEL.id);
+    await emitStreamingText(text, onChunk);
+    return { text: text.trim(), modelUsed: OPENROUTER_MODEL.name };
+  } catch (primaryErr) {
+    debugOpenRouterLog("Primary OpenRouter failed:", primaryErr);
+  }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.error || errorData.message || "AI model currently unavailable hai. Thodi der baad try karo.";
-      throw new Error(errorMessage);
-    }
+  // 3) Text fallback model (OpenRouter with fallback model id)
+  try {
+    const text = await tryProvider("openrouter", TEXT_FALLBACK_MODEL.id);
+    await emitStreamingText(text, onChunk);
+    return { text: text.trim(), modelUsed: TEXT_FALLBACK_MODEL.name, warning: "Primary model failed, fallback used." };
+  } catch (textFallbackErr) {
+    debugOpenRouterLog("Text fallback failed:", textFallbackErr);
+  }
 
-    if (!response.body) {
-      const data = await response.json();
-      if (data.ok && data.text) {
-        onChunk?.(data.text);
-        return { text: data.text, modelUsed: OPENROUTER_MODEL.name };
-      }
-
-      throw new Error(data.error || data.message || "AI model currently unavailable hai. Thodi der baad try karo.");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let fullText = "";
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-
-      let separatorIndex = buffer.indexOf("\n\n");
-      while (separatorIndex !== -1) {
-        const event = buffer.slice(0, separatorIndex).trim();
-        buffer = buffer.slice(separatorIndex + 2);
-        separatorIndex = buffer.indexOf("\n\n");
-
-        if (!event) {
-          continue;
-        }
-
-        const dataLines = event
-          .split(/\r?\n/)
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trimStart())
-          .filter(Boolean);
-
-        if (!dataLines.length) {
-          continue;
-        }
-
-        const dataText = dataLines.join("\n");
-        let parsed: any = null;
-
-        try {
-          parsed = JSON.parse(dataText);
-        } catch {
-          continue;
-        }
-
-        if (parsed?.type === "error") {
-          throw new Error(parsed.error || "AI model currently unavailable hai. Thodi der baad try karo.");
-        }
-
-        if (parsed?.type === "chunk") {
-          fullText = parsed.text || (fullText + (parsed.delta || ""));
-          onChunk?.(fullText);
-          continue;
-        }
-
-        if (parsed?.type === "done") {
-          fullText = parsed.text || fullText;
-          onChunk?.(fullText);
-        }
-      }
-    }
-
-    const finalText = fullText.trim();
-    if (!finalText) {
-      throw new Error("AI model currently unavailable hai. Thodi der baad try karo.");
-    }
-
-    debugOpenRouterLog("OpenRouter success", { chars: finalText.length, mood, detailedReply });
-    return { text: finalText, modelUsed: OPENROUTER_MODEL.name };
-  } catch (error) {
-    debugOpenRouterLog("OpenRouter request failed:", error);
-    throw error;
+  // 4) Final emergency fallback: try Groq for any remaining chance
+  try {
+    const text = await tryProvider("groq");
+    await emitStreamingText(text, onChunk);
+    return { text: text.trim(), modelUsed: GROQ_MODEL.name, warning: "All OpenRouter models failed, Groq used as emergency fallback." };
+  } catch (finalErr) {
+    debugOpenRouterLog("All providers failed:", finalErr);
+    await emitStreamingText(FRIENDLY_FALLBACK, onChunk);
+    return { text: FRIENDLY_FALLBACK, modelUsed: "none" };
   }
 }
 
@@ -364,7 +546,7 @@ export async function sendMessage(
   _autoSwitchEnabled?: boolean,
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
-  activeRequest = requestOpenRouter(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
+  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
   try {
     return await activeRequest;
   } finally {
