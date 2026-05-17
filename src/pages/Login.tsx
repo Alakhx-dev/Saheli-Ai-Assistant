@@ -11,14 +11,36 @@ import {
   type AuthProvider,
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { getLang } from "@/lib/useLanguage";
 import { useNavigate } from "react-router-dom";
 import { Github } from "lucide-react";
 import { isMobile } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
+const LOGIN_CINEMATIC_COPY = [
+  { title: "Good to see you again", subtitle: "Let’s pick up where we left off." },
+  { title: "Welcome back", subtitle: "Your conversation is waiting." },
+  { title: "Hey, welcome back", subtitle: "Ready for another conversation?" },
+  { title: "You’re back", subtitle: "Let’s continue the night." },
+  { title: "Back again?", subtitle: "I saved your spot." },
+  { title: "Nice to see you", subtitle: "What’s on your mind tonight?" },
+  { title: "Glad you’re here", subtitle: "It’s better when you are." },
+  { title: "Welcome back", subtitle: "Saheli is ready when you are." },
+];
+
+const SIGNUP_CINEMATIC_COPY = [
+  { title: "Join Saheli", subtitle: "Your conversations start here." },
+  { title: "Create Your Space", subtitle: "A better kind of AI companion." },
+  { title: "Ready to begin?", subtitle: "Your late-night companion is waiting." },
+  { title: "Start Something New", subtitle: "Let’s make this place yours." },
+  { title: "Welcome to Saheli", subtitle: "A more personal AI experience." },
+  { title: "Create Your Account", subtitle: "Your conversations deserve a place." },
+  { title: "This is your corner now", subtitle: "Talk, relax, stay awhile." },
+  { title: "Let’s get started", subtitle: "Saheli is ready when you are." },
+];
+
+const pickRandomCopy = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)];
+
 export default function Login() {
-  const t = getLang();
   const dialogues = {
     welcome: [
       "Aa gaye? Chalo fatafat login karo! ✨",
@@ -90,6 +112,8 @@ export default function Login() {
   const [clickCount, setClickCount] = useState(0);
   const [hoverCount, setHoverCount] = useState(0);
   const interactionTimer = useRef<number>(Date.now());
+  const [loginHeroCopy] = useState(() => pickRandomCopy(LOGIN_CINEMATIC_COPY));
+  const [signupHeroCopy] = useState(() => pickRandomCopy(SIGNUP_CINEMATIC_COPY));
   
   
 
@@ -402,8 +426,14 @@ export default function Login() {
         >
           {/* --- FRONT SIDE: LOGIN --- */}
           <div className="cinematic-card w-full h-full p-10 flex flex-col justify-center">
-            <h1 className="text-4xl font-bold text-white mb-2 text-center text-glow-magenta">Aayiye Shuru Karein!</h1>
-            <p className="text-white/60 mb-8 text-center">{t.login.subtitle || "Saheli (AI Bestie) is waiting for you..."}</p>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{loginHeroCopy.title}</h1>
+              <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{loginHeroCopy.subtitle}</p>
+            </motion.div>
 
             <form onSubmit={handleAuth} className="space-y-6">
               <input
@@ -433,7 +463,7 @@ export default function Login() {
                 type="submit"
                 onMouseEnter={() => handleTease("welcome")}
                 onMouseLeave={hideBubble}
-                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_4px_25px_rgba(244,163,187,0.4),0_2px_10px_rgba(232,121,249,0.25)] hover:shadow-[0_6px_35px_rgba(244,163,187,0.55),0_4px_15px_rgba(232,121,249,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
               >
                 Sign In
               </button>
@@ -441,12 +471,12 @@ export default function Login() {
 
             <div className="mt-4 flex flex-col items-center gap-4">
               <p className="text-gray-400 text-center text-sm mt-2">
-                Naye ho? {" "}
+                New here? {" "}
                 <span 
                   onClick={() => setIsSignUp(true)} 
                   className="text-pink-400 cursor-pointer hover:underline"
                 >
-                  ID banao jaldi!
+                  Create an account
                 </span>
               </p>
 
@@ -496,8 +526,14 @@ export default function Login() {
 
           {/* --- BACK SIDE: SIGNUP --- */}
           <div className="cinematic-card card-back w-full h-full p-10 flex flex-col justify-center">
-            <h1 className="text-4xl font-bold text-white mb-2 text-center text-glow-magenta">Join Saheli</h1>
-            <p className="text-white/60 mb-8 text-center">Nayi shuruat, are you ready?</p>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{signupHeroCopy.title}</h1>
+              <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{signupHeroCopy.subtitle}</p>
+            </motion.div>
 
             <form onSubmit={handleAuth} className="space-y-6">
               <input
@@ -527,7 +563,7 @@ export default function Login() {
                 type="submit"
                 onMouseEnter={() => handleTease("signup")}
                 onMouseLeave={hideBubble}
-                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_4px_25px_rgba(244,163,187,0.4),0_2px_10px_rgba(232,121,249,0.25)] hover:shadow-[0_6px_35px_rgba(244,163,187,0.55),0_4px_15px_rgba(232,121,249,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
               >
                 Create Account
               </button>
