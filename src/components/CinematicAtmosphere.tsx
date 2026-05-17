@@ -50,6 +50,12 @@ const dressParticles = Array.from({ length: 14 }, (_, index) => ({
   opacity: 0.1 + seeded(index, 26) * 0.2,
 }));
 
+const foregroundButterflies = [
+  { id: "swarm-1", tone: "pink", left: "14%", top: "22%", size: "30px", delay: "-3s" },
+  { id: "swarm-2", tone: "lavender", left: "72%", top: "16%", size: "26px", delay: "-9s" },
+  { id: "swarm-3", tone: "pink", left: "48%", top: "12%", size: "34px", delay: "-6s" },
+] as const;
+
 const butterflyImageVars = {
   "--butterfly-pink": "url('/butterflies/pink-transparent.png')",
   "--butterfly-lavender": "url('/butterflies/lavender-transparent.png')",
@@ -84,10 +90,6 @@ const CinematicAtmosphere = memo(function CinematicAtmosphere({
   if (layer === "characterBack") {
     return (
       <div className="cinematic-character-atmosphere" aria-hidden="true">
-        {/* Studio Aura Layers */}
-        <div className="cinematic-studio-aura-left" />
-        <div className="cinematic-studio-aura-right" />
-        
         <div className="cinematic-character-bloom" />
         <div className="cinematic-character-haze" />
         <div className="cinematic-petal-field cinematic-petal-field--back">
@@ -121,6 +123,29 @@ const CinematicAtmosphere = memo(function CinematicAtmosphere({
 
         <div className="cinematic-petal-field cinematic-petal-field--front">
           {renderPetals("front")}
+        </div>
+
+        <div className="cinematic-butterfly-swarm">
+          {foregroundButterflies.map((butterfly) => (
+            <div
+              key={butterfly.id}
+              className={`cinematic-hero-butterfly cinematic-hero-butterfly--anchored cinematic-hero-butterfly--${butterfly.tone}`}
+              style={
+                {
+                  left: butterfly.left,
+                  top: butterfly.top,
+                  "--butterfly-size": butterfly.size,
+                  "--butterfly-delay": butterfly.delay,
+                } as StyleVars
+              }
+            >
+              <div className={`cinematic-hero-butterfly__form cinematic-hero-butterfly__form--${butterfly.tone}`}>
+                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+                <span className="cinematic-hero-butterfly__body" />
+                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
+              </div>
+            </div>
+          ))}
         </div>
 
         <div

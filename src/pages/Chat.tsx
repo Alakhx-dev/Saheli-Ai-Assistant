@@ -498,8 +498,8 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
         transition-all duration-300 saheli-bubble saheli-bubble-float backdrop-blur-[20px]
         ${isNew ? "msg-sheen" : ""}
         ${isUser
-          ? "rounded-3xl rounded-br-md bg-black/60 border border-white/10 shadow-[0_4px_24px_rgba(255,255,255,0.05)]"
-          : "rounded-3xl rounded-bl-md bg-[#2d0f3e]/70 border border-pink-500/30 shadow-[0_8px_32px_rgba(255,79,216,0.2)]"
+          ? "rounded-3xl rounded-br-md bg-gradient-to-br from-white/8 to-white/5 border border-white/12 shadow-[0_8px_24px_rgba(255,255,255,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]"
+          : "rounded-3xl rounded-bl-md bg-gradient-to-br from-pink-500/8 via-purple-600/5 to-transparent border border-pink-500/20 shadow-[0_8px_32px_rgba(255,79,216,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]"
         }
       `}
         style={{ fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
@@ -749,6 +749,13 @@ export default function Chat() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
   const [isIdle, setIsIdle] = useState(false);
+  
+  // Real-time presence: Teasing logic for typing
+  const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
+  const [lastInputLength, setLastInputLength] = useState(0);
+  const typingTimeoutRef = useRef<number | null>(null);
+  const teasingTimeoutRef = useRef<number | null>(null);
+  
   // Track recently saved images to prevent duplicates
   const recentlySavedImageHashesRef = useRef<Map<string, number>>(new Map());
   const imageSaveLockRef = useRef(false);
@@ -2274,6 +2281,7 @@ export default function Chat() {
         onOpenMemory={handleOpenMemoryFromSettings}
         onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
+        onLogout={() => void handleLogout()}
         activeProvider={activeProvider}
         onSelectProvider={handleSelectProvider}
         className={isIdle ? 'ghost-mode' : ''}
@@ -2362,7 +2370,7 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="flex-none p-4 w-full md:w-[60%] lg:w-[55%] mx-auto group relative mt-auto z-30 pt-8">
+        <div className="flex-none p-4 w-full md:w-[60%] lg:w-[55%] mx-auto group relative mt-auto z-30 pt-8 pb-8">
           <div className="mb-3 flex justify-center">
             <div className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-black/35 px-3 py-1.5 text-xs font-medium text-pink-100 backdrop-blur-xl">
               <span className="h-2 w-2 rounded-full bg-pink-400 shadow-[0_0_12px_rgba(244,114,182,0.75)]" />
@@ -2376,17 +2384,11 @@ export default function Chat() {
           ) : null}
           <form
             onSubmit={handleSubmit}
-            className={`relative mx-auto flex items-center transition-all duration-300 ${
+            className={`saheli-composer-shell relative mx-auto flex items-center transition-all duration-300 ${
               input.trim() ? "shadow-[0_0_40px_rgba(255,20,147,0.4)] scale-[1.01]" : "shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
             }`}
             style={{
-              width: "min(100%, 600px)",
-              background: "rgba(10, 5, 15, 0.6)",
-              backdropFilter: "blur(30px) saturate(150%)",
-              WebkitBackdropFilter: "blur(30px) saturate(150%)",
-              borderRadius: "999px",
-              padding: "4px 8px",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
+              width: "min(100%, 650px)",
             }}
           >
             {selectedImage && (
@@ -2478,9 +2480,34 @@ export default function Chat() {
             <input
               type="text"
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                const newInput = e.target.value;
+                setInput(newInput);
+                setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
+                
+                // Clear existing timeouts
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                if (teasingTimeoutRef.current) clearTimeout(teasingTimeoutRef.current);
+                
+                // Check for backspace teasing (>10 chars deleted)
+                if (lastInputLength > newInput.length && lastInputLength - newInput.length > 10) {
+                  setPresenceStatus("Arey! Itna sab likh ke mita diya? 🧐");
+                  teasingTimeoutRef.current = window.setTimeout(() => {
+                    setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
+                  }, 3000);
+                }
+                
+                setLastInputLength(newInput.length);
+                
+                // Stop typing teasing after 7 seconds of no input
+                if (newInput.length > 0) {
+                  typingTimeoutRef.current = window.setTimeout(() => {
+                    setPresenceStatus("Ruk kyun gaye? Likh bhi do ab! 😉");
+                  }, 7000);
+                }
+              }}
               placeholder={inputPlaceholder}
-              className="flex-1 bg-transparent px-4 py-3 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 border-none"
+              className="saheli-composer-input flex-1 px-4 py-3 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 border-none"
               style={{ fontSize: "15px" }}
             />
             <div className="flex items-center gap-1 mr-1">
@@ -2510,6 +2537,20 @@ export default function Chat() {
               </button>
             </div>
           </form>
+          
+          {/* Real-time Presence Indicator */}
+          {presenceStatus && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.3 }}
+              className="mt-2 text-center text-xs font-medium text-pink-300/80"
+            >
+              {presenceStatus}
+            </motion.div>
+          )}
+          
           <input
             ref={mobileCameraInputRef}
             type="file"

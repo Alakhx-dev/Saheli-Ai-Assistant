@@ -240,7 +240,7 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
       <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
-        <div className="relative group flex items-center justify-center">
+        <div className="relative flex items-center justify-center w-full max-w-[520px]">
 
 
           {/* Anchored Chat Bubble: Toggled by Hover/Focus */}
@@ -308,25 +308,20 @@ export default function Login() {
           </AnimatePresence>
 
           {/* Character Image with Multi-Layered Animations */}
-          <img
-            src="/saheli-ai-logo.svg"
-
-            alt="Saheli AI Bestie"
-            className={`anime-girl max-h-[85vh] w-auto object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
-            // Multi-Event Binding
+          <div
+            className="relative z-10 flex items-center justify-center w-full max-w-[460px] px-2"
             onMouseEnter={() => {
-              hideBubble(); 
-              
+              hideBubble();
+
               const now = Date.now();
               const timeSinceLast = now - interactionTimer.current;
               interactionTimer.current = now;
               const isFast = timeSinceLast < 450;
-              
-              setHoverCount(prev => {
+
+              setHoverCount((prev) => {
                 const current = prev + 1;
-                // Text occurs 85% of the time, emoji occasionally (~15%)
                 const isText = Math.random() > 0.15;
-                
+
                 let content = "";
                 if (isText) {
                   const arr = isFast ? HOVER_TEXTS_FAST : HOVER_TEXTS_NORMAL;
@@ -334,14 +329,14 @@ export default function Login() {
                 } else {
                   content = HOVER_EMOJIS[Math.floor(Math.random() * HOVER_EMOJIS.length)];
                 }
-                
+
                 createReaction(content, isText);
                 return current;
               });
             }}
             onClick={() => {
               setIsClicked(true);
-              hideBubble(); 
+              hideBubble();
               window.setTimeout(() => setIsClicked(false), 150);
 
               const now = Date.now();
@@ -349,11 +344,10 @@ export default function Login() {
               interactionTimer.current = now;
               const isFast = timeSinceLast < 350;
 
-              setClickCount(prev => {
+              setClickCount((prev) => {
                 const current = prev + 1;
-                // Text occurs 85% of the time, emoji occasionally (~15%)
                 const isText = Math.random() > 0.15;
-                
+
                 let content = "";
                 if (isText) {
                   const arr = isFast ? CLICK_TEXTS_FAST : CLICK_TEXTS_NORMAL;
@@ -361,19 +355,24 @@ export default function Login() {
                 } else {
                   content = ANGRY_EMOJIS[Math.floor(Math.random() * ANGRY_EMOJIS.length)];
                 }
-                
+
                 createReaction(content, isText);
                 return current;
               });
             }}
-            style={{
-              // These are optimized from the base animation class
-              willChange: "transform, filter",
-            }}
-            onError={(e) => {
-              e.currentTarget.src = "/saheli-ai-logo.svg";
-            }}
-          />
+          >
+            <img
+              src="/saheli-ai-logo.png"
+              alt="Saheli AI Bestie"
+              className={`anime-girl w-full max-w-[460px] max-h-[70vh] object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
+              style={{
+                willChange: "transform, filter",
+              }}
+              onError={(e) => {
+                e.currentTarget.src = "/saheli-ai-logo.svg";
+              }}
+            />
+          </div>
 
           {/* 3. Soft realistic shadow under feet */}
           <div className="girl-ground-shadow" />

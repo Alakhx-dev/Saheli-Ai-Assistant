@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, Pencil, Plus, Settings, Trash2, Sparkles, Sun, Moon } from "lucide-react";
+import { LogOut, MessageCircle, Pencil, Plus, Settings, Trash2, Sparkles, Sun, Moon } from "lucide-react";
 import SettingsBubble from "@/components/settings/SettingsBubble";
 import MuteButton from "@/components/settings/MuteButton";
 import ProfileBubble from "@/components/settings/ProfileBubble";
@@ -39,6 +39,7 @@ interface SidebarProps {
   onOpenMemory: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
+  onLogout: () => void | Promise<void>;
   activeProvider: AIProvider;
   onSelectProvider: (provider: AIProvider) => void;
   className?: string;
@@ -180,6 +181,7 @@ export default function Sidebar({
   onOpenMemory,
   onOpenProfile,
   onOpenSettings,
+  onLogout,
   activeProvider,
   onSelectProvider,
   className = "",
@@ -306,7 +308,14 @@ export default function Sidebar({
         }`}
       />
       <aside
-        className={`sidebar sidebar-glass z-40 flex flex-col ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
+        className={`sidebar sidebar-glass z-40 flex flex-col rounded-3xl border border-white/10 ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
+        style={{
+          margin: "1rem",
+          background: "linear-gradient(135deg, rgba(15, 8, 20, 0.25) 0%, rgba(20, 10, 25, 0.3) 50%, rgba(15, 8, 20, 0.25) 100%)",
+          backdropFilter: "blur(40px) saturate(160%)",
+          WebkitBackdropFilter: "blur(40px) saturate(160%)",
+          boxShadow: "0 28px 64px rgba(0, 0, 0, 0.55), 0 6px 30px rgba(168, 85, 247, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25) inset",
+        }}
       >
         {/* ── Premium Logo Section ── */}
         <div className="saheli-logo-section">
@@ -461,6 +470,18 @@ export default function Sidebar({
               />
             </div>
           </div>
+
+          <motion.button
+            type="button"
+            whileHover={{ y: -1, scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => void onLogout()}
+            className="mx-auto flex w-full items-center justify-center gap-2 rounded-2xl border border-red-400/15 bg-gradient-to-r from-red-500/10 via-red-500/8 to-orange-500/10 px-4 py-3 text-sm font-semibold text-red-100 shadow-[0_12px_30px_rgba(239,68,68,0.12)] transition-all duration-300 hover:border-red-300/30 hover:text-white"
+            aria-label="Logout"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </motion.button>
         </div>
       </aside>
     </>

@@ -19,8 +19,8 @@
 .cinematic-fog {
   position: absolute;
   inset: -18%;
-  opacity: 0.42;
-  filter: blur(48px);
+  opacity: 0.58;
+  filter: blur(42px);
   will-change: transform, opacity;
   transform: translateZ(0);
   mix-blend-mode: screen;
@@ -28,16 +28,16 @@
 
 .cinematic-fog--violet {
   background:
-    linear-gradient(115deg, transparent 6%, rgba(130, 80, 180, 0.08) 30%, transparent 58%),
-    radial-gradient(ellipse 70% 55% at 48% 42%, rgba(160, 100, 220, 0.06), transparent 68%);
+    linear-gradient(115deg, transparent 6%, rgba(109, 73, 173, 0.12) 30%, transparent 58%),
+    radial-gradient(ellipse 70% 55% at 48% 42%, rgba(167, 96, 255, 0.08), transparent 68%);
   animation: cinematicFogViolet 34s ease-in-out infinite;
 }
 
 .cinematic-fog--rose {
   background:
-    linear-gradient(235deg, transparent 8%, rgba(200, 130, 180, 0.06) 38%, transparent 66%),
-    radial-gradient(ellipse 62% 46% at 54% 58%, rgba(180, 120, 180, 0.05), transparent 72%);
-  opacity: 0.35;
+    linear-gradient(235deg, transparent 8%, rgba(255, 132, 190, 0.1) 38%, transparent 66%),
+    radial-gradient(ellipse 62% 46% at 54% 58%, rgba(255, 180, 210, 0.07), transparent 72%);
+  opacity: 0.48;
   animation: cinematicFogRose 41s ease-in-out infinite;
 }
 
@@ -83,42 +83,6 @@
   contain: layout paint style;
 }
 
-/* Studio Aura - Dual Layer Pink/Indigo */
-.cinematic-studio-aura-left {
-  position: absolute;
-  left: -15%;
-  top: 35%;
-  width: 50%;
-  height: 65%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center,
-    rgba(255, 79, 216, 0.2) 0%,
-    rgba(255, 79, 216, 0.08) 35%,
-    transparent 70%);
-  filter: blur(50px);
-  animation: studioBreathe 4.5s ease-in-out infinite;
-}
-
-.cinematic-studio-aura-right {
-  position: absolute;
-  right: -15%;
-  top: 40%;
-  width: 50%;
-  height: 60%;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center,
-    rgba(75, 0, 130, 0.2) 0%,
-    rgba(75, 0, 130, 0.08) 35%,
-    transparent 70%);
-  filter: blur(50px);
-  animation: studioBreathe 5.2s ease-in-out infinite 0.3s;
-}
-
-@keyframes studioBreathe {
-  0%, 100% { opacity: 0.1; transform: scale(1); }
-  50% { opacity: 0.3; transform: scale(1.05); }
-}
-
 .cinematic-character-bloom {
   position: absolute;
   left: 50%;
@@ -126,13 +90,12 @@
   width: min(56vw, 680px);
   height: min(72vh, 760px);
   border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 50% 46%, rgba(180, 110, 200, 0.12) 0%, rgba(150, 90, 200, 0.06) 36%, rgba(200, 130, 220, 0.01) 58%, transparent 72%);
-  filter: blur(40px);
-  opacity: 0.48;
+  background: radial-gradient(ellipse at 50% 46%, rgba(232, 220, 255, 0.18) 0%, rgba(210, 174, 255, 0.1) 34%, rgba(255, 220, 233, 0.04) 58%, transparent 72%);
+  filter: blur(28px);
+  opacity: 0.5;
   mix-blend-mode: screen;
   transform: translate3d(-50%, -50%, 0);
-  animation: cinematicCharacterBloom 10s ease-in-out infinite;
+  animation: cinematicCharacterBloom 8s ease-in-out infinite;
 }
 
 .cinematic-character-haze {
@@ -142,11 +105,19 @@
   width: min(44vw, 520px);
   height: min(52vh, 560px);
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(200, 140, 220, 0.08), rgba(150, 100, 200, 0.03) 48%, transparent 72%);
-  filter: blur(32px);
-  opacity: 0.42;
+  background: radial-gradient(ellipse at center, rgba(239, 228, 255, 0.1), rgba(134, 83, 205, 0.06) 48%, transparent 72%);
+  filter: blur(28px);
+  opacity: 0.5;
   transform: translate3d(-50%, -50%, 0);
-  animation: cinematicHazeBreath 16s ease-in-out infinite;
+  animation: cinematicHazeBreath 14s ease-in-out infinite;
+}
+
+.cinematic-butterfly-swarm {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 
 .cinematic-foreground-atmosphere {
@@ -228,14 +199,20 @@
     drop-shadow(0 0 10px rgba(255, 187, 229, 0.16));
 }
 
+.cinematic-hero-butterfly--anchored {
+  opacity: 0.68;
+  animation: none;
+  filter: drop-shadow(0 8px 10px rgba(0,0,0,0.32));
+}
+
 .cinematic-hero-butterfly--primary {
-  --butterfly-size: clamp(26px, 3.2vw, 44px);
+  --butterfly-size: clamp(34px, 4.4vw, 58px);
   animation: cinematicButterflyPathPrimary 38s cubic-bezier(0.38, 0, 0.2, 1) infinite;
   animation-delay: -11s;
 }
 
 .cinematic-hero-butterfly--secondary {
-  --butterfly-size: clamp(22px, 2.8vw, 36px);
+  --butterfly-size: clamp(28px, 3.6vw, 46px);
   animation: cinematicButterflyPathSecondary 47s cubic-bezier(0.42, 0, 0.22, 1) infinite;
   animation-delay: -27s;
   filter:
@@ -250,6 +227,7 @@
   height: 100%;
   transform-style: preserve-3d;
   animation: cinematicButterflyHover 5.8s ease-in-out infinite;
+  animation-delay: var(--butterfly-delay, 0s);
 }
 
 .cinematic-hero-butterfly__wing {
@@ -536,7 +514,88 @@
   .cinematic-particle,
   .cinematic-petal,
   .cinematic-dress-particle,
-  .cinematic-hero-butterfly {
+  .cinematic-hero-butterfly,
+  .cinematic-cameo-butterfly {
     opacity: 0 !important;
+  }
+}
+
+/* ===== FLOATING COMPOSER / SIDEBAR & PERCHED BUTTERFLIES ===== */
+.saheli-composer-shell {
+  transform: translateY(-10px);
+  will-change: transform, box-shadow;
+}
+
+.saheli-composer-shell:focus-within {
+  transform: translateY(-12px) scale(1.01);
+}
+
+.cinematic-cameo-butterflies {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cinematic-cameo-butterfly {
+  position: fixed;
+  opacity: 0.8;
+  transform: translate3d(0, 0, 0);
+  animation: cinematicCameoDrift 8.2s ease-in-out infinite;
+  filter:
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.32));
+}
+
+.cinematic-cameo-butterfly img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cinematic-cameo-butterfly__shadow {
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 72%;
+  height: 18%;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.45), transparent 72%);
+  filter: blur(5px);
+  opacity: 0.6;
+}
+
+.cinematic-cameo-butterfly--small {
+  opacity: 0.72;
+  animation-duration: 8.4s;
+}
+
+.cinematic-cameo-butterfly--medium {
+  opacity: 0.78;
+  animation-duration: 9.2s;
+}
+
+.cinematic-cameo-butterfly--sidebar {
+  opacity: 0.84;
+  animation-duration: 9.6s;
+  z-index: 121;
+}
+
+.cinematic-cameo-butterfly--composer {
+  opacity: 0.82;
+  animation-duration: 8.8s;
+  z-index: 121;
+}
+
+@keyframes cinematicCameoDrift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-3deg);
+  }
+
+  50% {
+    transform: translate3d(0, -8px, 0) rotate(4deg);
   }
 }

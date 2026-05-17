@@ -60,35 +60,45 @@ export default function MemoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="memory-modal-content">
+      <DialogContent className="memory-modal-content rounded-3xl border border-pink-500/20 bg-gradient-to-br from-[#160822]/95 to-[#0a0510]/95 backdrop-blur-2xl">
         {/* Header */}
-        <div className="border-b border-white/10 px-6 py-5">
+        <div className="border-b border-pink-500/15 px-6 py-5">
           <DialogHeader className="space-y-2 text-left">
-            <DialogTitle className="text-xl font-semibold text-white">Manage Memory</DialogTitle>
+            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-pink-300 to-purple-300 bg-clip-text text-transparent">
+              Long-term Memory
+            </DialogTitle>
             <DialogDescription className="text-sm text-white/50">
-              Review long-term memory insights, image memory, and storage controls.
+              Your precious memories 💭 — Review insights and visual memories. All stored securely.
             </DialogDescription>
           </DialogHeader>
 
-          {/* Tab Bar */}
-          <div className="memory-tab-bar mt-4">
+          {/* Tab Bar - Premium Glass Style */}
+          <div className="memory-tab-bar mt-5 flex gap-2 rounded-full bg-white/5 p-1 backdrop-blur-xl">
             <button
               type="button"
-              className={`memory-tab ${activeTab === "chat" ? "memory-tab-active" : ""}`}
+              className={`memory-tab flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 ${
+                activeTab === "chat"
+                  ? "bg-gradient-to-r from-pink-500/30 to-purple-500/20 text-pink-200 shadow-[0_0_20px_rgba(236,72,153,0.2)]"
+                  : "text-white/60 hover:text-white/80"
+              }`}
               onClick={() => setActiveTab("chat")}
             >
               <MessageSquareText className="h-4 w-4" />
-              <span>Chat Memory</span>
-              <span className="memory-tab-count">{profile.chat_history.length}</span>
+              <span className="text-xs font-medium">Insights</span>
+              <span className="text-xs font-semibold text-pink-300/80">{profile.chat_history.length}</span>
             </button>
             <button
               type="button"
-              className={`memory-tab ${activeTab === "image" ? "memory-tab-active" : ""}`}
+              className={`memory-tab flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full transition-all duration-300 ${
+                activeTab === "image"
+                  ? "bg-gradient-to-r from-pink-500/30 to-purple-500/20 text-pink-200 shadow-[0_0_20px_rgba(236,72,153,0.2)]"
+                  : "text-white/60 hover:text-white/80"
+              }`}
               onClick={() => setActiveTab("image")}
             >
               <ImageIcon className="h-4 w-4" />
-              <span>Image Memory</span>
-              <span className="memory-tab-count">{profile.images.length}</span>
+              <span className="text-xs font-medium">Visual</span>
+              <span className="text-xs font-semibold text-pink-300/80">{profile.images.length}</span>
             </button>
           </div>
         </div>
@@ -99,15 +109,15 @@ export default function MemoryModal({
             {activeTab === "chat" ? (
               <motion.div
                 key="chat-tab"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
               >
-                <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
-                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">Insights</p>
-                    <p className="text-xs text-white/45">{profile.chat_history.length}</p>
+                <section className="space-y-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.15em] font-semibold text-white/60">Conversation Insights</p>
+                    <p className="text-xs text-pink-300/70 font-medium">{profile.chat_history.length} memories</p>
                   </div>
                   <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />
                 </section>
@@ -115,15 +125,15 @@ export default function MemoryModal({
             ) : (
               <motion.div
                 key="image-tab"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.25 }}
               >
-                <section className="space-y-2 rounded-xl border border-white/10 bg-[#242424]">
-                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">Images</p>
-                    <p className="text-xs text-white/45">{profile.images.length}</p>
+                <section className="space-y-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.15em] font-semibold text-white/60">Visual Memories</p>
+                    <p className="text-xs text-pink-300/70 font-medium">{profile.images.length} images</p>
                   </div>
                   <ImageGrid items={profile.images} onDelete={onDeleteImage} onPreview={onPreviewImage} />
                 </section>
@@ -131,23 +141,43 @@ export default function MemoryModal({
             )}
           </AnimatePresence>
 
-          {/* Controls Section */}
-          <section className="rounded-xl border border-white/10 bg-[#242424] p-4">
-            <p className="mb-3 text-xs uppercase tracking-[0.2em] text-white/40">Controls</p>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="inline-flex items-center gap-3">
-                <span className="text-sm text-white/80">Memory</span>
+          {/* Controls Section - Premium Glass */}
+          <section className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 space-y-4">
+            <p className="text-xs uppercase tracking-[0.15em] font-semibold text-white/60">Memory Settings</p>
+            
+            {/* iOS-style Toggle for Long-term Memory */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-white">Long-term Memory</p>
+                <p className="text-xs text-white/50 mt-1">Store facts, preferences & insights</p>
+              </div>
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
                   checked={profile.memoryEnabled}
                   onChange={(event) => void onToggleMemory(event.target.checked)}
-                  className="h-4 w-4 rounded border-white/20 bg-transparent accent-white"
+                  className="sr-only peer"
                 />
+                <div className={`
+                  relative inline-block w-11 h-6 rounded-full transition-all duration-300
+                  ${profile.memoryEnabled 
+                    ? "bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_12px_rgba(236,72,153,0.4)]" 
+                    : "bg-white/10 border border-white/20"
+                  }
+                `}>
+                  <div className={`
+                    absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300
+                    ${profile.memoryEnabled ? "translate-x-5" : ""}
+                  `} />
+                </div>
               </label>
+            </div>
+            
+            <div className="border-t border-white/10 pt-4">
               <button
                 type="button"
                 onClick={() => void onClearAll()}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-300 transition-all duration-300 hover:bg-red-500/20 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]"
               >
                 Clear All Memory
               </button>
