@@ -43,7 +43,19 @@ function readLocalChats(): LocalChatsMap {
       return {};
     }
 
-    const parsed = JSON.parse(raw) as LocalChatsMap;
+    const parsed = JSON.parse(raw) as LocalChatsMap | LocalChatRecord[];
+    // Handle legacy array format from old saveLocal() - convert to object
+    if (Array.isArray(parsed)) {
+      console.warn("[chat-history] Legacy array format detected in localStorage, migrating...");
+      const migrated: LocalChatsMap = {};
+      for (const item of parsed) {
+        if (item && typeof item === "object" && "id" in item) {
+          migrated[(item as LocalChatRecord).id] = item as LocalChatRecord;
+        }
+      }
+      writeLocalChats(migrated);
+      return migrated;
+    }
     return parsed ?? {};
   } catch (error) {
     console.error("Failed to read local chat history", error);

@@ -663,16 +663,7 @@ const BackgroundComponent = memo(function BackgroundComponent() {
   );
 });
 
-function saveLocal(message: { content: string, role: string }) {
-  try {
-    const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
-    const chats = Array.isArray(storedChats) ? storedChats : [];
-    chats.push(message);
-    localStorage.setItem("chats", JSON.stringify(chats));
-  } catch (err) {
-    console.error("Failed to save local chat", err);
-  }
-}
+
 
 function isFirestoreConnectivityError(error: unknown) {
   const code = typeof error === "object" && error && "code" in error ? String((error as { code?: string }).code ?? "") : "";

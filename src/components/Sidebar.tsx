@@ -83,7 +83,7 @@ const ChatItem = memo(function ChatItem({
       whileTap={{ scale: 0.99 }}
       className={`group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 transition duration-300 ${isActive ? "bg-white/[0.07] text-white" : "bg-transparent hover:bg-white/[0.04]"}`}
     >
-      <MessageCircle className="h-4 w-4 shrink-0 text-white/38 transition group-hover:text-pink-200/90" />
+      <MessageCircle className="h-4 w-4 shrink-0 text-white/40 transition group-hover:text-pink-200" />
       {isEditing ? (
         <input
           ref={inputRef}
@@ -100,7 +100,7 @@ const ChatItem = memo(function ChatItem({
               onCancelEdit();
             }
           }}
-          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/40"
           autoFocus
         />
       ) : (
@@ -108,9 +108,10 @@ const ChatItem = memo(function ChatItem({
           type="button"
           onClick={() => void onSelectChat(chat.id)}
           onDoubleClick={() => onStartEdit(chat.id, title)}
-          className="min-w-0 flex-1 overflow-hidden text-left text-[13px] text-white/78"
+          style={{ color: "rgba(255,255,255,0.85)" }}
+          className="min-w-0 flex-1 overflow-hidden text-left text-[13px] hover:text-white transition-colors duration-200"
         >
-          <span className="block truncate [mask-image:linear-gradient(90deg,black_88%,transparent)]">{title}</span>
+          <span className="block truncate">{title}</span>
         </button>
       )}
 
@@ -254,7 +255,7 @@ export default function Sidebar(props: SidebarProps) {
           border: "0.5px solid rgba(255, 255, 255, 0.06)",
           boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)",
           transform: isOpen ? "translateX(0)" : "translateX(-110%)",
-          transition: "transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
         <div className="pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />

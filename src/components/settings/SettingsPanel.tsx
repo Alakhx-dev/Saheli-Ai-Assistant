@@ -41,7 +41,7 @@ function NavButton({ active, label, onClick }: { active: boolean; label: string;
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 ${active ? "border-pink-400/30 bg-white/10 text-white shadow-[0_0_24px_rgba(255,0,120,0.16)]" : "border-white/8 bg-white/[0.03] text-white/65 hover:border-white/12 hover:bg-white/[0.06] hover:text-white"}`}
+      className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${active ? "border-pink-400/20 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.1)]" : "border-pink-500/5 bg-gradient-to-r from-pink-500/5 to-purple-500/5 text-white/65 hover:border-pink-500/15 hover:from-pink-500/10 hover:to-purple-500/10 hover:text-white"}`}
     >
       <span>{label}</span>
       {active ? <Check className="h-4 w-4 text-pink-200" /> : null}
@@ -108,7 +108,7 @@ export default function SettingsPanel({
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
+            transition={{ type: "spring", damping: 25, stiffness: 250 }}
             style={{
               background: "rgba(15, 15, 15, 0.4)",
               backdropFilter: "blur(25px)",
@@ -140,7 +140,7 @@ export default function SettingsPanel({
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ duration: 0.25, ease: "easeOut", delay: 0.05 }}
+            transition={{ type: "spring", damping: 25, stiffness: 250, delay: 0.05 }}
             style={{
               background: "rgba(15, 15, 15, 0.4)",
               backdropFilter: "blur(25px)",
