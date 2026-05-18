@@ -186,8 +186,8 @@ export default function SettingsBubble({
     <motion.div layout className="space-y-1.5">
       <div className="bubble-action-glass justify-between cursor-default">
         <div className="min-w-0 pr-4">
-          <div className="bubble-label-text">OpenRouter</div>
-          <div className="text-[11px] text-white/45">Off = OpenRouter</div>
+          <div className="bubble-label-text">Primary Model</div>
+          <div className="text-[11px] text-white/45">Off = primary route</div>
         </div>
         <LiquidSwitch
           checked={activeProvider === "Groq"}
@@ -196,8 +196,8 @@ export default function SettingsBubble({
       </div>
       <div className="bubble-action-glass justify-between cursor-default">
         <div className="min-w-0 pr-4">
-          <div className="bubble-label-text">Groq</div>
-          <div className="text-[11px] text-white/45">On = Groq only</div>
+          <div className="bubble-label-text">Fast Route</div>
+          <div className="text-[11px] text-white/45">On = fast route only</div>
         </div>
         <div className="text-xs font-semibold text-pink-100">
           {activeProvider === "Groq" ? "Selected" : ""}

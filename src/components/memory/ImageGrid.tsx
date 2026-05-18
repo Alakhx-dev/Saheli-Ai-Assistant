@@ -10,32 +10,30 @@ interface ImageGridProps {
 
 function ImageGrid({ items, onDelete, onPreview }: ImageGridProps) {
   if (!items.length) {
-    return <p className="px-4 py-5 text-sm text-white/45">No image memory saved yet.</p>;
+    return <p className="px-1 py-4 text-sm text-white/45">No image memory saved yet.</p>;
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3">
+    <div className="columns-1 gap-4 space-y-4 sm:columns-2 xl:columns-3">
       {items.map((image) => (
-        <div key={image.id} className="group relative overflow-hidden rounded-xl border border-white/10 bg-black/30">
-          <button type="button" onClick={() => onPreview(image.url)} className="block aspect-square w-full">
-            <img
-              src={image.url}
-              alt={image.prompt || image.caption || "Memory image"}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
+        <div key={image.id} className="group mb-4 break-inside-avoid overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.04] transition duration-300 hover:-translate-y-1 hover:border-pink-400/20 hover:bg-white/[0.06] hover:shadow-[0_0_24px_rgba(255,0,120,0.14)]">
+          <button type="button" onClick={() => onPreview(image.url)} className="block w-full">
+            <img src={image.url} alt={image.prompt || image.caption || "Memory image"} loading="lazy" className="h-auto w-full object-cover" />
           </button>
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-2 text-[10px] uppercase tracking-[0.14em] text-white/70">
-            {image.type}
+          <div className="flex items-center justify-between gap-3 p-3">
+            <div className="min-w-0">
+              <p className="truncate text-xs uppercase tracking-[0.18em] text-white/45">{image.type}</p>
+              <p className="mt-1 text-[11px] text-white/35">{new Date(image.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onDelete(image.id)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/20 text-white/45 opacity-0 transition duration-300 group-hover:opacity-100 hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-100"
+              aria-label="Delete image memory"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void onDelete(image.id)}
-            className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-black/60 text-white/70 opacity-0 transition group-hover:opacity-100 hover:text-white"
-            aria-label="Delete image memory"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
         </div>
       ))}
     </div>

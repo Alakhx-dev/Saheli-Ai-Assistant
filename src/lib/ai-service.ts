@@ -504,7 +504,15 @@ export async function fetchAISwarasResponse(
     }
   }
 
-  // 2) Text-only: primary OpenRouter (Deepseek)
+  // 2) Text-only: Groq first, then OpenRouter primary, then OpenRouter secondary
+  try {
+    const text = await tryProvider("groq");
+    await emitStreamingText(text, onChunk);
+    return { text: text.trim(), modelUsed: GROQ_MODEL.name };
+  } catch (groqErr) {
+    debugOpenRouterLog("Groq text route failed:", groqErr);
+  }
+
   try {
     const text = await tryProvider("openrouter", OPENROUTER_MODEL.id);
     await emitStreamingText(text, onChunk);
@@ -513,22 +521,12 @@ export async function fetchAISwarasResponse(
     debugOpenRouterLog("Primary OpenRouter failed:", primaryErr);
   }
 
-  // 3) Text fallback model (OpenRouter with fallback model id)
   try {
     const text = await tryProvider("openrouter", TEXT_FALLBACK_MODEL.id);
     await emitStreamingText(text, onChunk);
-    return { text: text.trim(), modelUsed: TEXT_FALLBACK_MODEL.name, warning: "Primary model failed, fallback used." };
-  } catch (textFallbackErr) {
-    debugOpenRouterLog("Text fallback failed:", textFallbackErr);
-  }
-
-  // 4) Final emergency fallback: try Groq for any remaining chance
-  try {
-    const text = await tryProvider("groq");
-    await emitStreamingText(text, onChunk);
-    return { text: text.trim(), modelUsed: GROQ_MODEL.name, warning: "All OpenRouter models failed, Groq used as emergency fallback." };
-  } catch (finalErr) {
-    debugOpenRouterLog("All providers failed:", finalErr);
+    return { text: text.trim(), modelUsed: TEXT_FALLBACK_MODEL.name };
+  } catch (secondaryErr) {
+    debugOpenRouterLog("Secondary OpenRouter failed:", secondaryErr);
     await emitStreamingText(FRIENDLY_FALLBACK, onChunk);
     return { text: FRIENDLY_FALLBACK, modelUsed: "none" };
   }

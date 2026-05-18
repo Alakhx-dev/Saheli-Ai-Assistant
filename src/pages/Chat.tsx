@@ -2,13 +2,13 @@ import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useStat
 import {
   Camera,
   ImagePlus,
-  Menu,
   Mic,
   Send,
   Heart,
   X,
   Plus,
   Upload,
+  PanelLeft,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -49,10 +49,10 @@ import { detectMemory, saveImageMemoryDB, saveMemoryToDB, saveVisionImageMemory 
 import { resetSaheliSpeechDedup, speakSaheli, stopSaheliSpeech } from "@/utils/speechEngine";
 
 import { isMobile } from "@/lib/utils";
-import Sidebar from "@/components/Sidebar";
-import CinematicAtmosphere from "@/components/CinematicAtmosphere";
-import Profile from "@/components/Profile";
-import MemoryModal from "@/components/memory/MemoryModal";
+import Sidebar from "../components/Sidebar";
+import CinematicAtmosphere from "../components/CinematicAtmosphere";
+import Profile from "../components/Profile";
+import MemoryModal from "../components/memory/MemoryModal";
 import { useAppStore } from "@/store/app-store";
 import {
   DropdownMenu,
@@ -61,7 +61,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const SettingsPanel = lazy(() => import("@/components/settings/SettingsPanel"));
+const SettingsPanel = lazy(() => import("../components/settings/SettingsPanel"));
 
 // Intent-based vision trigger — matches natural Hindi/English phrases asking to be looked at.
 const isVisionIntent = (text: string) => {
@@ -102,7 +102,7 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = "general" | "personalization" | "account";
+type SettingsSectionId = "personalization" | "memory" | "account" | "appearance" | "voice" | "about";
 
 interface ProfileImageMeta {
   width: number;
@@ -494,15 +494,22 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
       <div
         data-role={isUser ? 'user' : 'assistant'}
         className={`
-        max-w-[84%] md:max-w-[72%] px-5 py-3.5 text-sm leading-relaxed font-medium relative text-neutral-50
-        transition-all duration-300 saheli-bubble saheli-bubble-float backdrop-blur-[20px]
+        max-w-[58%] px-5 py-4 text-sm leading-relaxed font-medium relative text-neutral-50
+        transition-all duration-300 rounded-[28px]
         ${isNew ? "msg-sheen" : ""}
         ${isUser
-          ? "rounded-3xl rounded-br-md bg-gradient-to-br from-white/8 to-white/5 border border-white/12 shadow-[0_8px_24px_rgba(255,255,255,0.05),inset_0_1px_0_rgba(255,255,255,0.08)]"
-          : "rounded-3xl rounded-bl-md bg-gradient-to-br from-pink-500/8 via-purple-600/5 to-transparent border border-pink-500/20 shadow-[0_8px_32px_rgba(255,79,216,0.2),inset_0_1px_0_rgba(255,255,255,0.05)]"
+          ? "rounded-br-[10px]"
+          : "rounded-bl-[10px]"
         }
       `}
-        style={{ fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", letterSpacing: "0.01em" }}
+        style={{ 
+          fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
+          letterSpacing: "0.01em",
+          background: "rgba(255, 255, 255, 0.045)",
+          backdropFilter: "blur(15px)",
+          WebkitBackdropFilter: "blur(15px)",
+          boxShadow: "0 8px 20px rgba(0, 0, 0, 0.3)"
+        }}
       >
         {msg.content}
       </div>
@@ -662,7 +669,8 @@ const BackgroundComponent = memo(function BackgroundComponent() {
 
 function saveLocal(message: { content: string, role: string }) {
   try {
-    const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+    const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+    const chats = Array.isArray(storedChats) ? storedChats : [];
     chats.push(message);
     localStorage.setItem("chats", JSON.stringify(chats));
   } catch (err) {
@@ -696,7 +704,7 @@ export default function Chat() {
   const [profileCropX, setProfileCropX] = useState(0);
   const [profileCropY, setProfileCropY] = useState(0);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("general");
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("personalization");
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
@@ -727,6 +735,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [mood, setMood] = useState("neutral");
   const [isScrolling, setIsScrolling] = useState(false);
+  const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
@@ -749,6 +758,9 @@ export default function Chat() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
   const [isIdle, setIsIdle] = useState(false);
+  const [selectedCharacter, setSelectedCharacter] = useState("butterfly");
+  const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
+  const [moodTint, setMoodTint] = useState("neutral");
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -851,6 +863,35 @@ export default function Chat() {
     };
   }, []);
 
+  // ── Parallax Effect for Character ──
+  useEffect(() => {
+    let animationFrameId: number;
+    let throttleTimeout: NodeJS.Timeout | null = null;
+    
+    const handleMouseMove = (event: MouseEvent) => {
+      if (throttleTimeout) return;
+      
+      throttleTimeout = setTimeout(() => {
+        const { clientX, clientY } = event;
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        
+        const moveX = (clientX - centerX) * 0.02;
+        const moveY = (clientY - centerY) * 0.02;
+        
+        setParallaxOffset({ x: moveX, y: moveY });
+        throttleTimeout = null;
+      }, 16); // ~60fps throttle
+    };
+    
+    window.addEventListener("mousemove", handleMouseMove);
+    
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (throttleTimeout) clearTimeout(throttleTimeout);
+    };
+  }, []);
+
   useEffect(() => {
     let scrollTimeout: NodeJS.Timeout;
     const handleScroll = (e: Event) => {
@@ -901,7 +942,7 @@ export default function Chat() {
   );
 
   useEffect(() => {
-    void import("@/components/settings/SettingsPanel");
+    void import("../components/settings/SettingsPanel");
   }, []);
 
   useEffect(() => {
@@ -2231,14 +2272,23 @@ export default function Chat() {
   const handleToggleSidebarTheme = useCallback((nextValue: boolean) => {
     setIsSidebarLightMode(nextValue);
   }, []);
-  const handleSelectProvider = useCallback((provider: AIProvider) => {
-    setStoreSettings({ activeProvider: provider });
-  }, [setStoreSettings]);
+  const handleCharacterChange = useCallback((character: string) => {
+    setSelectedCharacter(character);
+  }, []);
+  const handleOpenMemoryPanel = useCallback(() => {
+    setSecondaryPanelType("memory");
+  }, []);
+  const handleOpenSettingsPanel = useCallback(() => {
+    setSecondaryPanelType("settings");
+  }, []);
+  const handleCloseSecondaryPanel = useCallback(() => {
+    setSecondaryPanelType(null);
+  }, []);
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
   return (
     <div
-      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000] text-white selection:bg-pink-500/30"
+      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
       data-mood={mood}
       style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
     >
@@ -2253,6 +2303,29 @@ export default function Chat() {
         ))}
       </div>
       
+      {/* ── Persistent Floating Toggle Recovery Button ── */}
+      <motion.button
+        type="button"
+        onClick={() => setIsSidebarOpen((previous) => !previous)}
+        aria-label={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+        whileHover={{ scale: 1.12 }}
+        whileTap={{ scale: 0.92 }}
+        initial={{ opacity: 1, x: 0 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3, ease: "easeInOut" }}
+        className="fixed z-[9999] inline-flex h-[48px] w-[48px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/80 transition duration-300 hover:bg-white/[0.12] hover:text-white"
+        style={{
+          top: "32px",
+          left: "32px",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          boxShadow: "0 0 20px rgba(255, 45, 85, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.1)",
+          transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+      >
+        <PanelLeft className="h-5 w-5" />
+      </motion.button>
+      
       <Sidebar
         isOpen={isSidebarOpen}
         chatSessions={chatSessions}
@@ -2260,7 +2333,6 @@ export default function Chat() {
         isGuest={isGuest}
         isLightMode={isSidebarLightMode}
         isTtsMuted={isTtsMuted}
-        memoryEnabled={memoryEnabled}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}
         noChatsGuestLabel={t.sidebar.noChatsGuest}
@@ -2275,28 +2347,16 @@ export default function Chat() {
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
         onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
+        onToggleSidebar={() => setIsSidebarOpen((previous) => !previous)}
         onToggleTtsMute={handleToggleTtsMute}
         onToggleSidebarTheme={handleToggleSidebarTheme}
-        onToggleMemory={handleMemoryToggle}
-        onOpenMemory={handleOpenMemoryFromSettings}
         onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
         onLogout={() => void handleLogout()}
-        activeProvider={activeProvider}
-        onSelectProvider={handleSelectProvider}
-        className={isIdle ? 'ghost-mode' : ''}
+        className={`${isIdle ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
       />
 
-      <button
-        type="button"
-        onClick={() => setIsSidebarOpen((previous) => !previous)}
-        aria-label={t.header.toggleSidebar}
-        className="fixed left-4 top-4 z-[110] flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/45 text-white shadow-[0_8px_32px_rgba(192,38,211,0.18)] backdrop-blur-xl transition duration-300 hover:bg-black/60 hover:text-pink-200"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
-
-      <div className="chat-content relative z-10 flex h-full w-full flex-col" style={{ isolation: 'isolate' }}>
+      <div className="chat-content relative z-10 flex h-full w-full flex-col" style={{ isolation: 'isolate', background: '#000000' }}>
         <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
           <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm pointer-events-auto" style={{ fontFamily: "'Sour Gummy', cursive" }}>
             <Heart className="w-5 h-5 fill-current" />
@@ -2310,27 +2370,26 @@ export default function Chat() {
           style={{ 
             opacity: isScrolling ? 0.1 : 0.3, 
             transition: 'opacity 0.5s ease-in-out',
-            transform: 'translateY(calc(var(--scroll-y, 0px) * -0.15))' // Subtle Parallax Effect
+            transform: `translateY(calc(var(--scroll-y, 0px) * -0.03))`
           }}
         >
-          {/* Layer 1 (z-0): Studio Light from Top & Nebula Background */}
-          <div className="absolute top-[-10%] w-[70vw] max-w-[800px] h-[40vh] bg-white/15 rounded-full blur-[120px] mix-blend-overlay" />
-          <div className="absolute z-0 w-[50vw] max-w-[600px] h-[50vh] bg-pink-500/10 rounded-full blur-[120px] mix-blend-screen" />
-          <div className="absolute z-0 w-[40vw] max-w-[500px] h-[40vh] bg-purple-600/15 rounded-full blur-[140px] mix-blend-screen" />
+          {/* Layer 1 (z-0): Pure black backdrop for Swara */}
+          <div className="absolute inset-0" style={{ background: "#000000" }} />
           
           {/* Layer 2 (z-5): Mascot Container */}
           <div className="relative z-[5] flex flex-col items-center justify-center w-full h-full">
             <CinematicAtmosphere layer="characterBack" />
             
             <motion.div
-              className="relative z-[5] flex justify-center w-full h-[75vh]"
-              animate={{ y: [-10, 10, -10] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              className="relative z-[5] flex justify-center w-full" style={{ height: "calc(75vh * 0.85)" }}
+              animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
+              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
             >
               <img 
                 src="/butterfly.png" 
                 alt="Big Swara Mascot"
                 className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
+                style={{ filter: selectedCharacter === "lavender" ? "hue-rotate(22deg) saturate(1.15) brightness(1.08)" : selectedCharacter === "pink" ? "saturate(1.18) brightness(1.06)" : "none" }}
               />
             </motion.div>
 
@@ -2370,13 +2429,7 @@ export default function Chat() {
           )}
         </div>
 
-        <div className="flex-none p-4 w-full md:w-[60%] lg:w-[55%] mx-auto group relative mt-auto z-30 pt-8 pb-8">
-          <div className="mb-3 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-black/35 px-3 py-1.5 text-xs font-medium text-pink-100 backdrop-blur-xl">
-              <span className="h-2 w-2 rounded-full bg-pink-400 shadow-[0_0_12px_rgba(244,114,182,0.75)]" />
-              via {activeProvider}
-            </div>
-          </div>
+        <div className="flex-none px-4 pb-10 pt-6 w-full md:w-[72%] lg:w-[62%] mx-auto group relative mt-auto z-30">
           {dbStatus ? (
             <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
               {dbStatus}
@@ -2384,11 +2437,18 @@ export default function Chat() {
           ) : null}
           <form
             onSubmit={handleSubmit}
-            className={`saheli-composer-shell relative mx-auto flex items-center transition-all duration-300 ${
-              input.trim() ? "shadow-[0_0_40px_rgba(255,20,147,0.4)] scale-[1.01]" : "shadow-[0_10px_40px_rgba(0,0,0,0.5)]"
+            className={`saheli-composer-shell relative mx-auto flex h-[68px] items-center gap-2.5 px-4 transition-all duration-300 ${
+              input.trim() ? "scale-[1.01] border-pink-400/15 shadow-[0_0_24px_rgba(255,0,120,0.12)]" : ""
             }`}
             style={{
-              width: "min(100%, 650px)",
+              width: "min(100%, 860px)",
+              background: "rgba(18, 10, 24, 0.5)",
+              backdropFilter: "blur(20px) saturate(160%)",
+              WebkitBackdropFilter: "blur(20px) saturate(160%)",
+              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 105, 180, 0.1)",
+              transform: "translateY(-28px)",
+              borderRadius: "24px",
+              border: "1px solid rgba(255, 255, 255, 0.08)"
             }}
           >
             {selectedImage && (
@@ -2424,7 +2484,7 @@ export default function Chat() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="ml-2 flex items-center justify-center w-[38px] h-[38px] rounded-full bg-white/5 border border-white/10 backdrop-blur-md text-white transition-all duration-300 hover:scale-125 hover:bg-white/10 origin-center"
+                  className="saheli-composer-btn ml-1"
                   aria-label="Add image"
                 >
                   <Plus className="w-5 h-5" />
@@ -2507,33 +2567,24 @@ export default function Chat() {
                 }
               }}
               placeholder={inputPlaceholder}
-              className="saheli-composer-input flex-1 px-4 py-3 text-white placeholder-white/40 focus:outline-none font-sans focus:ring-0 border-none"
-              style={{ fontSize: "15px" }}
+              className="saheli-composer-input flex-1 bg-transparent px-2 text-[15px] text-white placeholder-white/35 focus:outline-none focus:ring-0"
             />
-            <div className="flex items-center gap-1 mr-1">
+            <div className="flex items-center gap-2 pr-1">
               <button
                 type="button"
                 onClick={toggleMic}
                 aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
-                className={`flex items-center justify-center w-[38px] h-[38px] rounded-full transition-all duration-300 hover:scale-125 origin-center ${
-                  isListening
-                    ? "bg-pink-500 text-white shadow-[0_0_20px_rgba(255,105,180,0.6)] animate-pulse"
-                    : "bg-white/5 text-white/70 hover:bg-white/10 hover:text-white"
-                }`}
+                className="saheli-composer-btn"
               >
-                <Mic className="w-4 h-4" />
+                <Mic className={`w-4 h-4 ${isListening ? "text-pink-300" : ""}`} />
               </button>
               <button
                 type="submit"
                 aria-label={t.composer.sendMessage}
                 disabled={(!(input.trim() || selectedImage) || isLoading)}
-                className={`flex items-center justify-center w-[38px] h-[38px] rounded-full transition-all duration-300 origin-center ${
-                  (input.trim() || selectedImage) && !isLoading
-                    ? "bg-gradient-to-r from-pink-500 to-purple-500 text-white shadow-[0_0_15px_rgba(255,105,180,0.4)] hover:scale-125"
-                    : "bg-white/5 text-white/30"
-                }`}
+                className="saheli-composer-btn saheli-send-btn"
               >
-                <Send className="w-4 h-4 ml-1" />
+                <Send className="h-4 w-4 translate-x-[1px]" />
               </button>
             </div>
           </form>
@@ -2592,6 +2643,10 @@ export default function Chat() {
               onEditProfile={handleOpenProfileFromSettings}
               onChangePassword={() => void handleChangePassword()}
               onLogout={() => void handleLogout()}
+              isTtsMuted={isTtsMuted}
+              onToggleTtsMute={handleToggleTtsMute}
+              selectedCharacter={selectedCharacter}
+              onCharacterChange={handleCharacterChange}
             />
           ) : null}
         </Suspense>

@@ -1,10 +1,6 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, MessageCircle, Pencil, Plus, Settings, Trash2, Sparkles, Sun, Moon } from "lucide-react";
-import SettingsBubble from "@/components/settings/SettingsBubble";
-import MuteButton from "@/components/settings/MuteButton";
-import ProfileBubble from "@/components/settings/ProfileBubble";
-import type { AIProvider } from "@/lib/ai-service";
+import { motion } from "framer-motion";
+import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 
 export interface ChatSessionListItem {
   id: string;
@@ -18,7 +14,6 @@ interface SidebarProps {
   isGuest: boolean;
   isLightMode: boolean;
   isTtsMuted: boolean;
-  memoryEnabled: boolean;
   newChatLabel: string;
   recentChatsLabel: string;
   noChatsGuestLabel: string;
@@ -33,15 +28,12 @@ interface SidebarProps {
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
+  onToggleSidebar: () => void;
   onToggleTtsMute: () => void;
   onToggleSidebarTheme: (nextValue: boolean) => void;
-  onToggleMemory: (nextValue: boolean) => void;
-  onOpenMemory: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onLogout: () => void | Promise<void>;
-  activeProvider: AIProvider;
-  onSelectProvider: (provider: AIProvider) => void;
   className?: string;
 }
 
@@ -87,11 +79,11 @@ const ChatItem = memo(function ChatItem({
   return (
     <motion.div
       layout
-      whileHover={{ x: 2 }}
+      whileHover={{ y: -2, scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
-      className={`history-item group ${isActive ? "active" : ""}`}
+      className={`group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 transition duration-300 ${isActive ? "bg-white/[0.07] text-white" : "bg-transparent hover:bg-white/[0.04]"}`}
     >
-      <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-50 transition-opacity group-hover:opacity-100" />
+      <MessageCircle className="h-4 w-4 shrink-0 text-white/38 transition group-hover:text-pink-200/90" />
       {isEditing ? (
         <input
           ref={inputRef}
@@ -108,7 +100,7 @@ const ChatItem = memo(function ChatItem({
               onCancelEdit();
             }
           }}
-          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none"
+          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
           autoFocus
         />
       ) : (
@@ -116,10 +108,9 @@ const ChatItem = memo(function ChatItem({
           type="button"
           onClick={() => void onSelectChat(chat.id)}
           onDoubleClick={() => onStartEdit(chat.id, title)}
-          className="min-w-0 flex-1 truncate text-left text-sm"
+          className="min-w-0 flex-1 overflow-hidden text-left text-[13px] text-white/78"
         >
-            {title}
-            {isActive ? <span className="chat-item-butterfly" aria-hidden /> : null}
+          <span className="block truncate [mask-image:linear-gradient(90deg,black_88%,transparent)]">{title}</span>
         </button>
       )}
 
@@ -132,7 +123,7 @@ const ChatItem = memo(function ChatItem({
               onStartEdit(chat.id, title);
             }}
             aria-label="Rename chat"
-            className="rounded-md p-1 text-white/45 opacity-0 transition duration-200 hover:bg-white/10 hover:text-white group-hover:opacity-100"
+            className="rounded-full p-1.5 text-white/35 opacity-0 transition duration-200 hover:bg-white/10 hover:text-white group-hover:opacity-100"
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -144,7 +135,7 @@ const ChatItem = memo(function ChatItem({
             void onDeleteChat(chat.id);
           }}
           aria-label="Delete chat"
-          className="rounded-md p-1 text-red-400 opacity-0 transition duration-200 hover:text-red-500 group-hover:opacity-100"
+          className="rounded-full p-1.5 text-red-300/70 opacity-0 transition duration-200 hover:bg-red-500/10 hover:text-red-200 group-hover:opacity-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -153,47 +144,67 @@ const ChatItem = memo(function ChatItem({
   );
 });
 
-export default function Sidebar({
-  isOpen,
-  chatSessions,
-  currentChatId,
-  isGuest,
-  isLightMode,
-  isTtsMuted,
-  memoryEnabled,
-  newChatLabel,
-  recentChatsLabel,
-  noChatsGuestLabel,
-  noChatsAccountLabel,
-  settingsLabel,
-  userName,
-  userPhotoUrl,
-  userEmail,
-  resolveChatTitle,
-  onCreateChat,
-  onSelectChat,
-  onDeleteChat,
-  onRenameChat,
-  onCloseSidebar,
-  onToggleTtsMute,
-  onToggleSidebarTheme,
-  onToggleMemory,
-  onOpenMemory,
-  onOpenProfile,
-  onOpenSettings,
-  onLogout,
-  activeProvider,
-  onSelectProvider,
-  className = "",
-}: SidebarProps) {
+function playPopSound() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    return;
+  }
+
+  try {
+    const context = new AudioContextCtor();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(540, context.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
+
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.12);
+
+    oscillator.onended = () => {
+      void context.close();
+    };
+  } catch {
+    // ignore audio pop failures
+  }
+}
+
+export default function Sidebar(props: SidebarProps) {
+  const {
+    isOpen,
+    chatSessions,
+    currentChatId,
+    isGuest,
+    newChatLabel,
+    recentChatsLabel,
+    noChatsGuestLabel,
+    noChatsAccountLabel,
+    settingsLabel,
+    userName,
+    userPhotoUrl,
+    userEmail,
+    resolveChatTitle,
+    onCreateChat,
+    onSelectChat,
+    onDeleteChat,
+    onRenameChat,
+    onCloseSidebar,
+    onToggleSidebar,
+    onOpenSettings,
+    className = "",
+  } = props;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
-  const [isSettingsBubbleOpen, setIsSettingsBubbleOpen] = useState(false);
-  const [isProfileBubbleOpen, setIsProfileBubbleOpen] = useState(false);
-  const settingsBubbleRef = useRef<HTMLDivElement>(null);
-  const settingsButtonRef = useRef<HTMLButtonElement>(null);
-  const profileBubbleRef = useRef<HTMLDivElement>(null);
-  const profileButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleStartEdit = (chatId: string, title: string) => {
     setEditingId(chatId);
@@ -217,141 +228,65 @@ export default function Sidebar({
   };
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
-  const sidebarTone = isLightMode ? "text-neutral-900" : "text-white";
-  const surfaceTone = isLightMode ? "border-white/35 bg-white/90" : "border-white/10 bg-[#120814]/72";
-  const subtleTextTone = isLightMode ? "text-neutral-500" : "text-white/45";
-  const defaultTextTone = isLightMode ? "text-neutral-900" : "text-white";
-  const dividerTone = isLightMode ? "border-neutral-300/80" : "border-white/10";
-
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node;
-      
-      if (isSettingsBubbleOpen && !settingsBubbleRef.current?.contains(target) && !settingsButtonRef.current?.contains(target)) {
-        setIsSettingsBubbleOpen(false);
-      }
-      
-      if (isProfileBubbleOpen && !profileBubbleRef.current?.contains(target) && !profileButtonRef.current?.contains(target)) {
-        setIsProfileBubbleOpen(false);
-      }
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsSettingsBubbleOpen(false);
-        setIsProfileBubbleOpen(false);
-      }
-    };
-
-    window.addEventListener("pointerdown", handlePointerDown);
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown);
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isSettingsBubbleOpen, isProfileBubbleOpen]);
-
-  const playPopSound = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextCtor) {
-      return;
-    }
-
-    try {
-      const context = new AudioContextCtor();
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(540, context.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
-
-      oscillator.connect(gain);
-      gain.connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.12);
-
-      oscillator.onended = () => {
-        void context.close();
-      };
-    } catch {
-      // ignore audio pop failures
-    }
-  };
-
-  const handleToggleSettingsBubble = () => {
-    playPopSound();
-    setIsSettingsBubbleOpen((prev) => !prev);
-    setIsProfileBubbleOpen(false);
-  };
-
-  const handleToggleProfileBubble = () => {
-    playPopSound();
-    setIsProfileBubbleOpen((prev) => !prev);
-    setIsSettingsBubbleOpen(false);
-  };
 
   return (
     <>
       <div
         onClick={onCloseSidebar}
-        className={`fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 md:hidden ${
-          isOpen ? "opacity-100" : "pointer-events-none opacity-0"
-        }`}
+        className={`fixed inset-0 z-30 bg-black/45 backdrop-blur-[2px] transition-opacity duration-300 md:hidden ${isOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
       />
       <aside
-        className={`sidebar sidebar-glass z-40 flex flex-col rounded-3xl border border-white/10 ${sidebarTone} ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
+        className={`sidebar fixed flex flex-col justify-between overflow-hidden rounded-[28px] text-white ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
         style={{
-          margin: "1rem",
-          background: "linear-gradient(135deg, rgba(15, 8, 20, 0.25) 0%, rgba(20, 10, 25, 0.3) 50%, rgba(15, 8, 20, 0.25) 100%)",
-          backdropFilter: "blur(40px) saturate(160%)",
-          WebkitBackdropFilter: "blur(40px) saturate(160%)",
-          boxShadow: "0 28px 64px rgba(0, 0, 0, 0.55), 0 6px 30px rgba(168, 85, 247, 0.06), 0 2px 8px rgba(0, 0, 0, 0.25) inset",
+          top: "24px !important",
+          left: "20px",
+          bottom: "24px !important",
+          height: "calc(100vh - 48px)",
+          width: "280px",
+          zIndex: "9999 !important",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          paddingTop: "20px",
+          background: "rgba(15, 15, 15, 0.4)",
+          backdropFilter: "blur(25px)",
+          WebkitBackdropFilter: "blur(25px)",
+          border: "0.5px solid rgba(255, 255, 255, 0.06)",
+          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)",
+          transform: isOpen ? "translateX(0)" : "translateX(-110%)",
+          transition: "transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
-        {/* ── Premium Logo Section ── */}
-        <div className="saheli-logo-section">
-          <motion.div 
-            className="saheli-logo-text-wrap"
-            animate={{ opacity: [1, 0.7, 1] }}
-            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+        <div className="pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />
+
+        <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4">
+          <span
+            className="block px-1 text-[1.08rem] font-light tracking-[0.18em] text-pink-200/95"
+            style={{ fontFamily: "'Playfair Display', serif" }}
           >
-            <span className="saheli-logo-name">Saheli</span>
-            <span className="saheli-sparkle-icon">✨</span>
-            <span className="saheli-logo-butterfly" aria-hidden />
-            <span className="saheli-logo-badge ml-1">AI</span>
-          </motion.div>
+            Saheli AI
+          </span>
         </div>
 
-        {/* ── New Chat Button ── */}
         <motion.button
           type="button"
           onClick={() => void onCreateChat()}
           whileHover={{ y: -1, scale: 1.01 }}
           whileTap={{ scale: 0.98 }}
-          className="new-chat-pill group"
+          className="group mx-3 mt-3 inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2.5 text-xs font-light tracking-[0.08em] text-white/84 shadow-[0_12px_28px_rgba(0,0,0,0.28),0_0_18px_rgba(255,192,203,0.08)] backdrop-blur-xl transition duration-300 hover:bg-white/[0.08] hover:text-white"
         >
           <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
           {newChatLabel}
         </motion.button>
 
-        {/* ── Chat History ── */}
-        <div className="custom-scrollbar flex-1 overflow-y-auto scroll-smooth">
-          <div className="mb-3 px-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/35">
+        <div className="flex-1 overflow-y-auto px-2.5 pb-2.5 pt-3 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.25em] text-white/28">
             {recentChatsLabel}
           </div>
           {chatSessions.length === 0 ? (
-            <p className={`px-2 py-3 text-sm ${subtleTextTone}`}>{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
+            <p className="px-2 py-3 text-sm text-white/42">{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
           ) : (
-            <div className="history-container">
+            <div className="space-y-1.5">
               {chatSessions.map((chat) => (
                 <ChatItem
                   key={chat.id}
@@ -372,116 +307,31 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* ── Bottom Controls ── */}
-        <div className={`mt-auto border-t pt-4 pb-2 flex flex-col gap-4 ${dividerTone}`}>
-          
-          {/* Top Row: Setting, Mute, Theme */}
-          <div className="flex items-center justify-between px-2 gap-4">
-            
-            {/* 1. Settings Toggle */}
-            <div className="relative flex">
-              <motion.button
-                ref={settingsButtonRef}
-                type="button"
-                whileHover={{ y: -2, scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleToggleSettingsBubble}
-                aria-label={settingsLabel}
-                className={`sidebar-footer-btn ${isSettingsBubbleOpen ? "settings-active" : ""}`}
-              >
-                <motion.div
-                  animate={{ rotate: isSettingsBubbleOpen ? 90 : 0 }}
-                  transition={{ duration: 0.3, ease: "easeOut" }}
-                >
-                  <Settings className="h-5 w-5 text-white/90" />
-                </motion.div>
-              </motion.button>
-
-              {/* Settings Bubble - positioned to the right */}
-              <div
-                ref={settingsBubbleRef}
-                className="absolute left-[calc(100%+1.25rem)] bottom-0 z-50"
-              >
-                <SettingsBubble
-                  open={isSettingsBubbleOpen}
-                  isLightMode={isLightMode}
-                  memoryEnabled={memoryEnabled}
-                  profileName={userName || "User"}
-                  profileEmail={userEmail}
-                  profileInitial={profileInitial}
-                  onClose={() => setIsSettingsBubbleOpen(false)}
-                  onThemeToggle={onToggleSidebarTheme}
-                  onMemoryToggle={onToggleMemory}
-                  onOpenMemory={onOpenMemory}
-                  onOpenProfile={onOpenProfile}
-                  onOpenSettings={onOpenSettings}
-                  activeProvider={activeProvider}
-                  onSelectProvider={onSelectProvider}
-                />
-              </div>
-            </div>
-
-            {/* 2. Mute Toggle */}
-            <MuteButton muted={isTtsMuted} onToggle={onToggleTtsMute} />
-
-            {/* 3. Theme Toggle */}
-            <motion.button
-              type="button"
-              whileHover={{ y: -2, scale: 1.05 }}
-              whileTap={{ scaleX: 1.2, scaleY: 0.8 }}
-              onClick={() => onToggleSidebarTheme(!isLightMode)}
-              className="sidebar-footer-btn"
-              aria-label="Toggle theme"
-            >
-              {isLightMode ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </motion.button>
-          </div>
-
-          {/* Bottom Row: Profile */}
-          <div className="flex justify-center relative">
-            <motion.button
-              ref={profileButtonRef}
-              type="button"
-              whileHover={{ y: -2, scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleToggleProfileBubble}
-              className="sidebar-footer-btn profile-btn relative w-12 h-12"
-              aria-label="Open profile"
-            >
+        <div className="mt-auto border-t border-white/[0.02] px-2.5 pb-1 pt-3">
+          <div className="flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 backdrop-blur-xl" style={{ boxShadow: "0 12px 30px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.05)" }}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-white/10">
               {userPhotoUrl ? (
-                <img
-                  src={userPhotoUrl}
-                  alt="avatar"
-                  className="h-full w-full rounded-full object-cover border border-white/20"
-                />
+                <img src={userPhotoUrl} alt="avatar" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-lg font-bold text-white">{profileInitial}</span>
+                <span className="text-xs font-medium text-white/90">{profileInitial}</span>
               )}
-            </motion.button>
-            <div ref={profileBubbleRef}>
-              <ProfileBubble
-                open={isProfileBubbleOpen}
-                profileName={userName || "User"}
-                profileEmail={userEmail}
-                profileInitial={profileInitial}
-                userPhotoUrl={userPhotoUrl}
-                isGuest={isGuest}
-                onClose={() => setIsProfileBubbleOpen(false)}
-              />
             </div>
-          </div>
 
-          <motion.button
-            type="button"
-            whileHover={{ y: -1, scale: 1.01 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => void onLogout()}
-            className="mx-auto flex w-full items-center justify-center gap-2 rounded-2xl border border-red-400/15 bg-gradient-to-r from-red-500/10 via-red-500/8 to-orange-500/10 px-4 py-3 text-sm font-semibold text-red-100 shadow-[0_12px_30px_rgba(239,68,68,0.12)] transition-all duration-300 hover:border-red-300/30 hover:text-white"
-            aria-label="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </motion.button>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[11px] font-medium text-white/90">{userName || "User"}</p>
+              <p className="truncate text-[10px] text-white/42">{userEmail || (isGuest ? "Guest mode" : "Connected")}</p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { playPopSound(); onOpenSettings(); }}
+              aria-label={settingsLabel}
+              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-white/76 shadow-[0_8px_20px_rgba(0,0,0,0.22)] transition duration-300 hover:bg-white/[0.1] hover:text-white"
+              style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+            >
+              <Settings className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </aside>
     </>

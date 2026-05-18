@@ -30,11 +30,11 @@ function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettings
       <SettingsSection
         label="AI Model"
         title="Active AI Engine"
-        description="Switch between OpenRouter and Groq for testing. OpenRouter still keeps Groq as silent fallback."
+        description="Switch between the primary route and the fast route. The fallback behavior stays the same."
       >
         <SettingsRow
           title="Active AI Engine"
-          description="Choose which provider should answer first."
+          description="Choose which route should answer first."
         >
           <div className="flex w-full max-w-xs flex-col gap-3">
             <div className="flex items-center gap-2 rounded-xl border border-pink-500/20 bg-white/5 px-4 py-2 text-sm font-medium tracking-wide text-pink-100">
@@ -43,8 +43,8 @@ function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettings
             </div>
             <div className="flex items-center justify-between rounded-xl border border-pink-500/15 bg-white/5 px-4 py-3">
               <div className="min-w-0 pr-4">
-                <div className="text-sm font-semibold text-white">OpenRouter</div>
-                <div className="text-[11px] text-white/55">Off = OpenRouter</div>
+                <div className="text-sm font-semibold text-white">Primary route</div>
+                <div className="text-[11px] text-white/55">Off = primary route</div>
               </div>
               <div className="flex flex-col items-center gap-2">
                 <ToggleSwitch
@@ -53,18 +53,18 @@ function GeneralSettings({ languageMode, onLanguageModeChange }: GeneralSettings
                   ariaLabel="Active AI Engine"
                 />
                 <div className="text-[11px] font-medium text-pink-100">
-                  {activeProvider === "Groq" ? "Groq" : "OpenRouter"}
+                  {activeProvider === "Groq" ? "Fast route" : "Primary route"}
                 </div>
               </div>
               <div className="min-w-0 pl-4 text-right">
-                <div className="text-sm font-semibold text-white">Groq</div>
-                <div className="text-[11px] text-white/55">On = Groq only</div>
+                <div className="text-sm font-semibold text-white">Fast route</div>
+                <div className="text-[11px] text-white/55">On = fast route only</div>
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs mt-1">
               <span className="text-white/60">Status:</span>
               <span className="text-green-400 font-medium">
-                {activeProvider === "Groq" ? "⚡ Ready (Groq only)" : "⚡ Ready (OpenRouter + Groq fallback)"}
+                {activeProvider === "Groq" ? "⚡ Ready (fast route only)" : "⚡ Ready (primary route + fallback)"}
               </span>
             </div>
           </div>

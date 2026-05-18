@@ -24,9 +24,26 @@
     @apply border-border;
   }
   body {
-    @apply bg-black text-white;
+    @apply text-white;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at 20% 0%, rgba(255, 0, 120, 0.16), transparent 28%),
+      radial-gradient(circle at 80% 12%, rgba(138, 43, 226, 0.18), transparent 30%),
+      linear-gradient(160deg, #0f0819 0%, #0b0713 56%, #090510 100%);
     font-family: 'Outfit', 'Lexend', system-ui, sans-serif;
   }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+:root {
+  --saheli-bg: #0f0819;
+  --saheli-pink: #ff0078;
+  --saheli-purple: #8a2be2;
+  --saheli-glass: rgba(255, 255, 255, 0.06);
+  --saheli-shadow: rgba(0, 0, 0, 0.45);
 }
 
 /* Premium Playfair Display for Saheli Logo */
@@ -142,27 +159,25 @@
   top: 50%;
   left: 24px;
   transform: translateY(-50%);
-  width: 280px;
+  width: 214px;
   max-height: 90vh;
   overflow-y: auto;
   
   /* Premium Cinematic Glassmorphism */
-  background: linear-gradient(135deg, 
-    rgba(15, 8, 20, 0.25) 0%,
-    rgba(20, 10, 25, 0.3) 50%,
-    rgba(15, 8, 20, 0.25) 100%);
-  backdrop-filter: blur(40px) saturate(160%);
-  -webkit-backdrop-filter: blur(40px) saturate(160%);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
   
   /* Minimalist Glass Border */
   border-radius: 32px;
-  padding: 20px 16px;
+  padding: 16px 12px;
   border: 0.5px solid rgba(255, 255, 255, 0.1);
 
   /* Large Soft Elliptical Shadow - Physics */
   box-shadow:
     0 28px 64px rgba(0, 0, 0, 0.55),
-    0 6px 30px rgba(168, 85, 247, 0.06),
+    0 10px 44px rgba(255, 93, 166, 0.08),
+    0 40px 120px rgba(255, 93, 166, 0.08),
     0 2px 8px rgba(0,0,0,0.25) inset;
   z-index: 100;
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -182,6 +197,7 @@
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(180deg, rgba(255,79,216,0.03), rgba(168,85,247,0.02));
+  mask: linear-gradient(#000, #000);
   -webkit-mask: linear-gradient(#000, #000); /* keep underlying shape */
   mix-blend-mode: screen;
 }
@@ -248,7 +264,7 @@
 
 .sidebar-closed {
   opacity: 0;
-  transform: translateY(-50%) translateX(-300px);
+  transform: translateY(-50%) translateX(-100%);
   pointer-events: none;
 }
 
@@ -429,6 +445,7 @@
   pointer-events: none;
   /* very subtle, desaturated edge sheen for floating effect */
   background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  mask: linear-gradient(#000, #000);
   -webkit-mask: linear-gradient(#000, #000);
   opacity: 0.6;
   filter: blur(2px) saturate(100%);
@@ -481,27 +498,20 @@
   position: relative;
   max-width: 250px;
   min-width: 180px;
-  /* Sheer dark glass fill */
   background: linear-gradient(
     135deg,
-    rgba(255, 150, 200, 0.08) 0%,
-    rgba(30, 5, 25, 0.4) 50%,
-    rgba(10, 2, 15, 0.5) 100%
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(36, 12, 30, 0.24) 56%,
+    rgba(12, 6, 15, 0.28) 100%
   );
-  /* Heavy blur for premium frosted effect */
-  backdrop-filter: blur(32px) saturate(150%);
-  -webkit-backdrop-filter: blur(32px) saturate(150%);
-  /* 3D Glass Edge: Bright top/left, soft bottom/right */
-  border-top: 1px solid rgba(255, 180, 220, 0.45);
-  border-left: 1px solid rgba(255, 180, 220, 0.3);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 24px;
   box-shadow:
-    0 15px 35px rgba(0, 0, 0, 0.5),
-    0 0 25px rgba(236, 72, 153, 0.2),
-    inset 0 0 20px rgba(236, 72, 153, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 10px 28px rgba(0, 0, 0, 0.34),
+    0 0 20px rgba(236, 72, 153, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   overflow: visible;
 }
 
@@ -839,6 +849,21 @@
   50% { --scale: 1.015; }
 }
 
+@keyframes send-orb-pulse {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(255, 0, 120, 0.3), 0 0 36px rgba(255, 0, 120, 0.15);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(255, 0, 120, 0.4), 0 0 48px rgba(255, 0, 120, 0.2);
+    transform: scale(1.02);
+  }
+}
+
+.send-orb-active {
+  animation: send-orb-pulse 2s ease-in-out infinite;
+}
+
 .romantic-cta {
   transition: transform 460ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 460ms ease, filter 460ms ease;
 }
@@ -1003,15 +1028,33 @@
   --mood-blob-2: rgba(157, 23, 77, 0.35);    /* pink-900 */
   --mood-blob-3: rgba(67, 20, 110, 0.30);    /* purple-800 */
 }
-[data-mood="jealous"], [data-mood="angry"] {
-  --mood-blob-1: rgba(127, 29, 29, 0.50);    /* deep red shift */
-  --mood-blob-2: rgba(88, 28, 135, 0.45);    /* deeper purple */
-  --mood-blob-3: rgba(120, 20, 60, 0.35);    /* crimson undertone */
+
+/* Sad/Serious mood: Deep blues and cool tones */
+[data-mood="sad"], [data-mood="serious"] {
+  --mood-blob-1: rgba(59, 130, 246, 0.35);   /* blue-500 */
+  --mood-blob-2: rgba(100, 116, 139, 0.30);   /* slate-500 */
+  --mood-blob-3: rgba(79, 70, 229, 0.25);    /* indigo-600 */
 }
-[data-mood="sweet"], [data-mood="happy"] {
+
+/* Funny/Happy mood: Bright pinks and vibrant purples */
+[data-mood="funny"], [data-mood="happy"] {
   --mood-blob-1: rgba(192, 38, 211, 0.40);   /* brighter fuchsia */
   --mood-blob-2: rgba(236, 72, 153, 0.40);   /* bright pink */
   --mood-blob-3: rgba(168, 85, 247, 0.30);   /* soft purple */
+}
+
+/* Flirty mood: Warm pinks with romantic undertones */
+[data-mood="flirty"] {
+  --mood-blob-1: rgba(236, 72, 153, 0.45);   /* romantic pink */
+  --mood-blob-2: rgba(244, 114, 182, 0.35);  /* light pink */
+  --mood-blob-3: rgba(192, 38, 211, 0.30);   /* warm purple */
+}
+
+/* Neutral mood: Default soft pastels */
+[data-mood="neutral"] {
+  --mood-blob-1: rgba(88, 28, 135, 0.45);   /* purple-900 */
+  --mood-blob-2: rgba(157, 23, 77, 0.35);    /* pink-900 */
+  --mood-blob-3: rgba(67, 20, 110, 0.30);    /* purple-800 */
 }
 
 /* ===== PREMIUM CINEMATIC MESSAGE COMPOSER ===== */
@@ -1020,42 +1063,50 @@
 .saheli-composer-shell {
   position: relative !important;
   background: linear-gradient(135deg,
-    rgba(15, 8, 20, 0.3),
-    rgba(20, 10, 25, 0.35),
-    rgba(15, 8, 20, 0.3)) !important;
-  backdrop-filter: blur(50px) saturate(160%) !important;
-  -webkit-backdrop-filter: blur(50px) saturate(160%) !important;
+    rgba(20, 10, 24, 0.18),
+    rgba(20, 10, 25, 0.28),
+    rgba(15, 8, 20, 0.2)) !important;
+  backdrop-filter: blur(34px) saturate(155%) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(155%) !important;
   border: 1.5px solid transparent !important;
-  border-radius: 24px !important;
-  padding: 12px 16px !important;
+  border-radius: 9999px !important;
+  padding: 10px 18px !important;
+  overflow: visible !important;
+  isolation: isolate;
   box-shadow: 
-    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 18px 46px rgba(0, 0, 0, 0.36),
+    0 22px 54px rgba(255, 92, 196, 0.08),
+    0 56px 120px rgba(255, 92, 196, 0.08),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 0 40px rgba(168, 85, 247, 0.12),
+    0 0 30px rgba(168, 85, 247, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
 }
 
 .saheli-composer-shell:hover {
   box-shadow: 
-    0 24px 72px rgba(0, 0, 0, 0.6),
+    0 24px 58px rgba(0, 0, 0, 0.44),
+    0 24px 60px rgba(255, 92, 196, 0.1),
+    0 64px 140px rgba(255, 92, 196, 0.08),
     0 0 0 1px rgba(255, 255, 255, 0.12) inset,
-    0 0 50px rgba(168, 85, 247, 0.2),
+    0 0 34px rgba(168, 85, 247, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 30px rgba(0, 0, 0, 0.3) inset !important;
+    0 10px 24px rgba(0, 0, 0, 0.24) inset !important;
   transform: translateY(-2px) !important;
 }
 
 .saheli-composer-shell:focus-within {
   box-shadow: 
-    0 24px 72px rgba(0, 0, 0, 0.6),
+    0 24px 58px rgba(0, 0, 0, 0.44),
+    0 24px 60px rgba(255, 92, 196, 0.12),
+    0 64px 140px rgba(255, 92, 196, 0.1),
     0 0 0 1.5px rgba(255, 159, 224, 0.2) inset,
-    0 0 60px rgba(255, 72, 196, 0.25),
+    0 0 34px rgba(255, 72, 196, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
   background: linear-gradient(135deg,
-    rgba(20, 10, 25, 0.35),
-    rgba(25, 12, 30, 0.38),
-    rgba(20, 10, 25, 0.35)) !important;
+    rgba(20, 10, 25, 0.24),
+    rgba(25, 12, 30, 0.3),
+    rgba(20, 10, 25, 0.24)) !important;
 }
 
 /* Input Field - Premium Styling */
@@ -1063,7 +1114,7 @@
   background: transparent !important;
   border: none !important;
   color: #fff !important;
-  font-size: 14px !important;
+  font-size: 15px !important;
   font-weight: 500 !important;
   transition: all 0.3s ease !important;
 }
@@ -1091,30 +1142,30 @@
   height: 38px !important;
   border-radius: 50% !important;
   background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.04),
-    rgba(255, 159, 224, 0.03)) !important;
-  border: 1.2px solid rgba(255, 255, 255, 0.12) !important;
-  color: rgba(255, 255, 255, 0.85) !important;
+    rgba(255, 255, 255, 0.05),
+    rgba(255, 159, 224, 0.04)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   cursor: pointer !important;
   box-shadow: 
-    0 8px 20px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset !important;
+    0 8px 18px rgba(0, 0, 0, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset !important;
 }
 
 .saheli-composer-btn:hover {
   transform: translateY(-2px) scale(1.08) !important;
   background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 159, 224, 0.06)) !important;
-  border-color: rgba(255, 159, 224, 0.3) !important;
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 159, 224, 0.08)) !important;
+  border-color: rgba(255, 159, 224, 0.22) !important;
   color: #fff !important;
   box-shadow: 
-    0 12px 32px rgba(0, 0, 0, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.15) inset,
-    0 0 24px rgba(255, 92, 198, 0.2) !important;
+    0 12px 28px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset,
+    0 0 18px rgba(255, 92, 198, 0.14) !important;
 }
 
 .saheli-composer-btn:active {
@@ -1124,29 +1175,29 @@
 /* Send Button Premium Style */
 .saheli-send-btn {
   background: linear-gradient(135deg, 
-    rgba(255, 72, 196, 0.25),
-    rgba(168, 85, 247, 0.2),
+    rgba(255, 72, 196, 0.16),
+    rgba(168, 85, 247, 0.12),
     rgba(255, 255, 255, 0.05)) !important;
-  border: 1.5px solid rgba(255, 159, 224, 0.25) !important;
-  color: #ffb6ea !important;
+  border: 1px solid rgba(255, 159, 224, 0.18) !important;
+  color: #ffd4ef !important;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   font-weight: 600 !important;
   box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.3),
-    0 0 24px rgba(255, 72, 196, 0.12),
+    0 8px 22px rgba(0, 0, 0, 0.26),
+    0 0 18px rgba(255, 72, 196, 0.08),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
 }
 
 .saheli-send-btn:hover {
   background: linear-gradient(135deg, 
-    rgba(255, 72, 196, 0.35),
-    rgba(168, 85, 247, 0.28),
+    rgba(255, 72, 196, 0.24),
+    rgba(168, 85, 247, 0.18),
     rgba(255, 255, 255, 0.08)) !important;
-  border-color: rgba(255, 159, 224, 0.4) !important;
+  border-color: rgba(255, 159, 224, 0.28) !important;
   transform: translateY(-2px) scale(1.04) !important;
   box-shadow: 
-    0 12px 36px rgba(0, 0, 0, 0.4),
-    0 0 32px rgba(255, 72, 196, 0.25),
+    0 12px 30px rgba(0, 0, 0, 0.34),
+    0 0 24px rgba(255, 72, 196, 0.16),
     0 0 0 1px rgba(255, 255, 255, 0.12) inset !important;
 }
 
@@ -1284,34 +1335,47 @@
 .dust-particle:nth-child(11) { left: 90%; animation-duration: 8.8s; --dust-drift: 16px; animation-delay: 1.1s; }
 .dust-particle:nth-child(12) { left: 95%; animation-duration: 7.2s; --dust-drift: -12px; animation-delay: 0.9s; }
 
-/* ===== IDLE GHOST MODE ===== */
+/* ===== IDLE / MODAL DEACTIVATION ===== */
 
-.sidebar.ghost-mode {
-  opacity: 0.2 !important;
-  transition: opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+.ghost-mode,
+.sidebar-deactivated {
+  opacity: 0.72;
+  filter: saturate(0.72) brightness(0.92);
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1), filter 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.sidebar.ghost-mode .saheli-logo-section {
-  opacity: 0.2 !important;
-  transition: opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+.ghost-mode {
+  opacity: 0.82;
 }
 
-/* Composer dock butterfly accents */
+.sidebar-deactivated {
+  pointer-events: none;
+  transform: scale(0.99);
+}
+
+/* Composer floor glow */
 .saheli-composer-shell::before,
 .saheli-composer-shell::after {
   content: '';
   position: absolute;
-  width: 26px;
-  height: 26px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffb6ea' d='M12 2s2 2 4 1c1.8-.9 3 2 1 3-2 1-4 0-5 2s1 4-1 5c-2 .9-2 4-4 3-1.8-.9-3-2-2-4 1-3 2-3 1-6C4 5 8 3 12 2z'/></svg>");
-  background-size: contain;
-  background-repeat: no-repeat;
-  opacity: 0.9;
-  filter: blur(1px) drop-shadow(0 6px 14px rgba(255,79,216,0.08));
+  left: 12px;
+  right: 12px;
   pointer-events: none;
 }
-.saheli-composer-shell::before { left: 8px; bottom: 8px; transform: rotate(-12deg); }
-.saheli-composer-shell::after { right: 10px; bottom: 10px; transform: rotate(8deg); }
+.saheli-composer-shell::before {
+  bottom: -18px;
+  height: 44px;
+  background: radial-gradient(ellipse at center, rgba(255, 92, 196, 0.3) 0%, rgba(255, 92, 196, 0.14) 40%, transparent 76%);
+  filter: blur(20px);
+  opacity: 0.9;
+}
+.saheli-composer-shell::after {
+  bottom: -6px;
+  height: 18px;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.12) 0%, transparent 72%);
+  filter: blur(8px);
+  opacity: 0.6;
+}
 
 /* ===== Neon border glow for input */
 @keyframes border-glow {
@@ -1534,61 +1598,44 @@
 
 /* User Bubble — Neutral white glass with soft glow */
 .saheli-user-bubble {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.10) 0%,
-    rgba(230, 220, 245, 0.08) 50%,
-    rgba(200, 190, 220, 0.06) 100%
-  );
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(220, 226, 236, 0.05));
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.25),
-    0 2px 10px rgba(255, 255, 255, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 0 12px rgba(255, 255, 255, 0.02);
+    0 10px 26px rgba(0, 0, 0, 0.24),
+    0 0 18px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 }
 
 .saheli-user-bubble:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 14px 38px rgba(0, 0, 0, 0.3),
-    0 4px 14px rgba(255, 255, 255, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 0 16px rgba(255, 255, 255, 0.03);
+    0 16px 34px rgba(0, 0, 0, 0.28),
+    0 0 22px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 /* AI Bubble — Pink-tinted dark glass with soft glow */
 .saheli-ai-bubble {
-  background: linear-gradient(
-    145deg,
-    rgba(30, 12, 24, 0.55) 0%,
-    rgba(22, 8, 30, 0.50) 50%,
-    rgba(18, 6, 22, 0.45) 100%
-  );
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border-top: 1px solid rgba(236, 72, 153, 0.18);
-  border-left: 1px solid rgba(236, 72, 153, 0.12);
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: linear-gradient(145deg, rgba(255, 192, 203, 0.08), rgba(26, 10, 20, 0.28) 48%, rgba(12, 6, 16, 0.34));
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  border: 1px solid rgba(255, 192, 203, 0.08);
   box-shadow:
-    0 8px 25px rgba(5, 0, 12, 0.45),
-    0 0 14px rgba(236, 72, 153, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    inset 0 0 10px rgba(236, 72, 153, 0.03);
+    0 10px 26px rgba(5, 0, 12, 0.28),
+    0 0 20px rgba(236, 72, 153, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.3s ease;
 }
 
 .saheli-ai-bubble:hover {
   transform: translateY(-2px);
   box-shadow:
-    0 14px 36px rgba(5, 0, 12, 0.5),
-    0 0 22px rgba(236, 72, 153, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    inset 0 0 14px rgba(236, 72, 153, 0.05);
+    0 16px 34px rgba(5, 0, 12, 0.32),
+    0 0 24px rgba(236, 72, 153, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* Shimmer line on top of AI bubbles */

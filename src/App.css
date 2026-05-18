@@ -2,19 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Premium Futuristic Glassmorphism - Deep Space Theme */
+/* Cinematic Overhaul: Pure Black Background & Atmospheric Theme */
 
-/* Animated Mesh Gradient Background */
+/* Pure Black Base */
 html, body, #root {
   font-family: 'Delius', sans-serif;
-  background: 
-    radial-gradient(circle at 20% 80%, hsla(280, 50%, 20%, 0.4) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, hsla(340, 72%, 25%, 0.3) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, hsla(200, 50%, 15%, 0.4) 0%, transparent 50%),
-    linear-gradient(135deg, hsl(230 25% 7%) 0%, hsl(240 20% 5%) 50%, hsl(250 25% 3%) 100%);
-  background-size: 400% 400%, 300% 300%, 200% 200%, 100% 100%;
-  animation: mesh-gradient 20s ease-in-out infinite;
+  background: #000000;
   min-height: 100vh;
+}
+
+/* Message Bubble Ghost-Glass Animation */
+@layer components {
+  .msg-sheen {
+    animation: messageSheenPulse 2.5s ease-in-out forwards;
+  }
+  
+  @keyframes messageSheenPulse {
+    0% {
+      opacity: 0;
+      transform: translateY(12px) scale(0.95);
+      filter: blur(2px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
 }
 
 /* Glass Button Styles */
@@ -131,24 +145,6 @@ h1, h2, h3, .font-display {
 }
 
 /* Animations */
-@keyframes mesh-gradient {
-  0% {
-    background-position: 0% 0%, 100% 0%, 0% 100%, 0% 0%;
-  }
-  25% {
-    background-position: 50% 50%, 50% 50%, 50% 50%, 0% 0%;
-  }
-  50% {
-    background-position: 100% 100%, 0% 100%, 100% 0%, 0% 0%;
-  }
-  75% {
-    background-position: 50% 50%, 50% 50%, 50% 50%, 0% 0%;
-  }
-  100% {
-    background-position: 0% 0%, 100% 0%, 0% 100%, 0% 0%;
-  }
-}
-
 @keyframes click-scale-pulse {
   0% {
     transform: scale(0.95);
