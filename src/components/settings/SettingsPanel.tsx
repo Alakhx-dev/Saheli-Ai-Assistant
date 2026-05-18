@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ImageIcon, Sparkles, Volume2, VolumeX } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 
 type SettingsSectionId = "personalization" | "memory" | "account" | "appearance" | "voice" | "about";
@@ -97,18 +97,32 @@ export default function SettingsPanel({
   const selectedCharacterCard = characterCards.find((card) => card.id === selectedCharacter) ?? characterCards[0];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[100] h-[min(46rem,calc(100vh-2rem))] w-[min(76rem,calc(100vw-2rem))] max-w-[76rem] overflow-hidden rounded-[32px] border border-white/12 bg-[#0a0a0a]/95 p-0 text-white shadow-[0 25px 50px rgba(0,0,0,0.8), 0 0 60px rgba(255,105,180,0.15)] backdrop-blur-[30px]">
-        <div className="grid h-full min-h-0 md:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className="border-b border-white/10 bg-white/[0.03] px-4 py-5 md:border-b-0 md:border-r md:px-5">
-            <DialogHeader className="space-y-3 px-1 text-left">
-              <DialogTitle className="text-2xl font-semibold tracking-[-0.03em] text-white">{t.settings.title}</DialogTitle>
-              <DialogDescription className="text-sm leading-6 text-white/50">
-                {t.settings.description}
-              </DialogDescription>
-            </DialogHeader>
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[100] pointer-events-none flex items-end pb-[24px] pl-[320px]">
+          {/* Overlay to close */}
+          <div className="absolute inset-0 pointer-events-auto" onClick={() => onOpenChange(false)} />
 
-            <div className="mt-6 space-y-2">
+          {/* Level 1: Menu */}
+          <motion.div
+            initial={{ opacity: 0, x: -20, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -20, scale: 0.95 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            style={{
+              background: "rgba(15, 15, 15, 0.4)",
+              backdropFilter: "blur(25px)",
+              border: "0.5px solid rgba(255, 255, 255, 0.06)",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+            }}
+            className="relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
+          >
+            <div className="mb-2 px-2">
+              <h2 className="text-xl font-semibold tracking-tight text-white">{t.settings.title}</h2>
+              <p className="text-[11px] text-white/50">{t.settings.description}</p>
+            </div>
+            
+            <div className="flex flex-col gap-1">
               {sections.map((section) => (
                 <NavButton
                   key={section.id}
@@ -118,9 +132,24 @@ export default function SettingsPanel({
                 />
               ))}
             </div>
-          </aside>
+          </motion.div>
 
-          <div className="min-h-0 overflow-y-auto px-5 py-5 md:px-7 md:py-7">
+          {/* Level 2: Content Panel */}
+          <motion.div
+            key={activeSection || "empty"}
+            initial={{ opacity: 0, x: -20, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: -20, scale: 0.95 }}
+            transition={{ duration: 0.25, ease: "easeOut", delay: 0.05 }}
+            style={{
+              background: "rgba(15, 15, 15, 0.4)",
+              backdropFilter: "blur(25px)",
+              border: "0.5px solid rgba(255, 255, 255, 0.06)",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+            }}
+            className="relative pointer-events-auto ml-4 flex w-[420px] max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden"
+          >
+            <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
               {activeSection === "personalization" ? (
                 <motion.div key="personalization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
@@ -137,9 +166,9 @@ export default function SettingsPanel({
                             key={card.id}
                             type="button"
                             onClick={() => onCharacterChange(card.id)}
-                            className={`group overflow-hidden rounded-[24px] border p-3 text-left transition duration-300 ${active ? "border-pink-400/30 bg-white/10 shadow-[0_0_28px_rgba(255,0,120,0.16)]" : "border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.06]"}`}
+                            className={`group overflow-hidden rounded-[24px] border p-3 text-left transition duration-300 ${active ? "border-pink-400/50 bg-gradient-to-br from-pink-500/10 to-purple-500/10 shadow-[0_0_30px_rgba(255,105,180,0.2)]" : "border-white/10 bg-white/[0.02] hover:border-pink-400/30 hover:bg-gradient-to-br hover:from-pink-500/5 hover:to-purple-500/5 hover:shadow-[0_0_20px_rgba(255,105,180,0.1)]"}`}
                           >
-                            <div className={`relative aspect-[4/5] overflow-hidden rounded-[20px] bg-gradient-to-br ${card.accent}`}>
+                            <div className={`relative aspect-[4/5] overflow-hidden rounded-[20px] bg-gradient-to-br ${card.accent} shadow-inner`}>
                               <img src={card.image} alt={card.label} className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105" />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                             </div>
@@ -176,16 +205,16 @@ export default function SettingsPanel({
                           role="switch"
                           aria-checked={memoryEnabled}
                           onClick={() => onMemoryToggle(!memoryEnabled)}
-                          className={`relative inline-flex h-6 w-12 items-center rounded-full border transition duration-300 ${memoryEnabled ? "border-pink-400/20 bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_20px_rgba(255,0,120,0.25)]" : "border-white/10 bg-white/10"}`}
+                          className={`relative inline-flex h-6 w-12 items-center rounded-full border transition duration-300 backdrop-blur-md ${memoryEnabled ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5 hover:border-white/20"}`}
                         >
-                          <span className={`inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_0_16px_rgba(255,255,255,0.28)] transition duration-300 ${memoryEnabled ? "translate-x-6" : "translate-x-1"}`} />
+                          <span className={`inline-block h-5 w-5 rounded-full transition duration-300 ${memoryEnabled ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] translate-x-[22px]" : "bg-white/40 translate-x-[2px]"}`} />
                         </button>
                       </div>
 
                       <button
                         type="button"
                         onClick={onManageMemory}
-                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-pink-400/15 bg-pink-500/5 px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-pink-300/25 hover:bg-pink-500/10"
+                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-pink-500/30 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-4 py-3 text-sm font-medium text-pink-50 transition duration-300 hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/50 hover:shadow-[0_0_25px_rgba(255,105,180,0.25)] hover:text-white"
                       >
                         <ImageIcon className="h-4 w-4" />
                         Open memory vault
@@ -223,14 +252,14 @@ export default function SettingsPanel({
                         <button
                           type="button"
                           onClick={onEditProfile}
-                          className="rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-pink-400/20 hover:bg-white/[0.08]"
+                          className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-pink-400/30 hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 hover:shadow-[0_0_20px_rgba(255,105,180,0.15)]"
                         >
                           Open emotional profile
                         </button>
                         <button
                           type="button"
                           onClick={onChangePassword}
-                          className="rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-purple-400/20 hover:bg-white/[0.08]"
+                          className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-purple-400/30 hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]"
                         >
                           Change password
                         </button>
@@ -239,7 +268,7 @@ export default function SettingsPanel({
                       <button
                         type="button"
                         onClick={onLogout}
-                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-red-400/20 bg-transparent px-4 py-3 text-sm font-medium text-red-100 transition duration-300 hover:border-red-300/30 hover:bg-red-500/5"
+                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-200 transition duration-300 hover:border-red-400/40 hover:bg-red-500/15 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]"
                       >
                         Logout
                       </button>
@@ -262,7 +291,7 @@ export default function SettingsPanel({
                         { label: "Velvet Mist", value: "mist" },
                         { label: "Orbital Warmth", value: "warm" },
                       ].map((item, index) => (
-                        <div key={item.value} className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+                        <div key={item.value} className="rounded-[22px] border border-white/10 bg-white/[0.02] p-4 transition duration-300 hover:border-pink-400/30 hover:bg-white/[0.05] hover:shadow-[0_0_20px_rgba(255,105,180,0.1)] cursor-pointer">
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-sm font-medium text-white">{item.label}</p>
@@ -295,9 +324,9 @@ export default function SettingsPanel({
                           role="switch"
                           aria-checked={isTtsMuted}
                           onClick={onToggleTtsMute}
-                          className={`inline-flex h-11 w-20 items-center rounded-full border px-1 transition duration-300 ${isTtsMuted ? "border-pink-400/20 bg-white/10" : "border-white/10 bg-gradient-to-r from-pink-500/20 to-purple-500/15"}`}
+                          className={`inline-flex h-11 w-20 items-center rounded-full border px-1 transition duration-300 backdrop-blur-md ${isTtsMuted ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5 hover:border-white/20"}`}
                         >
-                          <span className={`flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition duration-300 ${isTtsMuted ? "translate-x-0" : "translate-x-8"}`}>
+                          <span className={`flex h-9 w-9 items-center justify-center rounded-full transition duration-300 ${isTtsMuted ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] text-pink-600 translate-x-0" : "bg-white/40 text-white/50 translate-x-9"}`}>
                             {isTtsMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                           </span>
                         </button>
@@ -325,9 +354,10 @@ export default function SettingsPanel({
                 </motion.div>
               ) : null}
             </AnimatePresence>
-          </div>
+            </div>
+          </motion.div>
         </div>
-      </DialogContent>
-    </Dialog>
+      )}
+    </AnimatePresence>
   );
 }

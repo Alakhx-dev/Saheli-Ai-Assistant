@@ -259,23 +259,35 @@ export default function Sidebar(props: SidebarProps) {
       >
         <div className="pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />
 
-        <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4">
+        <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4 relative flex items-center justify-between">
+          <div className="absolute top-1/2 left-4 w-24 h-12 -translate-y-1/2 bg-pink-500/20 blur-[20px] rounded-full pointer-events-none" />
           <span
-            className="block px-1 text-[1.08rem] font-light tracking-[0.18em] text-pink-200/95"
-            style={{ fontFamily: "'Playfair Display', serif" }}
+            className="block px-1 text-[1.2rem] font-medium tracking-[0.18em] text-pink-100"
+            style={{ 
+              fontFamily: "'Playfair Display', serif",
+              textShadow: "0 0 10px rgba(255, 105, 180, 0.5), 0 0 20px rgba(255, 105, 180, 0.3)"
+            }}
           >
             Saheli AI
           </span>
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="text-white/50 hover:text-white transition duration-300 p-1 mr-1"
+            aria-label="Hide sidebar"
+          >
+            <PanelLeft className="h-4 w-4" />
+          </button>
         </div>
 
         <motion.button
           type="button"
           onClick={() => void onCreateChat()}
-          whileHover={{ y: -1, scale: 1.01 }}
-          whileTap={{ scale: 0.98 }}
-          className="group mx-3 mt-3 inline-flex items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3 py-2.5 text-xs font-light tracking-[0.08em] text-white/84 shadow-[0_12px_28px_rgba(0,0,0,0.28),0_0_18px_rgba(255,192,203,0.08)] backdrop-blur-xl transition duration-300 hover:bg-white/[0.08] hover:text-white"
+          whileHover={{ y: -1, scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
+          className="group mx-3 mt-3 inline-flex items-center justify-center gap-2 rounded-full border border-pink-400/20 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-3 py-2.5 text-xs font-medium tracking-[0.08em] text-pink-100/90 shadow-[0_12px_28px_rgba(0,0,0,0.3),0_0_20px_rgba(255,105,180,0.15)] backdrop-blur-xl transition duration-300 hover:border-pink-400/40 hover:from-pink-500/20 hover:to-purple-500/20 hover:text-white"
         >
-          <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90" />
+          <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 text-pink-300" />
           {newChatLabel}
         </motion.button>
 
@@ -307,29 +319,29 @@ export default function Sidebar(props: SidebarProps) {
           )}
         </div>
 
-        <div className="mt-auto border-t border-white/[0.02] px-2.5 pb-1 pt-3">
-          <div className="flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 backdrop-blur-xl" style={{ boxShadow: "0 12px 30px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.05)" }}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/[0.08] bg-white/10">
+        <div className="mt-auto border-t border-white/[0.05] px-2.5 pb-2.5 pt-3 bg-gradient-to-t from-black/40 to-transparent">
+          <div className="flex items-center gap-2.5 rounded-[20px] border border-pink-400/20 bg-black/40 px-3 py-2.5 backdrop-blur-2xl transition duration-300 hover:border-pink-400/40 hover:bg-black/50 hover:shadow-[0_0_30px_rgba(255,105,180,0.15)]" style={{ boxShadow: "0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 105, 180, 0.15)" }}>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-400/30 bg-gradient-to-br from-pink-500/20 to-purple-500/20 shadow-[0_0_15px_rgba(255,105,180,0.2)]">
               {userPhotoUrl ? (
                 <img src={userPhotoUrl} alt="avatar" className="h-full w-full object-cover" />
               ) : (
-                <span className="text-xs font-medium text-white/90">{profileInitial}</span>
+                <span className="text-xs font-semibold text-pink-200/90">{profileInitial}</span>
               )}
             </div>
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-medium text-white/90">{userName || "User"}</p>
-              <p className="truncate text-[10px] text-white/42">{userEmail || (isGuest ? "Guest mode" : "Connected")}</p>
+              <p className="truncate text-[12px] font-semibold text-white/95">{userName || "User"}</p>
+              <p className="truncate text-[10px] text-pink-200/60 font-medium tracking-wide">{userEmail || (isGuest ? "Guest mode" : "Connected")}</p>
             </div>
 
             <button
               type="button"
               onClick={() => { playPopSound(); onOpenSettings(); }}
               aria-label={settingsLabel}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-white/76 shadow-[0_8px_20px_rgba(0,0,0,0.22)] transition duration-300 hover:bg-white/[0.1] hover:text-white"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/30 hover:text-pink-100 hover:shadow-[0_0_20px_rgba(255,105,180,0.3)]"
               style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
             >
-              <Settings className="h-3.5 w-3.5" />
+              <Settings className="h-4 w-4" />
             </button>
           </div>
         </div>

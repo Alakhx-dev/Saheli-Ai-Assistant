@@ -494,21 +494,17 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
       <div
         data-role={isUser ? 'user' : 'assistant'}
         className={`
-        max-w-[58%] px-5 py-4 text-sm leading-relaxed font-medium relative text-neutral-50
+        max-w-[85%] md:max-w-[45%] px-5 py-4 text-sm leading-relaxed font-medium relative text-neutral-50
         transition-all duration-300 rounded-[28px]
         ${isNew ? "msg-sheen" : ""}
         ${isUser
-          ? "rounded-br-[10px]"
-          : "rounded-bl-[10px]"
+          ? "rounded-br-[10px] saheli-message-user"
+          : "rounded-bl-[10px] saheli-message-ai"
         }
       `}
         style={{ 
           fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
           letterSpacing: "0.01em",
-          background: "rgba(255, 255, 255, 0.045)",
-          backdropFilter: "blur(15px)",
-          WebkitBackdropFilter: "blur(15px)",
-          boxShadow: "0 8px 20px rgba(0, 0, 0, 0.3)"
         }}
       >
         {msg.content}
@@ -537,7 +533,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   return (
     <div
       ref={containerRef}
-      className="w-full md:w-[60%] lg:w-[55%] mx-auto space-y-3 overflow-y-auto h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      className="w-full md:w-[85%] lg:w-[80%] mx-auto px-4 md:px-8 space-y-3 overflow-y-auto h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       style={{
         overflowAnchor: "none",
         scrollBehavior: "auto",
@@ -2303,28 +2299,31 @@ export default function Chat() {
         ))}
       </div>
       
-      {/* ── Persistent Floating Toggle Recovery Button ── */}
-      <motion.button
-        type="button"
-        onClick={() => setIsSidebarOpen((previous) => !previous)}
-        aria-label={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
-        whileHover={{ scale: 1.12 }}
-        whileTap={{ scale: 0.92 }}
-        initial={{ opacity: 1, x: 0 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3, ease: "easeInOut" }}
-        className="fixed z-[9999] inline-flex h-[48px] w-[48px] items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/80 transition duration-300 hover:bg-white/[0.12] hover:text-white"
-        style={{
-          top: "32px",
-          left: "32px",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-          boxShadow: "0 0 20px rgba(255, 45, 85, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.1)",
-          transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-        }}
-      >
-        <PanelLeft className="h-5 w-5" />
-      </motion.button>
+      {/* ── Small Sleek Toggle Button (Visible only when closed) ── */}
+      <AnimatePresence>
+        {!isSidebarOpen && (
+          <motion.button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            aria-label="Open sidebar"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="fixed z-[9999] inline-flex h-[36px] w-[36px] items-center justify-center rounded-full border border-pink-500/30 bg-black/40 text-pink-200 transition duration-300 hover:bg-black/60 hover:text-white hover:border-pink-400/50 hover:shadow-[0_0_15px_rgba(255,105,180,0.3)]"
+            style={{
+              top: "24px",
+              left: "24px",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
+          >
+            <PanelLeft className="h-4 w-4" />
+          </motion.button>
+        )}
+      </AnimatePresence>
       
       <Sidebar
         isOpen={isSidebarOpen}
@@ -2356,7 +2355,15 @@ export default function Chat() {
         className={`${isIdle ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
       />
 
-      <div className="chat-content relative z-10 flex h-full w-full flex-col" style={{ isolation: 'isolate', background: '#000000' }}>
+      <div 
+        className="chat-content relative z-10 flex h-full flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" 
+        style={{ 
+          isolation: 'isolate', 
+          background: '#000000',
+          marginLeft: isSidebarOpen ? '300px' : '0px',
+          width: isSidebarOpen ? 'calc(100% - 300px)' : '100%'
+        }}
+      >
         <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
           <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm pointer-events-auto" style={{ fontFamily: "'Sour Gummy', cursive" }}>
             <Heart className="w-5 h-5 fill-current" />
@@ -2379,6 +2386,9 @@ export default function Chat() {
           {/* Layer 2 (z-5): Mascot Container */}
           <div className="relative z-[5] flex flex-col items-center justify-center w-full h-full">
             <CinematicAtmosphere layer="characterBack" />
+            <div className="absolute inset-0 flex justify-center items-center pointer-events-none z-[-1]">
+              <div className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,105,180,0.18) 0%, rgba(200,80,250,0.08) 40%, transparent 70%)", filter: "blur(60px)", transform: "translateY(-5%)" }} />
+            </div>
             
             <motion.div
               className="relative z-[5] flex justify-center w-full" style={{ height: "calc(75vh * 0.85)" }}
@@ -2437,18 +2447,13 @@ export default function Chat() {
           ) : null}
           <form
             onSubmit={handleSubmit}
-            className={`saheli-composer-shell relative mx-auto flex h-[68px] items-center gap-2.5 px-4 transition-all duration-300 ${
-              input.trim() ? "scale-[1.01] border-pink-400/15 shadow-[0_0_24px_rgba(255,0,120,0.12)]" : ""
+            className={`saheli-composer-container relative mx-auto flex h-[68px] items-center gap-2.5 px-4 transition-all duration-300 ${
+              input.trim() ? "scale-[1.01]" : ""
             }`}
             style={{
               width: "min(100%, 860px)",
-              background: "rgba(18, 10, 24, 0.5)",
-              backdropFilter: "blur(20px) saturate(160%)",
-              WebkitBackdropFilter: "blur(20px) saturate(160%)",
-              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.95), 0 0 30px rgba(255, 105, 180, 0.1)",
               transform: "translateY(-28px)",
               borderRadius: "24px",
-              border: "1px solid rgba(255, 255, 255, 0.08)"
             }}
           >
             {selectedImage && (
