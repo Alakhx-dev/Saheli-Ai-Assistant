@@ -215,18 +215,8 @@ export async function saveVisionImageMemory(base64Image: string, userId?: string
       });
       console.log("✅ [Image Memory] Image saved successfully via saveImage()");
     } else {
-      // Fallback for guest or missing user - save to legacy collection
-      console.log("📸 [Image Memory] Using fallback legacy collection for guest user");
-      await addDoc(collection(db, "image_memories"), {
-        userId: uid,
-        type: "image",
-        timestamp: Date.now(),
-        base64: cleanBase64,
-        image: cleanBase64,
-        description: description?.trim() || "",
-        createdAt: serverTimestamp(),
-      });
-      console.log("✅ [Image Memory] Image saved to legacy collection");
+      // Guest mode - skip saving to Firebase
+      console.log("📸 [Image Memory] Skipping Firebase upload for guest user");
     }
   } catch (err) {
     console.error("❌ [Image Memory] Failed to save vision image memory:", {

@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Check, ImageIcon, Sparkles, Volume2, VolumeX, MessageSquareText } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 
-type SettingsSectionId = "personalization" | "memory" | "account" | "appearance" | "voice" | "about";
+type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 interface SettingsPanelProps {
@@ -31,9 +31,12 @@ interface SettingsPanelProps {
 }
 
 const characterCards = [
-  { id: "butterfly", label: "Butterfly Aura", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
-  { id: "pink", label: "Pink Velvet", image: "/butterflies/pink-transparent.png", accent: "from-pink-500/20 to-rose-400/10" },
-  { id: "lavender", label: "Lavender Mist", image: "/butterflies/lavender-transparent.png", accent: "from-violet-400/20 to-fuchsia-400/10" },
+  { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
+  { id: "aarohi", label: "Aarohi 🌸", image: "/Aarohi 🌸.png", accent: "from-pink-500/20 to-rose-400/10" },
+  { id: "elina", label: "Elina 🖤", image: "/Elina 🖤.png", accent: "from-gray-400/20 to-zinc-400/10" },
+  { id: "kiara", label: "Kiara 🎀", image: "/Kiara 🎀.png", accent: "from-rose-400/20 to-pink-400/10" },
+  { id: "meher", label: "Meher ✨", image: "/Meher ✨.jpeg", accent: "from-amber-400/20 to-yellow-400/10" },
+  { id: "zoya", label: "Zoya ❤️", image: "/Zoya ❤️.png", accent: "from-red-400/20 to-rose-400/10" },
 ];
 
 function NavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
@@ -86,8 +89,8 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const t = getLang();
   const sections = useMemo(() => ([
-    { id: "personalization" as const, label: "Personalization" },
-    { id: "memory" as const, label: "Memory Vault" },
+    { id: "character" as const, label: "Character" },
+    { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
     { id: "appearance" as const, label: "Appearance" },
     { id: "voice" as const, label: "Voice & Audio" },
@@ -147,18 +150,13 @@ export default function SettingsPanel({
               border: "0.5px solid rgba(255, 255, 255, 0.06)",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
             }}
-            className="relative pointer-events-auto ml-4 flex w-[420px] max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden"
+            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : "w-[420px]"}`}
           >
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
-              {activeSection === "personalization" ? (
-                <motion.div key="personalization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Personalization"
-                    title="Character Studio"
-                    description="Switch Swara’s aura, palette, and presentation without touching the backend model or memory system."
-                  >
-                    <div className="grid gap-3 sm:grid-cols-3">
+              {activeSection === "character" ? (
+                <motion.div key="character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                    <div className="flex flex-col gap-2">
                       {characterCards.map((card) => {
                         const active = selectedCharacter === card.id;
                         return (
@@ -166,61 +164,61 @@ export default function SettingsPanel({
                             key={card.id}
                             type="button"
                             onClick={() => onCharacterChange(card.id)}
-                            className={`group overflow-hidden rounded-[24px] border p-3 text-left transition duration-300 ${active ? "border-pink-400/50 bg-gradient-to-br from-pink-500/10 to-purple-500/10 shadow-[0_0_30px_rgba(255,105,180,0.2)]" : "border-white/10 bg-white/[0.02] hover:border-pink-400/30 hover:bg-gradient-to-br hover:from-pink-500/5 hover:to-purple-500/5 hover:shadow-[0_0_20px_rgba(255,105,180,0.1)]"}`}
+                            className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
                           >
-                            <div className={`relative aspect-[4/5] overflow-hidden rounded-[20px] bg-gradient-to-br ${card.accent} shadow-inner`}>
-                              <img src={card.image} alt={card.label} className="h-full w-full object-contain p-4 transition duration-300 group-hover:scale-105" />
-                              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                            </div>
-                            <div className="mt-3 flex items-center justify-between gap-2">
-                              <div>
-                                <p className="text-sm font-medium text-white">{card.label}</p>
-                                <p className="text-[11px] text-white/45">Frontend-only style variant</p>
-                              </div>
-                              {active ? <Sparkles className="h-4 w-4 text-pink-200" /> : null}
-                            </div>
+                            <span className="font-medium">{card.label}</span>
+                            {active && <Check className="h-4 w-4 text-pink-400" />}
                           </button>
                         );
                       })}
                     </div>
-                  </SectionShell>
                 </motion.div>
               ) : null}
 
               {activeSection === "memory" ? (
                 <motion.div key="memory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Memory Vault"
-                    title="Swara’s Memory Vault"
-                    description="Manage memory without exposing technical model or provider routing controls."
-                  >
-                    <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-                      <div className="flex items-center justify-between gap-4">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-white">Long-term Memory</p>
-                          <p className="text-sm leading-6 text-white/50">Keep insights and visual memories enabled.</p>
+                          <p className="text-sm font-medium text-white">Memory</p>
+                          <p className="text-[11px] leading-5 text-white/50">Auto-save insights</p>
                         </div>
                         <button
                           type="button"
                           role="switch"
                           aria-checked={memoryEnabled}
                           onClick={() => onMemoryToggle(!memoryEnabled)}
-                          className={`relative inline-flex h-6 w-12 items-center rounded-full border transition duration-300 backdrop-blur-md ${memoryEnabled ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5 hover:border-white/20"}`}
+                          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition duration-300 backdrop-blur-md ${memoryEnabled ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5 hover:border-white/20"}`}
                         >
-                          <span className={`inline-block h-5 w-5 rounded-full transition duration-300 ${memoryEnabled ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] translate-x-[22px]" : "bg-white/40 translate-x-[2px]"}`} />
+                          <span className={`inline-block h-4 w-4 rounded-full transition duration-300 ${memoryEnabled ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] translate-x-[22px]" : "bg-white/40 translate-x-[3px]"}`} />
                         </button>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={onManageMemory}
-                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-pink-500/30 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-4 py-3 text-sm font-medium text-pink-50 transition duration-300 hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/50 hover:shadow-[0_0_25px_rgba(255,105,180,0.25)] hover:text-white"
-                      >
-                        <ImageIcon className="h-4 w-4" />
-                        Open memory vault
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("saheli-memory-tab", { detail: "chat" }));
+                            onManageMemory();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-[16px] border border-pink-500/10 bg-gradient-to-r from-pink-500/5 to-purple-500/5 px-4 py-3.5 text-left text-sm font-medium text-white transition duration-300 hover:border-pink-500/30 hover:from-pink-500/10 hover:to-purple-500/10 hover:shadow-[0_0_20px_rgba(255,105,180,0.15)]"
+                        >
+                          <MessageSquareText className="h-4 w-4 text-pink-300" />
+                          Chat Memory
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("saheli-memory-tab", { detail: "image" }));
+                            onManageMemory();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-[16px] border border-purple-500/10 bg-gradient-to-r from-purple-500/5 to-pink-500/5 px-4 py-3.5 text-left text-sm font-medium text-white transition duration-300 hover:border-purple-500/30 hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]"
+                        >
+                          <ImageIcon className="h-4 w-4 text-purple-300" />
+                          Image Memory
+                        </button>
+                      </div>
                     </div>
-                  </SectionShell>
                 </motion.div>
               ) : null}
 

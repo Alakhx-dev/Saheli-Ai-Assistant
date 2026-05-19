@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ImageIcon, MessageSquareText, Sparkles } from "lucide-react";
+import { ImageIcon, MessageSquareText, ChevronLeft } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { MemoryProfile } from "@/lib/memory";
 import MemoryList from "@/components/memory/MemoryList";
@@ -16,6 +16,7 @@ interface MemoryModalProps {
   onDeleteImage: (imageId: string) => void | Promise<void>;
   onClearAll: () => void | Promise<void>;
   onPreviewImage: (url: string) => void;
+  onBack?: () => void;
 }
 
 type MemoryTab = "chat" | "image";
@@ -30,6 +31,7 @@ export default function MemoryModal({
   onDeleteImage,
   onClearAll,
   onPreviewImage,
+  onBack,
 }: MemoryModalProps) {
   const [activeTab, setActiveTab] = useState<MemoryTab>("chat");
 
@@ -55,118 +57,78 @@ export default function MemoryModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="z-[100] h-[min(46rem,calc(100vh-2rem))] w-[min(78rem,calc(100vw-2rem))] max-w-[78rem] overflow-hidden rounded-[32px] border border-white/12 bg-[#0f0819]/94 p-0 text-white shadow-[0_32px_90px_rgba(0,0,0,0.7)] backdrop-blur-[32px]">
-        <div className="border-b border-white/10 px-6 py-5">
-          <DialogHeader className="space-y-2 text-left">
-            <DialogTitle className="flex items-center gap-3 text-2xl font-semibold tracking-[-0.03em] text-white">
-              Swara’s Memory Vault
-              <Sparkles className="h-5 w-5 text-pink-200" />
+      <DialogContent 
+        className="z-[100] flex flex-col h-[min(40rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] overflow-hidden rounded-[32px] p-0 text-white !outline-none"
+        style={{
+          background: "rgba(15, 15, 15, 0.4)",
+          backdropFilter: "blur(25px)",
+          border: "0.5px solid rgba(255, 255, 255, 0.06)",
+          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+        }}
+      >
+        <div className="flex shrink-0 items-center gap-4 border-b border-white/5 px-6 py-5 bg-white/[0.01]">
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+          )}
+          <DialogHeader className="text-left flex-1">
+            <DialogTitle className="flex items-center gap-3 text-lg font-medium tracking-tight text-white">
+              {activeTab === "chat" ? (
+                <><MessageSquareText className="h-4.5 w-4.5 text-pink-300" /> Chat Memory</>
+              ) : (
+                <><ImageIcon className="h-4.5 w-4.5 text-purple-300" /> Image Memory</>
+              )}
             </DialogTitle>
-            <DialogDescription className="max-w-2xl text-sm leading-6 text-white/50">
-              Review insights and visual memories in a softer, cinematic format. The memory engine itself is unchanged.
+            <DialogDescription className="text-xs text-white/40 mt-1">
+              {activeTab === "chat" ? "Review automatically saved insights." : "Review automatically saved visual memories."}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="mt-5 flex rounded-full border border-white/10 bg-white/[0.04] p-1 backdrop-blur-xl">
-            {([
-              { key: "chat" as const, label: "Insights", icon: MessageSquareText },
-              { key: "image" as const, label: "Visual Memories", icon: ImageIcon },
-            ]).map((tab) => {
-              const active = activeTab === tab.key;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-medium transition duration-300 ${active ? "bg-white/12 text-white shadow-[0_0_20px_rgba(255,0,120,0.12)]" : "text-white/55 hover:text-white"}`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
 
-        <div className="grid min-h-0 gap-5 overflow-y-auto px-6 py-6 md:grid-cols-[minmax(0,1.2fr)_320px]">
-          <div className="space-y-5">
-            <AnimatePresence mode="wait">
-              {activeTab === "chat" ? (
-                <motion.section
-                  key="chat-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  className="space-y-4"
-                >
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {(profile.chat_history.length ? profile.chat_history : [{ id: "empty", content: "No memory insights saved yet.", timestamp: new Date().toISOString(), role: "assistant" as const }]).map((item) => (
-                      <div key={item.id} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-4 backdrop-blur-xl transition duration-300 hover:-translate-y-0.5 hover:border-pink-400/20 hover:bg-white/[0.06] hover:shadow-[0_0_24px_rgba(255,0,120,0.12)]">
-                        <p className="text-sm leading-6 text-white/85">
-                          {item.content.length > 140 ? `${item.content.slice(0, 140)}...` : item.content}
-                        </p>
-                        <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-white/35">
-                          Saved {new Date(item.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-                    <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />
-                  </div>
-                </motion.section>
-              ) : (
-                <motion.section
-                  key="image-tab"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-                  className="space-y-4"
-                >
-                  <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
-                    <ImageGrid items={profile.images} onDelete={onDeleteImage} onPreview={onPreviewImage} />
-                  </div>
-                </motion.section>
-              )}
-            </AnimatePresence>
-          </div>
-
-          <aside className="space-y-4">
-            <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-              <p className="text-[11px] font-medium uppercase tracking-[0.25em] text-white/35">Memory Settings</p>
-              <div className="mt-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white">Long-term Memory</p>
-                  <p className="text-sm leading-6 text-white/50">Keep insights and visuals active.</p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={profile.memoryEnabled}
-                  onClick={() => void onToggleMemory(!profile.memoryEnabled)}
-                  className={`relative inline-flex h-6 w-12 items-center rounded-full border transition duration-300 ${profile.memoryEnabled ? "border-pink-400/20 bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_20px_rgba(255,0,120,0.25)]" : "border-white/10 bg-white/10"}`}
-                >
-                  <span className={`inline-block h-4.5 w-4.5 rounded-full bg-white transition duration-300 ${profile.memoryEnabled ? "translate-x-6" : "translate-x-1"}`} />
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={() => void onClearAll()}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-[18px] border border-red-400/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-100 transition duration-300 hover:border-red-300/30 hover:bg-red-500/10"
+        <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <AnimatePresence mode="wait">
+            {activeTab === "chat" ? (
+              <motion.section
+                key="chat-tab"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
               >
-                Clear all memory
-              </button>
-            </div>
+                <MemoryList items={profile.chat_history} onDelete={onDeleteChat} />
+              </motion.section>
+            ) : (
+              <motion.section
+                key="image-tab"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <ImageGrid items={profile.images} onDelete={onDeleteImage} onPreview={onPreviewImage} />
+              </motion.section>
+            )}
+          </AnimatePresence>
 
-            {status ? (
-              <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-white/55 backdrop-blur-xl">
-                {status}
-              </div>
-            ) : null}
-          </aside>
+          {status ? (
+            <div className="mt-4 rounded-[26px] border border-white/10 bg-white/[0.03] p-5 text-sm leading-6 text-white/55 backdrop-blur-xl">
+              {status}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="shrink-0 border-t border-white/10 p-4">
+          <button
+            type="button"
+            onClick={() => void onClearAll()}
+            className="flex w-full items-center justify-center rounded-[18px] border border-red-400/10 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-100 transition duration-300 hover:border-red-400/20 hover:bg-red-500/10"
+          >
+            Clear all memory
+          </button>
         </div>
       </DialogContent>
     </Dialog>

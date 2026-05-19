@@ -102,7 +102,18 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = "personalization" | "memory" | "account" | "appearance" | "voice" | "about";
+type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about";
+
+// Configuration for character specific scaling and positioning
+// Adjust these values to make all characters visually match Swara's size
+const CHARACTER_CONFIG: Record<string, { scale: number, yOffset: string }> = {
+  swara: { scale: 1, yOffset: "0px" },
+  aarohi: { scale: 1.15, yOffset: "4%" },
+  elina: { scale: 1.1, yOffset: "2%" },
+  kiara: { scale: 1.12, yOffset: "3%" },
+  meher: { scale: 1.2, yOffset: "5%" }, // JPEG might be cropped differently
+  zoya: { scale: 1.08, yOffset: "1%" },
+};
 
 interface ProfileImageMeta {
   width: number;
@@ -691,7 +702,7 @@ export default function Chat() {
   const [profileCropX, setProfileCropX] = useState(0);
   const [profileCropY, setProfileCropY] = useState(0);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
-  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("personalization");
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("character");
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
@@ -1941,9 +1952,7 @@ export default function Chat() {
       const aiMessage = { role: "model" as const, content: responseText };
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
-      if (isGuest) {
-        saveLocal({ role: "assistant", content: responseText });
-      }
+
 
       void persistChatMessage(request.chatId, {
         role: "model",
@@ -2209,9 +2218,7 @@ export default function Chat() {
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
 
-      if (isGuest) {
-        saveLocal({ role: "assistant", content: responseText });
-      }
+
 
       void persistChatMessage(chatId, {
         role: "model",
@@ -2234,7 +2241,7 @@ export default function Chat() {
   const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
   const profileSubtext = user?.email || t.profileMenu.guestMode || "";
   const handleOpenMemoryFromSettings = useCallback(() => {
-    setActiveSettingsSection("personalization");
+    setActiveSettingsSection("character");
     setSettingsPanelOpen(false);
     setMemoryModalOpen(true);
   }, []);
@@ -2390,10 +2397,21 @@ export default function Chat() {
                   transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
                 >
                   <img 
-                    src="/butterfly.png" 
-                    alt="Big Swara Mascot"
+                    src={
+                      selectedCharacter === "aarohi" ? "/Aarohi 🌸.png" :
+                      selectedCharacter === "elina" ? "/Elina 🖤.png" :
+                      selectedCharacter === "kiara" ? "/Kiara 🎀.png" :
+                      selectedCharacter === "meher" ? "/Meher ✨.jpeg" :
+                      selectedCharacter === "zoya" ? "/Zoya ❤️.png" :
+                      "/butterfly.png"
+                    } 
+                    alt={`${selectedCharacter} Mascot`}
                     className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
-                    style={{ filter: selectedCharacter === "lavender" ? "hue-rotate(22deg) saturate(1.15) brightness(1.08)" : selectedCharacter === "pink" ? "saturate(1.18) brightness(1.06)" : "none" }}
+                    style={{ 
+                      transform: `scale(${CHARACTER_CONFIG[selectedCharacter]?.scale || 1}) translateY(${CHARACTER_CONFIG[selectedCharacter]?.yOffset || "0px"})`,
+                      transformOrigin: "bottom center",
+                      transition: "transform 0.5s ease-out"
+                    }}
                   />
                 </motion.div>
 
@@ -2686,6 +2704,11 @@ export default function Chat() {
           onDeleteImage={(imageId) => void handleDeleteMemoryImage(imageId)}
           onClearAll={() => void handleClearAllMemory()}
           onPreviewImage={(url) => setSelectedMemoryImage(url)}
+          onBack={() => {
+            setMemoryModalOpen(false);
+            setSettingsPanelOpen(true);
+            setActiveSettingsSection("memory");
+          }}
         />
 
         <Profile

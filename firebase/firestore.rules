@@ -14,10 +14,13 @@ service cloud.firestore {
     }
     
     match /chats/{chatId} {
-      allow read, write: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.uid == request.resource.data.userId);
+      allow read, write: if request.auth != null;
+      match /{document=**} {
+        allow read, write: if request.auth != null;
+      }
     }
     
-    match /memory/{memoryId} {
+    match /memories/{memoryId} {
       allow read, write: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.uid == request.resource.data.userId);
     }
     
