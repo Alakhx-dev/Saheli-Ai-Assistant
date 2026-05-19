@@ -2381,36 +2381,65 @@ export default function Chat() {
               <div className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,105,180,0.18) 0%, rgba(200,80,250,0.08) 40%, transparent 70%)", filter: "blur(60px)", transform: "translateY(-5%)" }} />
             </div>
             
-            <motion.div
-              className="relative z-[5] flex justify-center w-full" style={{ height: "calc(75vh * 0.85)" }}
-              animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
-              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-            >
-              <img 
-                src="/butterfly.png" 
-                alt="Big Swara Mascot"
-                className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
-                style={{ filter: selectedCharacter === "lavender" ? "hue-rotate(22deg) saturate(1.15) brightness(1.08)" : selectedCharacter === "pink" ? "saturate(1.18) brightness(1.06)" : "none" }}
-              />
-            </motion.div>
+            {/* Added wrapper to bump character & lights up slightly */}
+            <div className="flex flex-col items-center justify-center w-full" style={{ transform: "translateY(-25px)" }}>
+              <div className="relative flex items-center justify-center w-full max-w-[520px]">
+                <motion.div
+                  className="relative z-[5] flex justify-center w-full" style={{ height: "calc(75vh * 0.85)" }}
+                  animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
+                  transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <img 
+                    src="/butterfly.png" 
+                    alt="Big Swara Mascot"
+                    className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
+                    style={{ filter: selectedCharacter === "lavender" ? "hue-rotate(22deg) saturate(1.15) brightness(1.08)" : selectedCharacter === "pink" ? "saturate(1.18) brightness(1.06)" : "none" }}
+                  />
+                </motion.div>
 
-            {/* The Feet Shadow */}
-            <motion.div
-              className="relative z-[4] rounded-[50%] -mt-6"
-              style={{
-                width: '350px',
-                height: '35px',
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(15px)',
-                WebkitBackdropFilter: 'blur(15px)',
-                boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px rgba(236,72,153,0.4)',
-              }}
-              animate={{ 
-                scale: [1, 1.2, 1], 
-                opacity: [0.6, 0.4, 0.6] 
-              }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            />
+                {/* 3. Soft realistic shadow under feet (Darker, more grounded) */}
+                <div className="girl-ground-shadow" style={{ 
+                  background: "radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(5,0,15,0.8) 35%, rgba(15,5,25,0.4) 65%, transparent 85%)",
+                  width: "60%", height: "24px", filter: "blur(6px)", bottom: "0%"
+                }} />
+
+                {/* 2. Ground light — cinematic pink oval patch (softened) */}
+                <div className="girl-ground-light" style={{
+                  background: "radial-gradient(ellipse at center, rgba(255,20,147,0.55) 0%, rgba(168,85,247,0.35) 40%, rgba(20,5,25,0.15) 65%, transparent 85%)",
+                  width: "85%", height: "60px", filter: "blur(25px)", mixBlendMode: "screen", bottom: "-4%"
+                }} />
+
+                {/* 1. Spotlight — bright top-center cinematic cone on girl (softened) */}
+                <div className="girl-spotlight" style={{
+                  background: "radial-gradient(ellipse at 50% 0%, rgba(255,50,150,0.45) 0%, rgba(255,20,147,0.25) 25%, rgba(138,43,226,0.1) 50%, transparent 75%)",
+                  width: "120%", height: "90%", filter: "blur(30px)", mixBlendMode: "screen", top: "-20%"
+                }} />
+
+                {/* 4. Ambient glow — cinematic depth around character (softened) */}
+                <div className="girl-ambient-glow" style={{
+                  background: "radial-gradient(ellipse at center, rgba(255,0,128,0.15) 0%, rgba(148,0,211,0.08) 35%, rgba(75,0,130,0.04) 55%, transparent 70%)",
+                  filter: "blur(40px)", mixBlendMode: "screen", width: "80%", height: "80%"
+                }} />
+              </div>
+
+              {/* The Feet Shadow */}
+              <motion.div
+                className="relative z-[4] rounded-[50%] -mt-14"
+                style={{
+                  width: '350px',
+                  height: '35px',
+                  background: 'rgba(0,0,0,0.5)',
+                  backdropFilter: 'blur(15px)',
+                  WebkitBackdropFilter: 'blur(15px)',
+                  boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px rgba(236,72,153,0.4)',
+                }}
+                animate={{ 
+                  scale: [1, 1.2, 1], 
+                  opacity: [0.6, 0.4, 0.6] 
+                }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </div>
           </div>
         </div>
 
