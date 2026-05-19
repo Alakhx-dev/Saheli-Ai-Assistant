@@ -1373,6 +1373,11 @@ export default function Chat() {
       setProfileCropX(0);
       setProfileCropY(0);
       setProfileStatus(t.statuses.imageReady);
+
+      // Account panel does not expose crop controls; persist immediately there.
+      if (settingsPanelOpen && activeSettingsSection === "account") {
+        void handleSaveProfile(undefined, { source, meta });
+      }
     } catch (error) {
       console.error("Profile image selection failed", error);
       setProfileStatus(t.statuses.imageLoadFailed);
@@ -1415,14 +1420,19 @@ export default function Chat() {
     try {
       await updatePassword(user, nextPassword.trim());
       setMemoryStatus("Password updated.");
+      toast.success("Password updated.");
     } catch (error) {
       console.error("Password update failed", error);
       setMemoryStatus("Could not change password. Please re-login and try again.");
+      toast.error("Could not change password. Please re-login and try again.");
     }
   }, [user]);
 
-  const handleSaveProfile = async () => {
-    const trimmedName = profileDraftName.trim() || (isGuest ? CREATOR_NAME : "User");
+  const handleSaveProfile = async (
+    nameOverride?: string,
+    imageOverride?: { source: string; meta: ProfileImageMeta },
+  ) => {
+    const trimmedName = (nameOverride ?? profileDraftName).trim() || (isGuest ? CREATOR_NAME : "User");
 
     setIsSavingProfile(true);
     setProfileStatus(t.statuses.savingProfile);
@@ -1430,10 +1440,13 @@ export default function Chat() {
     try {
       let nextPhotoUrl = profilePhotoUrl;
 
-      if (profileImageSource && profileImageMeta) {
+      const sourceToPersist = imageOverride?.source ?? profileImageSource;
+      const metaToPersist = imageOverride?.meta ?? profileImageMeta;
+
+      if (sourceToPersist && metaToPersist) {
         const croppedDataUrl = await buildCroppedProfileImage(
-          profileImageSource,
-          profileImageMeta,
+          sourceToPersist,
+          metaToPersist,
           profileCropZoom,
           profileCropX,
           profileCropY,
@@ -2255,11 +2268,15 @@ export default function Chat() {
   const handleProfileImageDelete = useCallback(async () => {
     try {
       if (user) {
-        // For logged-in users: clear the custom photo, fall back to OAuth provider photo or nothing
-        const oAuthPhoto = user.providerData?.[0]?.photoURL || "";
-        await updateProfile(user, { photoURL: oAuthPhoto || null });
-        setProfilePhotoUrl(oAuthPhoto);
-        setProfileDraftPhotoUrl(oAuthPhoto);
+        // 1st delete from custom photo -> provider photo, 2nd delete from provider photo -> empty avatar
+        const providerPhoto = user.providerData?.[0]?.photoURL || "";
+        const currentPhoto = profileDraftPhotoUrl || user.photoURL || "";
+        const isCurrentlyProviderPhoto = Boolean(providerPhoto) && currentPhoto === providerPhoto;
+        const nextPhoto = isCurrentlyProviderPhoto ? "" : providerPhoto;
+
+        await updateProfile(user, { photoURL: nextPhoto || null });
+        setProfilePhotoUrl(nextPhoto);
+        setProfileDraftPhotoUrl(nextPhoto);
       } else {
         // For guests: remove from localStorage
         localStorage.removeItem(GUEST_PROFILE_PHOTO_KEY);
@@ -2273,7 +2290,7 @@ export default function Chat() {
       console.error("Failed to delete profile image", error);
       toast.error("Could not remove profile photo.");
     }
-  }, [user]);
+  }, [profileDraftPhotoUrl, user]);
   const handleToggleTtsMute = useCallback(() => {
     setIsTtsMuted((previous) => {
       const nextValue = !previous;
@@ -2726,7 +2743,7 @@ export default function Chat() {
               onProfileNameChange={setProfileDraftName}
               onProfileImageSelect={handleProfileImageSelect}
               onProfileImageDelete={() => void handleProfileImageDelete()}
-              onSaveProfile={() => void handleSaveProfile()}
+              onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
               isSavingProfile={isSavingProfile}
               originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
             />

@@ -33,7 +33,7 @@ interface SettingsPanelProps {
   onProfileNameChange: (name: string) => void;
   onProfileImageSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
   onProfileImageDelete: () => void;
-  onSaveProfile: () => void;
+  onSaveProfile: (nameOverride?: string) => void;
   isSavingProfile: boolean;
   /** The original email/OAuth photo URL (fallback when custom is deleted) */
   originalPhotoUrl?: string;
@@ -107,6 +107,7 @@ export default function SettingsPanel({
   const accountFileRef = useRef<HTMLInputElement>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [localName, setLocalName] = useState(profileDraftName);
+  const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
   const sections = useMemo(() => ([
     { id: "character" as const, label: "Character" },
     { id: "memory" as const, label: "Memory" },
@@ -252,135 +253,149 @@ export default function SettingsPanel({
                       onChange={onProfileImageSelect}
                     />
 
-                    <div className="space-y-4">
+                    <div className="space-y-3.5">
                       {/* ── Profile Picture ── */}
-                      <div className="flex flex-col items-center gap-3 pt-2">
+                      <div className="flex flex-col items-center gap-2 pt-1">
                         <div className="relative group">
-                          <div className="h-24 w-24 rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_26px_rgba(255,0,120,0.16)]">
+                          <button
+                            type="button"
+                            onClick={() => setIsPhotoMenuOpen((prev) => !prev)}
+                            className="h-20 w-20 rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_22px_rgba(255,0,120,0.14)] transition hover:border-pink-400/25"
+                          >
                             <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-400/20 to-purple-400/20">
                               {profileImageUrl ? (
                                 <img src={profileImageUrl} alt={profileName} className="h-full w-full object-cover" />
                               ) : (
-                                <UserCircle className="h-12 w-12 text-white/30" />
+                                <UserCircle className="h-10 w-10 text-white/30" />
                               )}
                             </div>
-                          </div>
-                        </div>
+                          </button>
 
-                        {/* DP Action Buttons */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => accountFileRef.current?.click()}
-                            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition duration-300 hover:border-pink-400/30 hover:bg-white/[0.08] hover:text-white"
-                          >
-                            <Upload className="h-3 w-3" />
-                            Upload
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              // Use the capture attribute trick for mobile camera
-                              if (accountFileRef.current) {
-                                accountFileRef.current.setAttribute("capture", "user");
-                                accountFileRef.current.click();
-                                // Remove capture after click so next upload opens gallery
-                                setTimeout(() => accountFileRef.current?.removeAttribute("capture"), 500);
-                              }
-                            }}
-                            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition duration-300 hover:border-purple-400/30 hover:bg-white/[0.08] hover:text-white"
-                          >
-                            <Camera className="h-3 w-3" />
-                            Camera
-                          </button>
-                          {profileImageUrl && (
-                            <button
-                              type="button"
-                              onClick={onProfileImageDelete}
-                              className="flex items-center gap-1.5 rounded-full border border-red-400/10 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-200/70 transition duration-300 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-100"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Delete
-                            </button>
-                          )}
+                          {isPhotoMenuOpen ? (
+                            <div className="absolute left-1/2 top-[88px] z-20 w-44 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#120b1b]/95 p-1.5 shadow-[0_18px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  accountFileRef.current?.removeAttribute("capture");
+                                  accountFileRef.current?.click();
+                                  setIsPhotoMenuOpen(false);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                              >
+                                <Upload className="h-3.5 w-3.5" />
+                                Upload from Gallery
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (accountFileRef.current) {
+                                    accountFileRef.current.setAttribute("capture", "user");
+                                    accountFileRef.current.click();
+                                    setTimeout(() => accountFileRef.current?.removeAttribute("capture"), 500);
+                                  }
+                                  setIsPhotoMenuOpen(false);
+                                }}
+                                className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
+                              >
+                                <Camera className="h-3.5 w-3.5" />
+                                Capture with Camera
+                              </button>
+                              {profileImageUrl ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onProfileImageDelete();
+                                    setIsPhotoMenuOpen(false);
+                                  }}
+                                  className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-red-200/80 transition hover:bg-red-500/10 hover:text-red-100"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete Photo
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 
                       {/* ── Username ── */}
-                      <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
-                        <div className="flex items-center justify-between gap-3">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 backdrop-blur-xl">
+                        <div className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/35 mb-2">Username</p>
+                            <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-white/35">Username</p>
                             {isEditingName ? (
-                              <input
-                                type="text"
-                                value={localName}
-                                onChange={(e) => setLocalName(e.target.value)}
-                                onBlur={() => {
-                                  const trimmed = localName.trim();
-                                  if (trimmed) {
-                                    onProfileNameChange(trimmed);
-                                  }
-                                  setIsEditingName(false);
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter") {
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={localName}
+                                  onChange={(e) => setLocalName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const trimmed = localName.trim();
+                                      if (trimmed) {
+                                        onProfileNameChange(trimmed);
+                                        onSaveProfile(trimmed);
+                                      }
+                                      setIsEditingName(false);
+                                    }
+                                  }}
+                                  autoFocus
+                                  className="w-full rounded-xl border border-pink-400/25 bg-white/[0.02] px-3 py-1.5 text-sm font-medium text-white outline-none transition focus:border-pink-300/45"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
                                     const trimmed = localName.trim();
                                     if (trimmed) {
                                       onProfileNameChange(trimmed);
+                                      onSaveProfile(trimmed);
                                     }
                                     setIsEditingName(false);
-                                  }
-                                }}
-                                autoFocus
-                                className="w-full bg-transparent text-sm font-medium text-white outline-none border-b border-pink-400/30 pb-1"
-                              />
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium text-white truncate">{profileName}</p>
-                                <button
-                                  type="button"
-                                  onClick={() => { setLocalName(profileDraftName); setIsEditingName(true); }}
-                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/5 text-white/40 transition hover:bg-white/10 hover:text-white"
+                                  }}
+                                  className="rounded-full border border-pink-400/25 bg-pink-500/10 px-3 py-1.5 text-xs font-semibold text-pink-100 transition hover:bg-pink-500/20"
                                 >
-                                  <Pencil className="h-3 w-3" />
+                                  OK
                                 </button>
                               </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLocalName(profileDraftName);
+                                  setIsEditingName(true);
+                                }}
+                                className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-left transition hover:border-pink-400/25 hover:bg-white/[0.04]"
+                              >
+                                <span className="truncate text-sm font-medium text-white">{profileName}</span>
+                                <Pencil className="h-3.5 w-3.5 text-white/45" />
+                              </button>
                             )}
-                            <p className="text-xs text-white/40 mt-1">{profileSubtext}</p>
+                            <p className="mt-1 text-[11px] text-white/40">{profileSubtext}</p>
                           </div>
                         </div>
                       </div>
-
-                      {/* ── Save Changes ── */}
-                      <button
-                        type="button"
-                        onClick={onSaveProfile}
-                        disabled={isSavingProfile}
-                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-pink-500/20 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-4 py-3 text-sm font-medium text-white transition duration-300 hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/40 hover:shadow-[0_0_20px_rgba(255,105,180,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isSavingProfile ? "Saving..." : "Save Changes"}
-                      </button>
 
                       {/* ── Password Change ── */}
                       <button
                         type="button"
                         onClick={onChangePassword}
-                        className="flex w-full items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/70 transition duration-300 hover:border-purple-400/20 hover:bg-white/[0.05] hover:text-white"
+                        className="flex w-full items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/75 transition duration-300 hover:border-purple-400/20 hover:bg-white/[0.05] hover:text-white"
                       >
                         <KeyRound className="h-4 w-4 text-purple-300" />
                         Change Password
                       </button>
 
                       {/* ── Logout ── */}
-                      <button
-                        type="button"
-                        onClick={onLogout}
-                        className="flex w-full items-center gap-3 rounded-[18px] border border-red-500/10 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-200/80 transition duration-300 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-100"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Logout
-                      </button>
+                      <div className="flex justify-start pt-1">
+                        <button
+                          type="button"
+                          onClick={onLogout}
+                          className="inline-flex items-center gap-2 rounded-full border border-red-400/25 bg-red-500/10 px-4 py-1.5 text-xs font-semibold text-red-100 transition duration-300 hover:border-red-300/40 hover:bg-red-500/15"
+                        >
+                          <LogOut className="h-3.5 w-3.5" />
+                          Logout
+                        </button>
+                      </div>
                     </div>
                 </motion.div>
               ) : null}
