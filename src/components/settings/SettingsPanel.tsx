@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, ImageIcon, Sparkles, Volume2, VolumeX, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -61,13 +61,25 @@ function NavButton({ active, label, onClick }: { active: boolean; label: string;
   );
 }
 
-function SectionShell({ label, title, description, children }: { label: string; title: string; description: string; children: React.ReactNode }) {
+function SectionShell({
+  label,
+  title,
+  description,
+  children,
+  compact = false,
+}: {
+  label: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <section className="space-y-4">
+    <section className={compact ? "space-y-3" : "space-y-4"}>
       <div className="space-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-white/35">{label}</p>
-        <h3 className="text-2xl font-semibold tracking-[-0.02em] text-white">{title}</h3>
-        <p className="max-w-2xl text-sm leading-6 text-white/55">{description}</p>
+        <p className={compact ? "text-[10px] font-medium uppercase tracking-[0.26em] text-white/35" : "text-[11px] font-medium uppercase tracking-[0.28em] text-white/35"}>{label}</p>
+        <h3 className={compact ? "text-[1.35rem] font-semibold tracking-[-0.02em] text-white" : "text-2xl font-semibold tracking-[-0.02em] text-white"}>{title}</h3>
+        <p className={compact ? "max-w-2xl text-[13px] leading-6 text-white/55" : "max-w-2xl text-sm leading-6 text-white/55"}>{description}</p>
       </div>
       {children}
     </section>
@@ -108,16 +120,44 @@ export default function SettingsPanel({
   const [isEditingName, setIsEditingName] = useState(false);
   const [localName, setLocalName] = useState(profileDraftName);
   const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
+  const [activeInnerTab, setActiveInnerTab] = useState<"personality" | "bond" | "privacy">(() => {
+    if (activeSection === "voice") {
+      return "bond";
+    }
+
+    if (activeSection === "about") {
+      return "privacy";
+    }
+
+    return "personality";
+  });
+  const [incognitoMode, setIncognitoMode] = useState(false);
+  const [groqKey, setGroqKey] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [selectedPersonality, setSelectedPersonality] = useState<"bestie" | "coach">("bestie");
   const sections = useMemo(() => ([
     { id: "character" as const, label: "Character" },
     { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
-    { id: "appearance" as const, label: "Appearance" },
-    { id: "voice" as const, label: "Voice & Audio" },
-    { id: "about" as const, label: "About Saheli" },
+    { id: "appearance" as const, label: "Personality" },
+    { id: "voice" as const, label: "Bond Level" },
+    { id: "about" as const, label: "Privacy" },
   ]), []);
 
   const selectedCharacterCard = characterCards.find((card) => card.id === selectedCharacter) ?? characterCards[0];
+  const activeSettingsView = activeSection === "appearance"
+    ? "personality"
+    : activeSection === "voice"
+      ? "bond"
+      : activeSection === "about"
+        ? "privacy"
+        : null;
+
+  useEffect(() => {
+    if (activeSettingsView) {
+      setActiveInnerTab(activeSettingsView);
+    }
+  }, [activeSettingsView]);
 
   return (
     <AnimatePresence>
@@ -131,7 +171,7 @@ export default function SettingsPanel({
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ type: "spring", damping: 25, stiffness: 250 }}
+            transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
             style={{
               background: "rgba(15, 15, 15, 0.4)",
               backdropFilter: "blur(25px)",
@@ -163,14 +203,14 @@ export default function SettingsPanel({
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ type: "spring", damping: 25, stiffness: 250, delay: 0.05 }}
+            transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
             style={{
               background: "rgba(15, 15, 15, 0.4)",
               backdropFilter: "blur(25px)",
               border: "0.5px solid rgba(255, 255, 255, 0.06)",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
             }}
-            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : "w-[420px]"}`}
+            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : "w-[360px]"}`}
           >
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
@@ -402,78 +442,130 @@ export default function SettingsPanel({
 
               {activeSection === "appearance" ? (
                 <motion.div key="appearance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Appearance"
-                    title="Atmospheric Styling"
-                    description="Tune the companion space’s visual tone without exposing routing or backend controls."
-                  >
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {[
-                        { label: "Soft Bloom", value: "bloom" },
-                        { label: "Noir Glow", value: "noir" },
-                        { label: "Velvet Mist", value: "mist" },
-                        { label: "Orbital Warmth", value: "warm" },
-                      ].map((item, index) => (
-                        <div key={item.value} className="rounded-[22px] border border-white/10 bg-white/[0.02] p-4 transition duration-300 hover:border-pink-400/30 hover:bg-white/[0.05] hover:shadow-[0_0_20px_rgba(255,105,180,0.1)] cursor-pointer">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm font-medium text-white">{item.label}</p>
-                              <p className="text-xs text-white/45">Palette preset {index + 1}</p>
-                            </div>
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-br from-pink-500/20 to-purple-500/20 shadow-[0_0_20px_rgba(255,0,120,0.16)]" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </SectionShell>
+                  {activeInnerTab === "personality" ? (
+                    <SectionShell
+                      label="Personality"
+                      title="Choose the interaction style"
+                      description="Pick how Saheli should sound in your conversations."
+                      compact
+                    >
+                      <div className="flex flex-col gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPersonality("bestie")}
+                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "bestie" ? "settings-personality-card-active" : ""}`}
+                        >
+                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "bestie" ? "text-pink-100" : "text-white"}`}>
+                            Bestie Mode
+                          </p>
+                          <p className="mt-1 text-[12px] leading-5 text-white/58">
+                            Casual, friendly, and matches your energy. Perfect for daily chats.
+                          </p>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPersonality("coach")}
+                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "coach" ? "settings-personality-card-active" : ""}`}
+                        >
+                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "coach" ? "text-pink-100" : "text-white"}`}>
+                            Study Coach / Mentor
+                          </p>
+                          <p className="mt-1 text-[12px] leading-5 text-white/58">
+                            Serious, academic, and professional. Best for solving doubts and code.
+                          </p>
+                        </button>
+                      </div>
+                    </SectionShell>
+                  ) : null}
+
                 </motion.div>
               ) : null}
 
               {activeSection === "voice" ? (
                 <motion.div key="voice" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Voice & Audio"
-                    title="Voice Presence"
-                    description="Keep the voice layer elegant and quiet when needed."
-                  >
-                    <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-                      <div className="flex items-center justify-between gap-4">
+                  {activeInnerTab === "bond" ? (
+                    <SectionShell
+                      label="Bond Level"
+                      title="Relationship progress"
+                      description="A soft, playful progress view for the companion bond."
+                      compact
+                    >
+                      <div className="space-y-2.5">
                         <div>
-                          <p className="text-sm font-medium text-white">TTS Mute</p>
-                          <p className="text-sm leading-6 text-white/50">Silence Saheli’s voice without changing the backend pipeline.</p>
+                          <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Level 4: Best Friends Forever</p>
+                          <div className="settings-progress-track mt-2">
+                            <div className="settings-progress-fill settings-progress-fill-animated" style={{ width: "84%" }} />
+                          </div>
+                          <p className="mt-2 text-[12px] text-white/50">840 / 1000 XP to next level</p>
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={isTtsMuted}
-                          onClick={onToggleTtsMute}
-                          className={`inline-flex h-11 w-20 items-center rounded-full border px-1 transition duration-300 backdrop-blur-md ${isTtsMuted ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5 hover:border-white/20"}`}
-                        >
-                          <span className={`flex h-9 w-9 items-center justify-center rounded-full transition duration-300 ${isTtsMuted ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] text-pink-600 translate-x-0" : "bg-white/40 text-white/50 translate-x-9"}`}>
-                            {isTtsMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                          </span>
-                        </button>
+
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            className="settings-glass-button settings-danger-button py-2.5 text-[13px]"
+                          >
+                            Reset Core Memory
+                          </button>
+                        </div>
                       </div>
-                      <div className="rounded-[18px] border border-white/8 bg-white/[0.02] px-4 py-3 text-sm text-white/55">
-                        Reply language remains {languageMode === "auto" ? "automatic" : languageMode}.
-                      </div>
-                    </div>
-                  </SectionShell>
+                    </SectionShell>
+                  ) : null}
                 </motion.div>
               ) : null}
 
               {activeSection === "about" ? (
                 <motion.div key="about" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="About Saheli"
-                    title="A living AI companion space"
-                    description="Cinematic, emotional, and fully frontend-driven on the presentation layer."
-                  >
-                    <div className="rounded-[26px] border border-white/10 bg-white/[0.03] p-5 text-sm leading-7 text-white/60 backdrop-blur-xl">
-                      <p>Saheli keeps the same backend behavior and replaces only the visual language with glass, glow, and softer motion.</p>
-                      <p className="mt-3">Selected character: {selectedCharacterCard.label}</p>
+                  {activeInnerTab === "privacy" ? (
+                    <div className="space-y-4">
+                      <p className="text-[11px] font-medium uppercase tracking-[0.26em] text-white/35">Privacy control</p>
+                      <div className="flex flex-col gap-4">
+                        <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Incognito Mode</p>
+                            <p className="mt-1 text-[12px] leading-5 text-white/55">
+                              Keeps these settings local while it is on. Nothing from this panel is stored.
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={incognitoMode}
+                            onClick={() => setIncognitoMode((value) => !value)}
+                            className={`settings-toggle-track ${incognitoMode ? "settings-toggle-track-on" : ""}`}
+                          >
+                            <span className={`settings-toggle-thumb ${incognitoMode ? "settings-toggle-thumb-on" : ""}`} />
+                          </button>
+                        </div>
+
+                        <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Custom API Keys (Optional)</p>
+                            <p className="mt-1 text-[12px] leading-5 text-white/45">
+                              Use your own keys to bypass system limits. Models and backend logic will remain 100% identical.
+                            </p>
+
+                            <div className="mt-3 flex flex-col gap-2.5">
+                              <input
+                                value={groqKey}
+                                onChange={(event) => setGroqKey(event.target.value)}
+                                type="password"
+                                placeholder="Enter Groq API Key (gsk_...)"
+                                className="settings-api-input py-2.5 text-[13px]"
+                              />
+                              <input
+                                value={openRouterKey}
+                                onChange={(event) => setOpenRouterKey(event.target.value)}
+                                type="password"
+                                placeholder="Enter OpenRouter API Key (sk-or-v1-...)"
+                                className="settings-api-input py-2.5 text-[13px]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </SectionShell>
+                  ) : null}
                 </motion.div>
               ) : null}
             </AnimatePresence>
