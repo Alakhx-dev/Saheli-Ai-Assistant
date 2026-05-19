@@ -1,6 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, Sparkles, Volume2, VolumeX, MessageSquareText } from "lucide-react";
+import { Check, ImageIcon, Sparkles, Volume2, VolumeX, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 
@@ -28,6 +28,15 @@ interface SettingsPanelProps {
   onToggleTtsMute: () => void;
   selectedCharacter: string;
   onCharacterChange: (character: string) => void;
+  // Inline account editing props
+  profileDraftName: string;
+  onProfileNameChange: (name: string) => void;
+  onProfileImageSelect: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onProfileImageDelete: () => void;
+  onSaveProfile: () => void;
+  isSavingProfile: boolean;
+  /** The original email/OAuth photo URL (fallback when custom is deleted) */
+  originalPhotoUrl?: string;
 }
 
 const characterCards = [
@@ -35,7 +44,7 @@ const characterCards = [
   { id: "aarohi", label: "Aarohi 🌸", image: "/Aarohi 🌸.png", accent: "from-pink-500/20 to-rose-400/10" },
   { id: "elina", label: "Elina 🖤", image: "/Elina 🖤.png", accent: "from-gray-400/20 to-zinc-400/10" },
   { id: "kiara", label: "Kiara 🎀", image: "/Kiara 🎀.png", accent: "from-rose-400/20 to-pink-400/10" },
-  { id: "meher", label: "Meher ✨", image: "/Meher ✨.jpeg", accent: "from-amber-400/20 to-yellow-400/10" },
+  { id: "meher", label: "Meher ✨", image: "/Meher ✨.png", accent: "from-amber-400/20 to-yellow-400/10" },
   { id: "zoya", label: "Zoya ❤️", image: "/Zoya ❤️.png", accent: "from-red-400/20 to-rose-400/10" },
 ];
 
@@ -86,8 +95,18 @@ export default function SettingsPanel({
   onToggleTtsMute,
   selectedCharacter,
   onCharacterChange,
+  profileDraftName,
+  onProfileNameChange,
+  onProfileImageSelect,
+  onProfileImageDelete,
+  onSaveProfile,
+  isSavingProfile,
+  originalPhotoUrl,
 }: SettingsPanelProps) {
   const t = getLang();
+  const accountFileRef = useRef<HTMLInputElement>(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [localName, setLocalName] = useState(profileDraftName);
   const sections = useMemo(() => ([
     { id: "character" as const, label: "Character" },
     { id: "memory" as const, label: "Memory" },
@@ -224,54 +243,145 @@ export default function SettingsPanel({
 
               {activeSection === "account" ? (
                 <motion.div key="account" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Account"
-                    title="Emotional Profile"
-                    description="Open the immersive profile editor directly from here and keep the companion-facing identity polished."
-                  >
-                    <div className="space-y-4 rounded-[26px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
-                      <div className="flex items-center gap-4">
-                        <div className="relative h-18 w-18 shrink-0 rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_26px_rgba(255,0,120,0.16)]">
-                          <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-400/20 to-purple-400/20">
-                            {profileImageUrl ? (
-                              <img src={profileImageUrl} alt={profileName} className="h-full w-full object-cover" />
-                            ) : (
-                              <span className="text-2xl font-semibold text-white">{profileInitial}</span>
-                            )}
+                    {/* Hidden file input for image upload */}
+                    <input
+                      ref={accountFileRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={onProfileImageSelect}
+                    />
+
+                    <div className="space-y-4">
+                      {/* ── Profile Picture ── */}
+                      <div className="flex flex-col items-center gap-3 pt-2">
+                        <div className="relative group">
+                          <div className="h-24 w-24 rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_26px_rgba(255,0,120,0.16)]">
+                            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-400/20 to-purple-400/20">
+                              {profileImageUrl ? (
+                                <img src={profileImageUrl} alt={profileName} className="h-full w-full object-cover" />
+                              ) : (
+                                <UserCircle className="h-12 w-12 text-white/30" />
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-lg font-medium text-white">{profileName}</p>
-                          <p className="truncate text-sm text-white/50">{profileSubtext}</p>
+
+                        {/* DP Action Buttons */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => accountFileRef.current?.click()}
+                            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition duration-300 hover:border-pink-400/30 hover:bg-white/[0.08] hover:text-white"
+                          >
+                            <Upload className="h-3 w-3" />
+                            Upload
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Use the capture attribute trick for mobile camera
+                              if (accountFileRef.current) {
+                                accountFileRef.current.setAttribute("capture", "user");
+                                accountFileRef.current.click();
+                                // Remove capture after click so next upload opens gallery
+                                setTimeout(() => accountFileRef.current?.removeAttribute("capture"), 500);
+                              }
+                            }}
+                            className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition duration-300 hover:border-purple-400/30 hover:bg-white/[0.08] hover:text-white"
+                          >
+                            <Camera className="h-3 w-3" />
+                            Camera
+                          </button>
+                          {profileImageUrl && (
+                            <button
+                              type="button"
+                              onClick={onProfileImageDelete}
+                              className="flex items-center gap-1.5 rounded-full border border-red-400/10 bg-red-500/5 px-3 py-1.5 text-xs font-medium text-red-200/70 transition duration-300 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-100"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          onClick={onEditProfile}
-                          className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-pink-400/30 hover:bg-gradient-to-r hover:from-pink-500/10 hover:to-purple-500/10 hover:shadow-[0_0_20px_rgba(255,105,180,0.15)]"
-                        >
-                          Open emotional profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onChangePassword}
-                          className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition duration-300 hover:border-purple-400/30 hover:bg-gradient-to-r hover:from-purple-500/10 hover:to-pink-500/10 hover:shadow-[0_0_20px_rgba(168,85,247,0.15)]"
-                        >
-                          Change password
-                        </button>
+                      {/* ── Username ── */}
+                      <div className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white/35 mb-2">Username</p>
+                            {isEditingName ? (
+                              <input
+                                type="text"
+                                value={localName}
+                                onChange={(e) => setLocalName(e.target.value)}
+                                onBlur={() => {
+                                  const trimmed = localName.trim();
+                                  if (trimmed) {
+                                    onProfileNameChange(trimmed);
+                                  }
+                                  setIsEditingName(false);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const trimmed = localName.trim();
+                                    if (trimmed) {
+                                      onProfileNameChange(trimmed);
+                                    }
+                                    setIsEditingName(false);
+                                  }
+                                }}
+                                autoFocus
+                                className="w-full bg-transparent text-sm font-medium text-white outline-none border-b border-pink-400/30 pb-1"
+                              />
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-white truncate">{profileName}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => { setLocalName(profileDraftName); setIsEditingName(true); }}
+                                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/5 text-white/40 transition hover:bg-white/10 hover:text-white"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
+                            <p className="text-xs text-white/40 mt-1">{profileSubtext}</p>
+                          </div>
+                        </div>
                       </div>
 
+                      {/* ── Save Changes ── */}
+                      <button
+                        type="button"
+                        onClick={onSaveProfile}
+                        disabled={isSavingProfile}
+                        className="flex w-full items-center justify-center gap-2 rounded-[18px] border border-pink-500/20 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-4 py-3 text-sm font-medium text-white transition duration-300 hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/40 hover:shadow-[0_0_20px_rgba(255,105,180,0.2)] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isSavingProfile ? "Saving..." : "Save Changes"}
+                      </button>
+
+                      {/* ── Password Change ── */}
+                      <button
+                        type="button"
+                        onClick={onChangePassword}
+                        className="flex w-full items-center gap-3 rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/70 transition duration-300 hover:border-purple-400/20 hover:bg-white/[0.05] hover:text-white"
+                      >
+                        <KeyRound className="h-4 w-4 text-purple-300" />
+                        Change Password
+                      </button>
+
+                      {/* ── Logout ── */}
                       <button
                         type="button"
                         onClick={onLogout}
-                        className="inline-flex items-center justify-center gap-2 rounded-[18px] border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-200 transition duration-300 hover:border-red-400/40 hover:bg-red-500/15 hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]"
+                        className="flex w-full items-center gap-3 rounded-[18px] border border-red-500/10 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-200/80 transition duration-300 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-100"
                       >
+                        <LogOut className="h-4 w-4" />
                         Logout
                       </button>
                     </div>
-                  </SectionShell>
                 </motion.div>
               ) : null}
 

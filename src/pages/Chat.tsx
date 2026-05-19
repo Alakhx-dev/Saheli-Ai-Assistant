@@ -104,15 +104,14 @@ type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
 type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about";
 
-// Configuration for character specific scaling and positioning
-// Adjust these values to make all characters visually match Swara's size
-const CHARACTER_CONFIG: Record<string, { scale: number, yOffset: string }> = {
-  swara: { scale: 1, yOffset: "0px" },
-  aarohi: { scale: 1.15, yOffset: "4%" },
-  elina: { scale: 1.1, yOffset: "2%" },
-  kiara: { scale: 1.12, yOffset: "3%" },
-  meher: { scale: 1.2, yOffset: "5%" }, // JPEG might be cropped differently
-  zoya: { scale: 1.08, yOffset: "1%" },
+// Canonical image map — single source of truth for character assets
+const CHARACTER_IMAGE_MAP: Record<string, string> = {
+  swara: "/butterfly.png",
+  aarohi: "/Aarohi 🌸.png",
+  elina: "/Elina 🖤.png",
+  kiara: "/Kiara 🎀.png",
+  meher: "/Meher ✨.png",
+  zoya: "/Zoya ❤️.png",
 };
 
 interface ProfileImageMeta {
@@ -2253,6 +2252,28 @@ export default function Chat() {
   const handleSettingsOpenChange = useCallback((open: boolean) => {
     setSettingsPanelOpen(open);
   }, []);
+  const handleProfileImageDelete = useCallback(async () => {
+    try {
+      if (user) {
+        // For logged-in users: clear the custom photo, fall back to OAuth provider photo or nothing
+        const oAuthPhoto = user.providerData?.[0]?.photoURL || "";
+        await updateProfile(user, { photoURL: oAuthPhoto || null });
+        setProfilePhotoUrl(oAuthPhoto);
+        setProfileDraftPhotoUrl(oAuthPhoto);
+      } else {
+        // For guests: remove from localStorage
+        localStorage.removeItem(GUEST_PROFILE_PHOTO_KEY);
+        setProfilePhotoUrl("");
+        setProfileDraftPhotoUrl("");
+      }
+      setProfileImageSource(null);
+      setProfileImageMeta(null);
+      toast.success("Profile photo removed.");
+    } catch (error) {
+      console.error("Failed to delete profile image", error);
+      toast.error("Could not remove profile photo.");
+    }
+  }, [user]);
   const handleToggleTtsMute = useCallback(() => {
     setIsTtsMuted((previous) => {
       const nextValue = !previous;
@@ -2391,29 +2412,40 @@ export default function Chat() {
             {/* Added wrapper to bump character & lights up slightly */}
             <div className="flex flex-col items-center justify-center w-full" style={{ transform: "translateY(-25px)" }}>
               <div className="relative flex items-center justify-center w-full max-w-[520px]">
-                <motion.div
-                  className="relative z-[5] flex justify-center w-full" style={{ height: "calc(75vh * 0.85)" }}
-                  animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
-                  transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+                {/* Standardized Character Container — identical bounding box for all characters */}
+                <div
+                  className="relative z-[5] pointer-events-none"
+                  style={{
+                    width: "380px",
+                    height: "520px",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "flex-end",
+                  }}
                 >
-                  <img 
-                    src={
-                      selectedCharacter === "aarohi" ? "/Aarohi 🌸.png" :
-                      selectedCharacter === "elina" ? "/Elina 🖤.png" :
-                      selectedCharacter === "kiara" ? "/Kiara 🎀.png" :
-                      selectedCharacter === "meher" ? "/Meher ✨.jpeg" :
-                      selectedCharacter === "zoya" ? "/Zoya ❤️.png" :
-                      "/butterfly.png"
-                    } 
-                    alt={`${selectedCharacter} Mascot`}
-                    className="w-auto h-full object-contain brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
-                    style={{ 
-                      transform: `scale(${CHARACTER_CONFIG[selectedCharacter]?.scale || 1}) translateY(${CHARACTER_CONFIG[selectedCharacter]?.yOffset || "0px"})`,
-                      transformOrigin: "bottom center",
-                      transition: "transform 0.5s ease-out"
-                    }}
-                  />
-                </motion.div>
+                  <motion.div
+                    animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
+                    transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+                    className="w-full h-full"
+                  >
+                    <AnimatePresence mode="wait">
+                      <motion.img
+                        key={selectedCharacter}
+                        src={CHARACTER_IMAGE_MAP[selectedCharacter] || "/butterfly.png"}
+                        alt={`${selectedCharacter} Mascot`}
+                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                        className="w-full h-full brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
+                        style={{
+                          objectFit: "contain",
+                          objectPosition: "bottom center",
+                        }}
+                      />
+                    </AnimatePresence>
+                  </motion.div>
+                </div>
 
                 {/* 3. Soft realistic shadow under feet (Darker, more grounded) */}
                 <div className="girl-ground-shadow" style={{ 
@@ -2690,6 +2722,13 @@ export default function Chat() {
               onToggleTtsMute={handleToggleTtsMute}
               selectedCharacter={selectedCharacter}
               onCharacterChange={handleCharacterChange}
+              profileDraftName={profileDraftName}
+              onProfileNameChange={setProfileDraftName}
+              onProfileImageSelect={handleProfileImageSelect}
+              onProfileImageDelete={() => void handleProfileImageDelete()}
+              onSaveProfile={() => void handleSaveProfile()}
+              isSavingProfile={isSavingProfile}
+              originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
             />
           ) : null}
         </Suspense>

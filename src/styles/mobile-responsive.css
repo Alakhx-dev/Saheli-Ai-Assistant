@@ -189,6 +189,12 @@
   .girl-ambient-glow {
     width: 50% !important;
   }
+
+  /* Standardized character container: scale down for mobile */
+  .relative.z-\[5\].pointer-events-none {
+    width: 280px !important;
+    height: 400px !important;
+  }
 }
 
 /* ===== MOBILE: MESSAGE AREA ===== */
