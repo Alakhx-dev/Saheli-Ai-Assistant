@@ -505,7 +505,7 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
         data-role={isUser ? 'user' : 'assistant'}
         className={`
         max-w-[85%] md:max-w-[45%] px-5 py-4 text-sm leading-relaxed font-medium relative text-neutral-50
-        transition-all duration-300 rounded-[28px]
+        transition-colors duration-300 rounded-[28px]
         ${isNew ? "msg-sheen" : ""}
         ${isUser
           ? "rounded-br-[10px] saheli-message-user"
@@ -564,20 +564,19 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
           {isLoading ? (
             <motion.div
               key="typing-indicator"
-              initial={{ opacity: 0, y: 12, scale: 0.9 }}
+              initial={{ opacity: 0, y: 8, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              exit={{ opacity: 0, transition: { duration: 0 } }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
               className="flex justify-start h-[76px] items-start"
               style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
             >
-              <div className="saheli-ai-bubble px-5 py-4 rounded-2xl rounded-bl-sm">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0s' }}></div>
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0.15s' }}></div>
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0.3s' }}></div>
+              <div className="saheli-typing-container flex items-center justify-center">
+                <div className="saheli-typing-dots flex items-center gap-1.5">
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0s' }} />
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0.15s' }} />
+                  <div className="saheli-typing-dot" style={{ animationDelay: '0.3s' }} />
                 </div>
-                <p className="text-pink-200/50 text-[11px] font-medium tracking-wide">{typingLabel}</p>
               </div>
             </motion.div>
           ) : null}
@@ -730,6 +729,22 @@ export default function Chat() {
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isTtsMuted, setIsTtsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [thinkingLabel, setThinkingLabel] = useState("hmm... 🤔");
+
+  useEffect(() => {
+    if (isLoading) {
+      const thinkingTexts = [
+        "hmm... 🤔",
+        "sochne do... 💭",
+        "ek sec 😭",
+        "wait na ✨",
+        "soch rhi hu...",
+        "brain loading 🧠✨"
+      ];
+      const randomText = thinkingTexts[Math.floor(Math.random() * thinkingTexts.length)];
+      setThinkingLabel(randomText);
+    }
+  }, [isLoading]);
   const [mood, setMood] = useState("neutral");
   const [isScrolling, setIsScrolling] = useState(false);
   const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
@@ -1940,6 +1955,7 @@ export default function Chat() {
     pendingMobileVisionRequestRef.current = null;
     setPendingMobileVisionRequest(null);
     setIsLoading(true);
+    firstChunkReceivedRef.current = false;
 
     try {
       const requestIdentity = getRequestIdentityContext();
@@ -2064,6 +2080,7 @@ export default function Chat() {
     stopSaheliSpeech();
     resetSaheliSpeechDedup();
     lastSpokenMessageRef.current = "";
+    firstChunkReceivedRef.current = false;
 
     const userText = input.trim() || (selectedImageRef.current ? "Please analyze this image carefully." : "");
     setInput("");
@@ -2411,7 +2428,7 @@ export default function Chat() {
         <div 
           className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-0 overflow-hidden"
           style={{ 
-            opacity: isScrolling ? 0.1 : 0.3, 
+            opacity: 0.3, 
             transition: 'opacity 0.5s ease-in-out',
             transform: `translateY(calc(var(--scroll-y, 0px) * -0.03))`
           }}
@@ -2537,7 +2554,7 @@ export default function Chat() {
               isLoading={isLoading}
               messagesEndRef={messagesEndRef}
               lastMsgCount={lastMsgCountRef.current}
-              typingLabel={t.composer.typing}
+              typingLabel={thinkingLabel}
             />
           )}
         </div>
@@ -2704,19 +2721,6 @@ export default function Chat() {
               </button>
             </div>
           </form>
-          
-          {/* Real-time Presence Indicator */}
-          {presenceStatus && (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.3 }}
-              className="mt-2 text-center text-xs font-medium text-pink-300/80"
-            >
-              {presenceStatus}
-            </motion.div>
-          )}
           
           <input
             ref={mobileCameraInputRef}

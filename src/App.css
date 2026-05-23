@@ -128,19 +128,19 @@ h1, h2, h3, .font-display {
 
 /* Message Bubble Overhaul */
 .saheli-message-user {
-  background: linear-gradient(135deg, rgba(236, 72, 153, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
-  border: 1px solid rgba(236, 72, 153, 0.25);
-  box-shadow: 0 8px 32px rgba(236, 72, 153, 0.1), inset 0 1px 2px rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255, 105, 180, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
+  border: 1px solid rgba(255, 105, 180, 0.22);
+  box-shadow: 0 8px 32px rgba(255, 105, 180, 0.04), inset 0 1px 2px rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .saheli-message-ai {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 192, 203, 0.02) 100%);
+  border: 1px solid rgba(255, 192, 203, 0.09);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .saheli-composer-container {

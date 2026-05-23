@@ -425,16 +425,13 @@ async function emitStreamingText(text: string, onChunk?: (partialText: string) =
     return;
   }
 
-  const chunkSize = Math.max(2, Math.min(8, Math.ceil(words.length / 10)));
   let partialText = "";
-
-  for (let index = 0; index < words.length; index += chunkSize) {
-    const nextChunk = words.slice(index, index + chunkSize).join(" ");
-    partialText = partialText ? `${partialText} ${nextChunk}` : nextChunk;
+  for (let index = 0; index < words.length; index++) {
+    partialText = partialText ? `${partialText} ${words[index]}` : words[index];
     onChunk(partialText);
 
-    if (index + chunkSize < words.length) {
-      await new Promise((resolve) => globalThis.setTimeout(resolve, 18));
+    if (index + 1 < words.length) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 55));
     }
   }
 }
