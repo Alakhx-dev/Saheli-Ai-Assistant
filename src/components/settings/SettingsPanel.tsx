@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, Sparkles, Volume2, VolumeX, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
+import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
 
-type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about";
+type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 interface SettingsPanelProps {
@@ -37,6 +38,15 @@ interface SettingsPanelProps {
   isSavingProfile: boolean;
   /** The original email/OAuth photo URL (fallback when custom is deleted) */
   originalPhotoUrl?: string;
+  realtimeAwareness: RealtimeAwarenessSnapshot;
+  awarenessLocationLabel: string;
+  awarenessWeatherLabel: string;
+  awarenessTimeFormat: "12h" | "24h";
+  awarenessShowDayDate: boolean;
+  awarenessRefreshing: boolean;
+  onAwarenessTimeFormatChange: (mode: "12h" | "24h") => void;
+  onAwarenessToggleDayDateVisibility: () => void;
+  onAwarenessRefresh: () => void;
 }
 
 const characterCards = [
@@ -114,6 +124,15 @@ export default function SettingsPanel({
   onSaveProfile,
   isSavingProfile,
   originalPhotoUrl,
+  realtimeAwareness,
+  awarenessLocationLabel,
+  awarenessWeatherLabel,
+  awarenessTimeFormat,
+  awarenessShowDayDate,
+  awarenessRefreshing,
+  onAwarenessTimeFormatChange,
+  onAwarenessToggleDayDateVisibility,
+  onAwarenessRefresh,
 }: SettingsPanelProps) {
   const t = getLang();
   const accountFileRef = useRef<HTMLInputElement>(null);
@@ -139,6 +158,7 @@ export default function SettingsPanel({
     { id: "character" as const, label: "Character" },
     { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
+    { id: "realtime" as const, label: "Date, Time & Weather" },
     { id: "appearance" as const, label: "Personality" },
     { id: "voice" as const, label: "Bond Level" },
     { id: "about" as const, label: "Privacy" },
@@ -210,7 +230,7 @@ export default function SettingsPanel({
               border: "0.5px solid rgba(255, 255, 255, 0.06)",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
             }}
-            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : "w-[360px]"}`}
+            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : activeSection === "realtime" ? "w-[380px]" : "w-[360px]"}`}
           >
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
@@ -437,6 +457,100 @@ export default function SettingsPanel({
                         </button>
                       </div>
                     </div>
+                </motion.div>
+              ) : null}
+
+              {activeSection === "realtime" ? (
+                <motion.div key="realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                  <SectionShell
+                    label="Real-Time Awareness"
+                    title="Date, Time & Weather"
+                    description="Saheli silently keeps time, weekday, location, weather, and session timing in sync." 
+                    compact
+                  >
+                    <div className="space-y-3">
+                      <div className="settings-glass-card space-y-3 !p-3">
+                        <div className="flex items-center gap-2 text-white/85">
+                          <Clock3 className="h-4 w-4 text-pink-300" />
+                          <p className="text-[13px] font-semibold">Current time</p>
+                        </div>
+                        <p className="text-[15px] font-semibold text-white">{realtimeAwareness.datetime.currentTime}</p>
+                        {awarenessShowDayDate ? (
+                          <div className="space-y-1 text-[12px] text-white/62">
+                            <p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-purple-300" /> {realtimeAwareness.datetime.currentDate}</p>
+                            <p>{realtimeAwareness.datetime.weekday} • {realtimeAwareness.datetime.dayState === "night" ? "Night" : "Day"}</p>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="settings-glass-card space-y-2 !p-3">
+                        <p className="text-[13px] font-semibold text-white/90">Time format</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onAwarenessTimeFormatChange("12h")}
+                            className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                          >
+                            12-hour
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onAwarenessTimeFormatChange("24h")}
+                            className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                          >
+                            24-hour
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
+                        <div>
+                          <p className="text-[13px] font-semibold text-white">Show day/date</p>
+                          <p className="mt-1 text-[12px] leading-5 text-white/55">Hide or show weekday and date details in this panel.</p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={awarenessShowDayDate}
+                          onClick={onAwarenessToggleDayDateVisibility}
+                          className={`settings-toggle-track ${awarenessShowDayDate ? "settings-toggle-track-on" : ""}`}
+                        >
+                          <span className={`settings-toggle-thumb ${awarenessShowDayDate ? "settings-toggle-thumb-on" : ""}`} />
+                        </button>
+                      </div>
+
+                      <div className="settings-glass-card space-y-2 !p-3">
+                        <p className="flex items-center gap-2 text-[13px] font-semibold text-white">
+                          <CloudSun className="h-4 w-4 text-amber-300" />
+                          Weather
+                        </p>
+                        <p className="text-[13px] text-white/75">{awarenessWeatherLabel}</p>
+                        {realtimeAwareness.weather ? (
+                          <div className="space-y-1 text-[12px] text-white/60">
+                            <p>
+                              Temp: {Math.round(realtimeAwareness.weather.temperatureC)}°C • {realtimeAwareness.weather.condition}
+                            </p>
+                            {typeof realtimeAwareness.weather.feelsLikeC === "number" ? (
+                              <p>Feels like: {Math.round(realtimeAwareness.weather.feelsLikeC)}°C</p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        <p className="flex items-center gap-2 text-[12px] text-white/55">
+                          <LocateFixed className="h-3.5 w-3.5 text-cyan-300" />
+                          {awarenessLocationLabel}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={onAwarenessRefresh}
+                          disabled={awarenessRefreshing}
+                          className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-pink-500/10 px-3 py-1.5 text-xs font-medium text-pink-100 transition hover:border-pink-300/35 hover:bg-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${awarenessRefreshing ? "animate-spin" : ""}`} />
+                          {awarenessRefreshing ? "Refreshing..." : "Refresh weather/location"}
+                        </button>
+                      </div>
+                    </div>
+                  </SectionShell>
                 </motion.div>
               ) : null}
 

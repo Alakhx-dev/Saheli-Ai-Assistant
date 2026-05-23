@@ -17,7 +17,7 @@ import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "fi
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { sendMessage, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type UserIdentityContext } from "@/lib/ai-service";
+import { sendMessage, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -47,6 +47,7 @@ import {
 } from "@/lib/memory";
 import { detectMemory, saveImageMemoryDB, saveMemoryToDB, saveVisionImageMemory } from "@/lib/chatService";
 import { resetSaheliSpeechDedup, speakSaheli, stopSaheliSpeech } from "@/utils/speechEngine";
+import { useRealtimeAwareness } from "@/hooks/useRealtimeAwareness";
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "../components/Sidebar";
@@ -102,7 +103,7 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about";
+type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
@@ -711,6 +712,17 @@ export default function Chat() {
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<string | null>(null);
+  const {
+    awareness,
+    settings: awarenessSettings,
+    setTimeFormat,
+    toggleDayDateVisibility,
+    refreshLocationAndWeather,
+    isRefreshing: isRefreshingRealtime,
+    locationLabel,
+    weatherLabel,
+    markActiveNow,
+  } = useRealtimeAwareness();
   const profileImageInputRef = useRef<HTMLInputElement>(null);
   const effectiveUserName = profileName.trim() || (isGuest ? CREATOR_NAME : "User");
   const identityContext: UserIdentityContext = {
@@ -721,6 +733,36 @@ export default function Chat() {
     language,
   };
   const inputPlaceholder = t.composer.messagePlaceholder;
+  const realtimeAwarenessContext = useMemo<RealtimeAwarenessContext>(() => ({
+    isoNow: awareness.datetime.isoNow,
+    localTime: awareness.datetime.currentTime,
+    currentDate: awareness.datetime.currentDate,
+    weekday: awareness.datetime.weekday,
+    hour24: awareness.datetime.hour24,
+    meridiem: awareness.datetime.meridiem,
+    dayState: awareness.datetime.dayState,
+    location: awareness.location
+      ? {
+          latitude: awareness.location.latitude,
+          longitude: awareness.location.longitude,
+          city: awareness.location.city,
+          region: awareness.location.region,
+          country: awareness.location.country,
+        }
+      : undefined,
+    weather: awareness.weather
+      ? {
+          temperatureC: awareness.weather.temperatureC,
+          feelsLikeC: awareness.weather.feelsLikeC,
+          hotColdState: awareness.weather.hotColdState,
+          condition: awareness.weather.condition,
+          isRainy: awareness.weather.isRainy,
+          isCloudy: awareness.weather.isCloudy,
+          dayState: awareness.weather.dayState,
+        }
+      : undefined,
+    timing: awareness.timing,
+  }), [awareness]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [latestSaheliMessage, setLatestSaheliMessage] = useState("");
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
@@ -1927,6 +1969,7 @@ export default function Chat() {
         detectedEmotion,
         memoryEnabled && nextMemoryProfile ? buildPromptMemoryContext(nextMemoryProfile) : null,
         requestIdentity,
+        realtimeAwarenessContext,
         memoryEnabled ? "enabled" : "disabled",
         handleChunk,
       );
@@ -1940,7 +1983,7 @@ export default function Chat() {
       console.error("Stream response error:", error);
       throw error;
     }
-  }, [isTtsMuted, memoryEnabled, updateStreamingMessage]);
+  }, [isTtsMuted, memoryEnabled, realtimeAwarenessContext, updateStreamingMessage]);
 
   const completePendingVisionRequest = async (request: PendingMobileVisionRequest, imageBase64?: string) => {
     if (mobileVisionProcessingRequestIdRef.current === request.id) {
@@ -2076,6 +2119,8 @@ export default function Chat() {
     if ((!(input.trim() || selectedImageRef.current)) || isLoading || submitLockRef.current) {
       return;
     }
+
+    markActiveNow();
 
     stopSaheliSpeech();
     resetSaheliSpeechDedup();
@@ -2774,6 +2819,15 @@ export default function Chat() {
               onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
               isSavingProfile={isSavingProfile}
               originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
+              realtimeAwareness={awareness}
+              awarenessLocationLabel={locationLabel}
+              awarenessWeatherLabel={weatherLabel}
+              awarenessTimeFormat={awarenessSettings.timeFormat}
+              awarenessShowDayDate={awarenessSettings.showDayDate}
+              awarenessRefreshing={isRefreshingRealtime}
+              onAwarenessTimeFormatChange={setTimeFormat}
+              onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
+              onAwarenessRefresh={() => void refreshLocationAndWeather()}
             />
           ) : null}
         </Suspense>

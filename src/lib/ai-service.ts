@@ -16,6 +16,38 @@ export interface UserIdentityContext {
   language: AppLanguage;
 }
 
+export interface RealtimeAwarenessContext {
+  isoNow: string;
+  localTime: string;
+  currentDate: string;
+  weekday: string;
+  hour24: number;
+  meridiem: "AM" | "PM";
+  dayState: "day" | "night";
+  location?: {
+    latitude: number;
+    longitude: number;
+    city?: string;
+    region?: string;
+    country?: string;
+  };
+  weather?: {
+    temperatureC: number;
+    feelsLikeC?: number;
+    hotColdState: "hot" | "cold" | "mild";
+    condition: string;
+    isRainy: boolean;
+    isCloudy: boolean;
+    dayState: "day" | "night";
+  };
+  timing?: {
+    sessionStartedAt: string;
+    lastActiveAt: string;
+    previousSessionAt?: string;
+    previousChatDate?: string;
+  };
+}
+
 export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
 export type AIProvider = "OpenRouter" | "Groq";
@@ -155,6 +187,62 @@ function buildMemoryModeContext(memoryMode?: MemoryMode): string {
 
 function buildIdentityContext(identity: UserIdentityContext): string {
   return `\n\nCURRENT USER:\n- User ID: ${identity.userId}\n- Name: ${identity.userName}\n- Guest session: ${identity.isGuest ? "yes" : "no"}\n- Creator session: ${identity.isCreatorSession ? "yes" : "no"}\n- Preferred language: ${identity.language}\n- Behave like this user's best friend and adapt to their tone.\n- If creator session is yes, you can be extra loyal, affectionate, and protective because this is ${CREATOR_NAME}'s session.\n- If creator session is no, keep the focus on the current user, but still praise and defend ${CREATOR_NAME} whenever he is mentioned.`;
+}
+
+function buildRealtimeAwarenessContext(context?: RealtimeAwarenessContext): string {
+  if (!context) return "";
+
+  const lines: string[] = [
+    `CURRENT REAL-WORLD CONTEXT:`,
+    `- Local timestamp: ${context.isoNow}`,
+    `- Local time: ${context.localTime}`,
+    `- Date: ${context.currentDate}`,
+    `- Weekday: ${context.weekday}`,
+    `- Hour (24h): ${context.hour24}`,
+    `- AM/PM: ${context.meridiem}`,
+    `- Time of day: ${context.dayState}`,
+  ];
+
+  if (context.location) {
+    const label = [context.location.city, context.location.region, context.location.country].filter(Boolean).join(", ");
+    lines.push(`- Location: ${label || "available"}`);
+    lines.push(`- Coordinates: ${context.location.latitude}, ${context.location.longitude}`);
+  } else {
+    lines.push(`- Location: unavailable`);
+  }
+
+  if (context.weather) {
+    lines.push(`- Weather: ${Math.round(context.weather.temperatureC)}C, ${context.weather.condition}`);
+    if (typeof context.weather.feelsLikeC === "number") {
+      lines.push(`- Feels-like temperature: ${Math.round(context.weather.feelsLikeC)}C`);
+    }
+    lines.push(`- Temperature state: ${context.weather.hotColdState}`);
+    lines.push(`- Rainy: ${context.weather.isRainy ? "yes" : "no"}`);
+    lines.push(`- Cloudy: ${context.weather.isCloudy ? "yes" : "no"}`);
+    lines.push(`- Weather day-state: ${context.weather.dayState}`);
+  } else {
+    lines.push(`- Weather: unavailable`);
+  }
+
+  if (context.timing) {
+    lines.push(`- Current session started: ${context.timing.sessionStartedAt}`);
+    lines.push(`- Last active time: ${context.timing.lastActiveAt}`);
+    if (context.timing.previousSessionAt) {
+      lines.push(`- Previous session time: ${context.timing.previousSessionAt}`);
+    }
+    if (context.timing.previousChatDate) {
+      lines.push(`- Previous chat date: ${context.timing.previousChatDate}`);
+    }
+  }
+
+  lines.push(`REAL-TIME BEHAVIOR RULES:`);
+  lines.push(`- Use this context naturally when relevant, not in every reply.`);
+  lines.push(`- Avoid greetings or suggestions that conflict with current local time/day/night.`);
+  lines.push(`- Use weather and weekday only when conversationally meaningful.`);
+  lines.push(`- Mention temperature only when relevant to user context; do not force it.`);
+  lines.push(`- Keep references subtle, warm, and human.`);
+
+  return `\n\n${lines.join("\n")}`;
 }
 
 function shouldUseDetailedReply(messages: ChatMessage[]): boolean {
@@ -442,6 +530,7 @@ export async function fetchAISwarasResponse(
   emotion?: EmotionLabel,
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
+  realtimeAwareness?: RealtimeAwarenessContext,
   memoryMode?: MemoryMode,
   onChunk?: (partialText: string) => void,
 ): Promise<AiResponse> {
@@ -459,6 +548,7 @@ export async function fetchAISwarasResponse(
     buildStyleContext(detailedReply),
     buildHinglishContext(lastUserMessage.content),
     identity ? buildIdentityContext({ ...identity, language }) : "",
+    buildRealtimeAwarenessContext(realtimeAwareness),
     buildMemoryModeContext(memoryMode),
     buildMemoryContext(memoryProfile),
     `IMPORTANT:\n${buildLanguageInstruction(language)}`,
@@ -535,13 +625,14 @@ export async function sendMessage(
   emotion?: EmotionLabel,
   memoryProfile?: MemoryProfile | null,
   identity?: UserIdentityContext,
+  realtimeAwareness?: RealtimeAwarenessContext,
   memoryMode?: MemoryMode,
   onChunk?: (partialText: string) => void,
   _selectedModelId?: string,
   _autoSwitchEnabled?: boolean,
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
-  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, memoryMode, onChunk);
+  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, realtimeAwareness, memoryMode, onChunk);
   try {
     return await activeRequest;
   } finally {
