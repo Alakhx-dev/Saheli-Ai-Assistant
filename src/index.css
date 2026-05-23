@@ -44,6 +44,13 @@
   --saheli-purple: #8a2be2;
   --saheli-glass: rgba(255, 255, 255, 0.06);
   --saheli-shadow: rgba(0, 0, 0, 0.45);
+  
+  /* Butterfly Assets Global Mappings */
+  --butterfly-pink: url('/butterflies/pink-transparent.png');
+  --butterfly-lavender: url('/butterflies/lavender-transparent.png');
+  --butterfly-cyan: url('/butterflies/cyan-transparent.png');
+  --butterfly-gold: url('/butterflies/gold-transparent.png');
+  --butterfly-emerald: url('/butterflies/emerald-transparent.png');
 }
 
 /* Premium Playfair Display for Saheli Logo */

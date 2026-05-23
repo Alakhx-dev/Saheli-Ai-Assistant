@@ -50,16 +50,77 @@ const dressParticles = Array.from({ length: 14 }, (_, index) => ({
   opacity: 0.1 + seeded(index, 26) * 0.2,
 }));
 
-const foregroundButterflies = [
-  { id: "swarm-1", tone: "pink", left: "14%", top: "22%", size: "30px", delay: "-3s" },
-  { id: "swarm-2", tone: "lavender", left: "72%", top: "16%", size: "26px", delay: "-9s" },
-  { id: "swarm-3", tone: "pink", left: "48%", top: "12%", size: "34px", delay: "-6s" },
-] as const;
-
 const butterflyImageVars = {
   "--butterfly-pink": "url('/butterflies/pink-transparent.png')",
   "--butterfly-lavender": "url('/butterflies/lavender-transparent.png')",
+  "--butterfly-cyan": "url('/butterflies/cyan-transparent.png')",
+  "--butterfly-gold": "url('/butterflies/gold-transparent.png')",
+  "--butterfly-emerald": "url('/butterflies/emerald-transparent.png')",
 } satisfies StyleVars;
+
+// Static flying butterflies config - looping infinitely inside the screen (no appearing/disappearing)
+const flyingButterflies = [
+  {
+    id: "fly-1",
+    tone: "pink",
+    loopClass: "cinematic-hero-butterfly--loop1",
+    size: "clamp(22px, 3.0vw, 34px)",
+    duration: "44s",
+    delay: "-1s",
+    flapDuration: "2.4s",
+    opacity: 0.58
+  },
+  {
+    id: "fly-2",
+    tone: "lavender",
+    loopClass: "cinematic-hero-butterfly--loop2",
+    size: "clamp(20px, 2.8vw, 30px)",
+    duration: "52s",
+    delay: "-1.5s",
+    flapDuration: "3.0s",
+    opacity: 0.54
+  },
+  {
+    id: "fly-3",
+    tone: "cyan",
+    loopClass: "cinematic-hero-butterfly--loop3",
+    size: "clamp(22px, 3.0vw, 32px)",
+    duration: "40s",
+    delay: "-20s",
+    flapDuration: "2.1s",
+    opacity: 0.52
+  },
+  {
+    id: "fly-4",
+    tone: "gold",
+    loopClass: "cinematic-hero-butterfly--loop4",
+    size: "clamp(24px, 3.2vw, 36px)",
+    duration: "46s",
+    delay: "-23s",
+    flapDuration: "2.6s",
+    opacity: 0.56
+  },
+  {
+    id: "fly-5",
+    tone: "emerald",
+    loopClass: "cinematic-hero-butterfly--loop5",
+    size: "clamp(20px, 2.8vw, 30px)",
+    duration: "48s",
+    delay: "-0.8s",
+    flapDuration: "2.8s",
+    opacity: 0.5
+  },
+  {
+    id: "fly-6",
+    tone: "cyan",
+    loopClass: "cinematic-hero-butterfly--loop6",
+    size: "clamp(18px, 2.4vw, 28px)",
+    duration: "38s",
+    delay: "-1.2s",
+    flapDuration: "2.2s",
+    opacity: 0.48
+  }
+] as const;
 
 function renderPetals(targetLayer: "back" | "front") {
   return petals
@@ -125,50 +186,29 @@ const CinematicAtmosphere = memo(function CinematicAtmosphere({
           {renderPetals("front")}
         </div>
 
-        <div className="cinematic-butterfly-swarm">
-          {foregroundButterflies.map((butterfly) => (
-            <div
-              key={butterfly.id}
-              className={`cinematic-hero-butterfly cinematic-hero-butterfly--anchored cinematic-hero-butterfly--${butterfly.tone}`}
-              style={
-                {
-                  left: butterfly.left,
-                  top: butterfly.top,
-                  "--butterfly-size": butterfly.size,
-                  "--butterfly-delay": butterfly.delay,
-                } as StyleVars
-              }
-            >
-              <div className={`cinematic-hero-butterfly__form cinematic-hero-butterfly__form--${butterfly.tone}`}>
-                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
-                <span className="cinematic-hero-butterfly__body" />
-                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
-              </div>
+        {/* Dynamic closed-loop flying butterflies (always visible, slowly floating on screen) */}
+        {flyingButterflies.map((butterfly) => (
+          <div
+            key={butterfly.id}
+            className={`cinematic-hero-butterfly ${butterfly.loopClass} cinematic-hero-butterfly--${butterfly.tone}`}
+            style={
+              {
+                "--butterfly-size": butterfly.size,
+                "--flight-duration": butterfly.duration,
+                "--flight-delay": butterfly.delay,
+                "--wing-flap-duration": butterfly.flapDuration,
+                "--path-opacity": butterfly.opacity,
+                ...butterflyImageVars,
+              } as StyleVars
+            }
+          >
+            <div className={`cinematic-hero-butterfly__form cinematic-hero-butterfly__form--${butterfly.tone}`}>
+              <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+              <span className="cinematic-hero-butterfly__body" />
+              <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
             </div>
-          ))}
-        </div>
-
-        <div
-          className="cinematic-hero-butterfly cinematic-hero-butterfly--primary"
-          style={butterflyImageVars}
-        >
-          <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--pink">
-            <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
-            <span className="cinematic-hero-butterfly__body" />
-            <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
           </div>
-        </div>
-
-        <div
-          className="cinematic-hero-butterfly cinematic-hero-butterfly--secondary"
-          style={butterflyImageVars}
-        >
-          <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--lavender">
-            <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
-            <span className="cinematic-hero-butterfly__body" />
-            <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
-          </div>
-        </div>
+        ))}
       </div>
     );
   }

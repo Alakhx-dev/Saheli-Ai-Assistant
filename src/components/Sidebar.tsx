@@ -279,6 +279,15 @@ export default function Sidebar(props: SidebarProps) {
           >
             <PanelLeft className="h-4 w-4" />
           </button>
+
+          {/* Perched Sidebar Butterfly */}
+          <div className="cinematic-hero-butterfly cinematic-hero-butterfly--perched-sidebar">
+            <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--perched cinematic-hero-butterfly__form--lavender">
+              <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+              <span className="cinematic-hero-butterfly__body" />
+              <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
+            </div>
+          </div>
         </div>
 
         <motion.button

@@ -2461,6 +2461,22 @@ export default function Chat() {
                         }}
                       />
                     </AnimatePresence>
+
+                    {/* Perched Butterflies on Hair and Dress */}
+                    <div className="cinematic-hero-butterfly cinematic-hero-butterfly--perched-hair">
+                      <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--perched cinematic-hero-butterfly__form--cyan">
+                        <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+                        <span className="cinematic-hero-butterfly__body" />
+                        <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
+                      </div>
+                    </div>
+                    <div className="cinematic-hero-butterfly cinematic-hero-butterfly--perched-dress">
+                      <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--perched cinematic-hero-butterfly__form--gold">
+                        <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+                        <span className="cinematic-hero-butterfly__body" />
+                        <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
+                      </div>
+                    </div>
                   </motion.div>
                 </div>
 
@@ -2543,6 +2559,14 @@ export default function Chat() {
               borderRadius: "24px",
             }}
           >
+            {/* Perched Composer Butterfly */}
+            <div className="cinematic-hero-butterfly cinematic-hero-butterfly--perched-composer">
+              <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--perched cinematic-hero-butterfly__form--pink">
+                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--left" />
+                <span className="cinematic-hero-butterfly__body" />
+                <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
+              </div>
+            </div>
             {selectedImage && (
               <div className="absolute -top-24 left-4 p-2 bg-[#1a0b2e]/80 backdrop-blur-xl border border-pink-500/30 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="relative group">
