@@ -5,7 +5,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
 
-type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
+type SettingsSectionId = "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 interface SettingsPanelProps {
@@ -154,14 +154,19 @@ export default function SettingsPanel({
   const [groqKey, setGroqKey] = useState("");
   const [openRouterKey, setOpenRouterKey] = useState("");
   const [selectedPersonality, setSelectedPersonality] = useState<"bestie" | "coach">("bestie");
+  const [personalizationChild, setPersonalizationChild] = useState<"character" | "realtime" | null>(null);
+  const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
-    { id: "character" as const, label: "Character" },
+    { id: "personalization" as const, label: "Personalization" },
     { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
-    { id: "realtime" as const, label: "Date, Time & Weather" },
     { id: "appearance" as const, label: "Personality" },
     { id: "voice" as const, label: "Bond Level" },
     { id: "about" as const, label: "Privacy" },
+  ]), []);
+  const personalizationSections = useMemo(() => ([
+    { id: "character" as const, label: "Character" },
+    { id: "realtime" as const, label: "Date, Time & Weather" },
   ]), []);
 
   const selectedCharacterCard = characterCards.find((card) => card.id === selectedCharacter) ?? characterCards[0];
@@ -178,6 +183,19 @@ export default function SettingsPanel({
       setActiveInnerTab(activeSettingsView);
     }
   }, [activeSettingsView]);
+
+  useEffect(() => {
+    if (activeSection !== "personalization") {
+      setPersonalizationChild(null);
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (open) {
+      setShowContentPanel(false);
+      setPersonalizationChild(null);
+    }
+  }, [open]);
 
   return (
     <AnimatePresence>
@@ -211,13 +229,21 @@ export default function SettingsPanel({
                   key={section.id}
                   active={activeSection === section.id}
                   label={section.label}
-                  onClick={() => onSectionChange(section.id)}
+                  onClick={() => {
+                    setShowContentPanel(true);
+                    onSectionChange(section.id);
+                    if (section.id === "personalization") {
+                      setPersonalizationChild(null);
+                    }
+                  }}
                 />
               ))}
             </div>
           </motion.div>
 
           {/* Level 2: Content Panel */}
+          <AnimatePresence>
+          {showContentPanel ? (
           <motion.div
             key={activeSection || "empty"}
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
@@ -230,10 +256,35 @@ export default function SettingsPanel({
               border: "0.5px solid rgba(255, 255, 255, 0.06)",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
             }}
-            className={`relative pointer-events-auto ml-4 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : activeSection === "realtime" ? "w-[380px]" : "w-[360px]"}`}
+            className={`relative pointer-events-auto ml-4 ${activeSection === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : activeSection === "personalization" ? "w-[320px]" : activeSection === "realtime" ? "w-[380px]" : "w-[360px]"}`}
           >
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
+              {activeSection === "personalization" ? (
+                <motion.div key="personalization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                  <SectionShell
+                    label="Personalization"
+                    title="Customize your experience"
+                    description="Choose what to personalize for Saheli."
+                    compact
+                  >
+                    <div className="flex flex-col gap-2">
+                      {personalizationSections.map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          onClick={() => setPersonalizationChild(section.id)}
+                          className="flex w-full items-center justify-between rounded-[16px] border border-white/5 bg-white/[0.02] px-4 py-3 text-left text-sm text-white/70 transition-all duration-300 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"
+                        >
+                          <span className="font-medium">{section.label}</span>
+                          {personalizationChild === section.id ? <Check className="h-4 w-4 text-pink-300" /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </SectionShell>
+                </motion.div>
+              ) : null}
+
               {activeSection === "character" ? (
                 <motion.div key="character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
                     <div className="flex flex-col gap-2">
@@ -247,7 +298,12 @@ export default function SettingsPanel({
                             className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
                           >
                             <span className="font-medium">{card.label}</span>
-                            {active && <Check className="h-4 w-4 text-pink-400" />}
+                            {active ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
+                                <Check className="h-3 w-3 text-pink-300" />
+                                Active
+                              </span>
+                            ) : null}
                           </button>
                         );
                       })}
@@ -462,71 +518,66 @@ export default function SettingsPanel({
 
               {activeSection === "realtime" ? (
                 <motion.div key="realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
-                  <SectionShell
-                    label="Real-Time Awareness"
-                    title="Date, Time & Weather"
-                    description="Saheli silently keeps time, weekday, location, weather, and session timing in sync." 
-                    compact
-                  >
-                    <div className="space-y-3">
-                      <div className="settings-glass-card space-y-3 !p-3">
+                  <section className="space-y-2">
+                    <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Date, Time & Weather</h3>
+                    <div className="space-y-2">
+                      <div className="settings-glass-card space-y-2 !p-2.5">
                         <div className="flex items-center gap-2 text-white/85">
                           <Clock3 className="h-4 w-4 text-pink-300" />
-                          <p className="text-[13px] font-semibold">Current time</p>
+                          <p className="text-[12px] font-semibold">Current time</p>
                         </div>
-                        <p className="text-[15px] font-semibold text-white">{realtimeAwareness.datetime.currentTime}</p>
+                        <p className="text-[14px] font-semibold text-white">{realtimeAwareness.datetime.currentTime}</p>
                         {awarenessShowDayDate ? (
-                          <div className="space-y-1 text-[12px] text-white/62">
+                          <div className="space-y-0.5 text-[11px] text-white/62">
                             <p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-purple-300" /> {realtimeAwareness.datetime.currentDate}</p>
                             <p>{realtimeAwareness.datetime.weekday} • {realtimeAwareness.datetime.dayState === "night" ? "Night" : "Day"}</p>
                           </div>
                         ) : null}
                       </div>
 
-                      <div className="settings-glass-card space-y-2 !p-3">
-                        <p className="text-[13px] font-semibold text-white/90">Time format</p>
+                      <div className="settings-glass-card space-y-1 !p-2.5">
+                        <p className="text-[12px] font-semibold text-white/90">Time format</p>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => onAwarenessTimeFormatChange("12h")}
-                            className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                           >
                             12-hour
                           </button>
                           <button
                             type="button"
                             onClick={() => onAwarenessTimeFormatChange("24h")}
-                            className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                           >
                             24-hour
                           </button>
                         </div>
                       </div>
 
-                      <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
+                      <div className="settings-glass-card flex items-start justify-between gap-2.5 !p-2.5">
                         <div>
-                          <p className="text-[13px] font-semibold text-white">Show day/date</p>
-                          <p className="mt-1 text-[12px] leading-5 text-white/55">Hide or show weekday and date details in this panel.</p>
+                          <p className="text-[12px] font-semibold text-white">Show day/date</p>
                         </div>
                         <button
                           type="button"
                           role="switch"
                           aria-checked={awarenessShowDayDate}
                           onClick={onAwarenessToggleDayDateVisibility}
-                          className={`settings-toggle-track ${awarenessShowDayDate ? "settings-toggle-track-on" : ""}`}
+                          className={`settings-toggle-track scale-90 origin-right ${awarenessShowDayDate ? "settings-toggle-track-on" : ""}`}
                         >
                           <span className={`settings-toggle-thumb ${awarenessShowDayDate ? "settings-toggle-thumb-on" : ""}`} />
                         </button>
                       </div>
 
-                      <div className="settings-glass-card space-y-2 !p-3">
-                        <p className="flex items-center gap-2 text-[13px] font-semibold text-white">
+                      <div className="settings-glass-card space-y-1.5 !p-2.5">
+                        <p className="flex items-center gap-2 text-[12px] font-semibold text-white">
                           <CloudSun className="h-4 w-4 text-amber-300" />
                           Weather
                         </p>
-                        <p className="text-[13px] text-white/75">{awarenessWeatherLabel}</p>
+                        <p className="text-[12px] text-white/75">{awarenessWeatherLabel}</p>
                         {realtimeAwareness.weather ? (
-                          <div className="space-y-1 text-[12px] text-white/60">
+                          <div className="space-y-0.5 text-[11px] text-white/60">
                             <p>
                               Temp: {Math.round(realtimeAwareness.weather.temperatureC)}°C • {realtimeAwareness.weather.condition}
                             </p>
@@ -535,7 +586,7 @@ export default function SettingsPanel({
                             ) : null}
                           </div>
                         ) : null}
-                        <p className="flex items-center gap-2 text-[12px] text-white/55">
+                        <p className="flex items-center gap-2 text-[11px] text-white/55">
                           <LocateFixed className="h-3.5 w-3.5 text-cyan-300" />
                           {awarenessLocationLabel}
                         </p>
@@ -543,14 +594,14 @@ export default function SettingsPanel({
                           type="button"
                           onClick={onAwarenessRefresh}
                           disabled={awarenessRefreshing}
-                          className="inline-flex items-center gap-2 rounded-full border border-pink-400/20 bg-pink-500/10 px-3 py-1.5 text-xs font-medium text-pink-100 transition hover:border-pink-300/35 hover:bg-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex items-center gap-1.5 rounded-full border border-pink-400/20 bg-pink-500/10 px-2.5 py-1 text-[11px] font-medium text-pink-100 transition hover:border-pink-300/35 hover:bg-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <RefreshCw className={`h-3.5 w-3.5 ${awarenessRefreshing ? "animate-spin" : ""}`} />
+                          <RefreshCw className={`h-3 w-3 ${awarenessRefreshing ? "animate-spin" : ""}`} />
                           {awarenessRefreshing ? "Refreshing..." : "Refresh weather/location"}
                         </button>
                       </div>
                     </div>
-                  </SectionShell>
+                  </section>
                 </motion.div>
               ) : null}
 
@@ -685,6 +736,144 @@ export default function SettingsPanel({
             </AnimatePresence>
             </div>
           </motion.div>
+          ) : null}
+          </AnimatePresence>
+
+          {showContentPanel && activeSection === "personalization" && personalizationChild ? (
+            <motion.div
+              key={`personalization-child-${personalizationChild}`}
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
+              style={{
+                background: "rgba(15, 15, 15, 0.4)",
+                backdropFilter: "blur(25px)",
+                border: "0.5px solid rgba(255, 255, 255, 0.06)",
+                boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+              }}
+              className={`relative pointer-events-auto ml-4 mb-2 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${personalizationChild === "character" ? "w-[280px]" : "w-[340px]"}`}
+            >
+              <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                <AnimatePresence mode="wait">
+                  {personalizationChild === "character" ? (
+                    <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                      <div className="flex flex-col gap-2">
+                        {characterCards.map((card) => {
+                          const active = selectedCharacter === card.id;
+                          return (
+                            <button
+                              key={card.id}
+                              type="button"
+                              onClick={() => onCharacterChange(card.id)}
+                              className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
+                            >
+                              <span className="font-medium">{card.label}</span>
+                              {active ? (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
+                                  <Check className="h-3 w-3 text-pink-300" />
+                                  Active
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  ) : null}
+
+                  {personalizationChild === "realtime" ? (
+                    <motion.div key="personalization-realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                      <section className="space-y-2">
+                        <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Date, Time & Weather</h3>
+                        <div className="space-y-2">
+                          <div className="settings-glass-card space-y-2 !p-2.5">
+                            <div className="flex items-center gap-2 text-white/85">
+                              <Clock3 className="h-4 w-4 text-pink-300" />
+                              <p className="text-[12px] font-semibold">Current time</p>
+                            </div>
+                            <p className="text-[14px] font-semibold text-white">{realtimeAwareness.datetime.currentTime}</p>
+                            {awarenessShowDayDate ? (
+                              <div className="space-y-0.5 text-[11px] text-white/62">
+                                <p className="flex items-center gap-2"><CalendarDays className="h-3.5 w-3.5 text-purple-300" /> {realtimeAwareness.datetime.currentDate}</p>
+                                <p>{realtimeAwareness.datetime.weekday} • {realtimeAwareness.datetime.dayState === "night" ? "Night" : "Day"}</p>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <div className="settings-glass-card space-y-1 !p-2.5">
+                            <p className="text-[12px] font-semibold text-white/90">Time format</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onAwarenessTimeFormatChange("12h")}
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                              >
+                                12-hour
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onAwarenessTimeFormatChange("24h")}
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                              >
+                                24-hour
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="settings-glass-card flex items-start justify-between gap-2.5 !p-2.5">
+                            <div>
+                              <p className="text-[12px] font-semibold text-white">Show day/date</p>
+                            </div>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={awarenessShowDayDate}
+                              onClick={onAwarenessToggleDayDateVisibility}
+                              className={`settings-toggle-track scale-90 origin-right ${awarenessShowDayDate ? "settings-toggle-track-on" : ""}`}
+                            >
+                              <span className={`settings-toggle-thumb ${awarenessShowDayDate ? "settings-toggle-thumb-on" : ""}`} />
+                            </button>
+                          </div>
+
+                          <div className="settings-glass-card space-y-1.5 !p-2.5">
+                            <p className="flex items-center gap-2 text-[12px] font-semibold text-white">
+                              <CloudSun className="h-4 w-4 text-amber-300" />
+                              Weather
+                            </p>
+                            <p className="text-[12px] text-white/75">{awarenessWeatherLabel}</p>
+                            {realtimeAwareness.weather ? (
+                              <div className="space-y-0.5 text-[11px] text-white/60">
+                                <p>
+                                  Temp: {Math.round(realtimeAwareness.weather.temperatureC)}°C • {realtimeAwareness.weather.condition}
+                                </p>
+                                {typeof realtimeAwareness.weather.feelsLikeC === "number" ? (
+                                  <p>Feels like: {Math.round(realtimeAwareness.weather.feelsLikeC)}°C</p>
+                                ) : null}
+                              </div>
+                            ) : null}
+                            <p className="flex items-center gap-2 text-[11px] text-white/55">
+                              <LocateFixed className="h-3.5 w-3.5 text-cyan-300" />
+                              {awarenessLocationLabel}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={onAwarenessRefresh}
+                              disabled={awarenessRefreshing}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-pink-400/20 bg-pink-500/10 px-2.5 py-1 text-[11px] font-medium text-pink-100 transition hover:border-pink-300/35 hover:bg-pink-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${awarenessRefreshing ? "animate-spin" : ""}`} />
+                              {awarenessRefreshing ? "Refreshing..." : "Refresh weather/location"}
+                            </button>
+                          </div>
+                        </div>
+                      </section>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          ) : null}
         </div>
       )}
     </AnimatePresence>

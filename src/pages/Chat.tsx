@@ -83,6 +83,7 @@ const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
 const ACTIVE_CHAT_SESSION_KEY = "activeChatId";
 const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
+const SELECTED_CHARACTER_STORAGE_KEY = "saheli_selected_character";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
 const STREAM_TTS_MIN_WORDS = 4;
@@ -103,7 +104,7 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
+type SettingsSectionId = "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
@@ -114,6 +115,20 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   meher: "/Meher ✨.png",
   zoya: "/Zoya ❤️.png",
 };
+
+function normalizeCharacterId(value: string | null | undefined) {
+  if (!value) return "swara";
+  if (value === "butterfly") return "swara";
+  return CHARACTER_IMAGE_MAP[value] ? value : "swara";
+}
+
+function getStoredCharacterId() {
+  if (typeof window === "undefined") {
+    return "swara";
+  }
+
+  return normalizeCharacterId(window.localStorage.getItem(SELECTED_CHARACTER_STORAGE_KEY));
+}
 
 interface ProfileImageMeta {
   width: number;
@@ -812,7 +827,7 @@ export default function Chat() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
   const [isIdle, setIsIdle] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState("butterfly");
+  const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId());
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
   
@@ -1043,6 +1058,10 @@ export default function Chat() {
   useEffect(() => {
     localStorage.setItem(REPLY_LANGUAGE_MODE_STORAGE_KEY, replyLanguageMode);
   }, [replyLanguageMode]);
+
+  useEffect(() => {
+    localStorage.setItem(SELECTED_CHARACTER_STORAGE_KEY, normalizeCharacterId(selectedCharacter));
+  }, [selectedCharacter]);
 
   useEffect(() => {
     chatLanguageRef.current = replyLanguageMode;
