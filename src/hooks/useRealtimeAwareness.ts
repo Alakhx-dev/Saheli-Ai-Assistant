@@ -42,6 +42,18 @@ interface WeatherResponse {
     apparent_temperature?: number;
     weather_code?: number;
     is_day?: number;
+    relative_humidity_2m?: number;
+    wind_speed_10m?: number;
+    precipitation_probability?: number;
+    time?: string;
+  };
+  hourly?: {
+    time?: string[];
+    temperature_2m?: number[];
+    weather_code?: number[];
+    precipitation_probability?: number[];
+    relative_humidity_2m?: number[];
+    wind_speed_10m?: number[];
   };
 }
 
@@ -135,7 +147,7 @@ async function reverseGeocode(latitude: number, longitude: number): Promise<Part
 
 async function fetchWeather(latitude: number, longitude: number): Promise<WeatherSnapshot> {
   const response = await fetch(
-    `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day&timezone=auto`,
+    `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,precipitation_probability&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&forecast_days=2&timezone=auto`,
   );
 
   if (!response.ok) {
@@ -144,15 +156,78 @@ async function fetchWeather(latitude: number, longitude: number): Promise<Weathe
 
   const data = (await response.json()) as WeatherResponse;
   const current = data.current;
+  const hourly = data.hourly;
 
   const temperatureC = typeof current?.temperature_2m === "number" ? current.temperature_2m : 0;
   const feelsLikeC = typeof current?.apparent_temperature === "number" ? current.apparent_temperature : undefined;
   const weatherCode = typeof current?.weather_code === "number" ? current.weather_code : 0;
   const weatherMeta = weatherConditionFromCode(weatherCode);
+  const forecastTimes = hourly?.time ?? [];
+  const forecastTemps = hourly?.temperature_2m ?? [];
+  const forecastCodes = hourly?.weather_code ?? [];
+  const forecastRain = hourly?.precipitation_probability ?? [];
+  const forecastHumidity = hourly?.relative_humidity_2m ?? [];
+  const forecastWind = hourly?.wind_speed_10m ?? [];
+  const currentTimeIso = current?.time ? new Date(current.time).toISOString().slice(0, 13) : null;
+  const matchedCurrentIndex = currentTimeIso
+    ? forecastTimes.findIndex((timeIso) => new Date(timeIso).toISOString().slice(0, 13) === currentTimeIso)
+    : -1;
+  const currentHour = new Date().getHours();
+  const startIndex = matchedCurrentIndex >= 0
+    ? matchedCurrentIndex
+    : forecastTimes.length > 0
+      ? Math.min(Math.max(currentHour, 0), Math.max(forecastTimes.length - 1, 0))
+      : 0;
+  const hourlyForecast = forecastTimes
+    .slice(startIndex, startIndex + 6)
+    .map((timeIso, index) => {
+      const absoluteIndex = startIndex + index;
+      const temperature = typeof forecastTemps[absoluteIndex] === "number" ? forecastTemps[absoluteIndex] : temperatureC;
+      const code = typeof forecastCodes[absoluteIndex] === "number" ? forecastCodes[absoluteIndex] : weatherCode;
+      const rainProbability = typeof forecastRain[absoluteIndex] === "number" ? forecastRain[absoluteIndex] : undefined;
+      const humidity = typeof forecastHumidity[absoluteIndex] === "number" ? forecastHumidity[absoluteIndex] : undefined;
+      const wind = typeof forecastWind[absoluteIndex] === "number" ? forecastWind[absoluteIndex] : undefined;
+      const meta = weatherConditionFromCode(code);
+      const date = new Date(timeIso);
+
+      return {
+        timeIso,
+        hourLabel: date.toLocaleTimeString(undefined, { hour: "numeric", hour12: true }),
+        temperatureC: temperature,
+        weatherCode: code,
+        condition: meta.condition,
+        precipitationProbabilityPercent: rainProbability,
+        isRainy: meta.isRainy,
+        isCloudy: meta.isCloudy,
+        dayState: resolveDayState(date.getHours()),
+        humidityPercent: humidity,
+        windSpeedKph: wind,
+      };
+    });
+
+  const currentForecastIndex = matchedCurrentIndex >= 0 ? matchedCurrentIndex : startIndex;
+  const humidityPercent = typeof current?.relative_humidity_2m === "number"
+    ? current.relative_humidity_2m
+    : typeof forecastHumidity[currentForecastIndex] === "number"
+      ? forecastHumidity[currentForecastIndex]
+      : undefined;
+  const windSpeedKph = typeof current?.wind_speed_10m === "number"
+    ? current.wind_speed_10m
+    : typeof forecastWind[currentForecastIndex] === "number"
+      ? forecastWind[currentForecastIndex]
+      : undefined;
+  const rainProbabilityPercent = typeof current?.precipitation_probability === "number"
+    ? current.precipitation_probability
+    : typeof forecastRain[currentForecastIndex] === "number"
+      ? forecastRain[currentForecastIndex]
+      : undefined;
 
   return {
     temperatureC,
     feelsLikeC,
+    humidityPercent,
+    windSpeedKph,
+    rainProbabilityPercent,
     hotColdState: resolveHotColdState(temperatureC),
     weatherCode,
     condition: weatherMeta.condition,
@@ -160,6 +235,7 @@ async function fetchWeather(latitude: number, longitude: number): Promise<Weathe
     isCloudy: weatherMeta.isCloudy,
     dayState: current?.is_day === 1 ? "day" : "night",
     updatedAt: Date.now(),
+    hourlyForecast,
   };
 }
 

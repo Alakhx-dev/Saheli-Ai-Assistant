@@ -9,6 +9,23 @@ import {
   Plus,
   Upload,
   PanelLeft,
+  Volume2,
+  VolumeX,
+  Clock3,
+  Cloud,
+  CloudDrizzle,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Droplets,
+  MapPin,
+  Moon,
+  Sparkles,
+  Sun,
+  Thermometer,
+  Wind,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -717,6 +734,9 @@ export default function Chat() {
   const [profileCropY, setProfileCropY] = useState(0);
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("character");
+  const [weatherPanelOpen, setWeatherPanelOpen] = useState(false);
+  const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" | "night">("auto");
+  const [weatherPanelClockNow, setWeatherPanelClockNow] = useState(() => new Date());
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
@@ -2333,6 +2353,78 @@ export default function Chat() {
 
   const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
   const profileSubtext = user?.email || t.profileMenu.guestMode || "";
+  const floatingTimeWeatherLabel = useMemo(() => {
+    const temperature = typeof awareness.weather?.temperatureC === "number"
+      ? `${Math.round(awareness.weather.temperatureC)}°C`
+      : "--°C";
+    return `${awareness.datetime.currentTime} · ${temperature}`;
+  }, [awareness.datetime.currentTime, awareness.weather?.temperatureC]);
+  const weatherThemeMode = weatherThemeOverride === "auto" ? awareness.datetime.dayState : weatherThemeOverride;
+  const weatherAtmosphere = weatherThemeMode === "day"
+    ? "shadow-[0_24px_60px_rgba(249,115,22,0.12),0_0_40px_rgba(255,255,255,0.04)]"
+    : "shadow-[0_24px_60px_rgba(59,130,246,0.12),0_0_40px_rgba(168,85,247,0.12)]";
+  const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
+  const weatherLocationLabel = awareness.location
+    ? [awareness.location.city, awareness.location.region, awareness.location.country].filter(Boolean).join(", ") || "Detected location"
+    : "Location unavailable";
+  const weatherLocationStatus = awareness.permission === "granted"
+    ? "Live location active"
+    : awareness.permission === "prompt"
+      ? "Location permission pending"
+      : awareness.permission === "denied"
+        ? "Location access denied"
+        : awareness.permission === "unsupported"
+          ? "Location unsupported"
+          : "Location status unknown";
+  const weatherRainProbability = typeof awareness.weather?.rainProbabilityPercent === "number"
+    ? `${Math.round(awareness.weather.rainProbabilityPercent)}%`
+    : "--";
+  const weatherHumidity = typeof awareness.weather?.humidityPercent === "number"
+    ? `${Math.round(awareness.weather.humidityPercent)}%`
+    : "--";
+  const weatherWind = typeof awareness.weather?.windSpeedKph === "number"
+    ? `${Math.round(awareness.weather.windSpeedKph)} km/h`
+    : "--";
+  const weatherTemperature = typeof awareness.weather?.temperatureC === "number"
+    ? `${Math.round(awareness.weather.temperatureC)}°C`
+    : "--°C";
+  const weatherFeelsLike = typeof awareness.weather?.feelsLikeC === "number"
+    ? `${Math.round(awareness.weather.feelsLikeC)}°C`
+    : "--°C";
+  const weatherCondition = awareness.weather?.condition ?? "Weather unavailable";
+  const weatherCurrentBadge = awareness.datetime.dayState === "day"
+    ? { icon: Sun, label: "Day mode" }
+    : { icon: Moon, label: "Night mode" };
+    const getHourlyForecastIcon = useCallback((slot: NonNullable<typeof weatherHourlyForecast>[number]) => {
+      if (slot.weatherCode === 0) {
+        return slot.dayState === "day" ? Sun : Moon;
+      }
+
+      if ([1, 2].includes(slot.weatherCode)) return CloudSun;
+      if (slot.weatherCode === 3) return Cloud;
+      if ([45, 48].includes(slot.weatherCode)) return CloudFog;
+      if ([51, 53, 55, 56, 57].includes(slot.weatherCode)) return CloudDrizzle;
+      if ([61, 63, 65, 66, 67, 80, 81, 82].includes(slot.weatherCode)) return CloudRain;
+      if ([71, 73, 75, 77, 85, 86].includes(slot.weatherCode)) return CloudSnow;
+      if ([95, 96, 99].includes(slot.weatherCode)) return CloudLightning;
+
+      return slot.isCloudy ? Cloud : CloudSun;
+    }, [weatherHourlyForecast]);
+  const weatherPanelTimeParts = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: awarenessSettings.timeFormat === "12h",
+    });
+    const parts = formatter.formatToParts(weatherPanelClockNow);
+    return {
+      hour: parts.find((part) => part.type === "hour")?.value ?? "--",
+      minute: parts.find((part) => part.type === "minute")?.value ?? "--",
+      second: parts.find((part) => part.type === "second")?.value ?? "--",
+      meridiem: parts.find((part) => part.type === "dayPeriod")?.value ?? "",
+    };
+  }, [awarenessSettings.timeFormat, weatherPanelClockNow]);
   const handleOpenMemoryFromSettings = useCallback(() => {
     setActiveSettingsSection("character");
     setSettingsPanelOpen(false);
@@ -2388,6 +2480,9 @@ export default function Chat() {
   const handleCharacterChange = useCallback((character: string) => {
     setSelectedCharacter(character);
   }, []);
+  const handleToggleWeatherPanel = useCallback(() => {
+    setWeatherPanelOpen((previous) => !previous);
+  }, []);
   const handleOpenMemoryPanel = useCallback(() => {
     setSecondaryPanelType("memory");
   }, []);
@@ -2397,6 +2492,24 @@ export default function Chat() {
   const handleCloseSecondaryPanel = useCallback(() => {
     setSecondaryPanelType(null);
   }, []);
+  useEffect(() => {
+    if (!awarenessSettings.showDayDate) {
+      setWeatherPanelOpen(false);
+    }
+  }, [awarenessSettings.showDayDate]);
+  useEffect(() => {
+    if (!weatherPanelOpen) {
+      return;
+    }
+
+    setWeatherPanelClockNow(new Date());
+    void refreshLocationAndWeather();
+    const intervalId = window.setInterval(() => {
+      setWeatherPanelClockNow(new Date());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [weatherPanelOpen]);
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
   return (
@@ -2487,6 +2600,268 @@ export default function Chat() {
             Saheli AI
           </div>
         </header>
+
+        {awarenessSettings.showDayDate ? (
+          <div className="fixed right-4 top-4 z-[9998] md:right-6 md:top-5">
+            <AnimatePresence>
+              {weatherPanelOpen ? (
+                <motion.button
+                  type="button"
+                  aria-label="Close weather details"
+                  onClick={() => setWeatherPanelOpen(false)}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed inset-0 z-[9998] cursor-default bg-transparent"
+                />
+              ) : null}
+            </AnimatePresence>
+
+            <div className="relative z-[9999] flex flex-col items-end gap-2">
+              <div className="pointer-events-auto flex items-center gap-2">
+                <motion.button
+                  type="button"
+                  onClick={handleToggleWeatherPanel}
+                  aria-label={weatherPanelOpen ? "Close weather details" : "Open weather details"}
+                  aria-expanded={weatherPanelOpen}
+                  title={floatingTimeWeatherLabel}
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-3.5 text-[11px] font-medium text-white/85 shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_18px_rgba(255,105,180,0.08)] backdrop-blur-2xl transition duration-300 hover:border-pink-400/25 hover:bg-white/[0.08] hover:text-white"
+                >
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-pink-500/10 text-pink-200 shadow-[0_0_14px_rgba(255,105,180,0.16)]">
+                    <Clock3 className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="whitespace-nowrap">{floatingTimeWeatherLabel}</span>
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-200">
+                    <CloudSun className="h-3.5 w-3.5" />
+                  </span>
+                </motion.button>
+
+                <motion.button
+                  type="button"
+                  onClick={handleToggleTtsMute}
+                  aria-label={isTtsMuted ? "Unmute TTS" : "Mute TTS"}
+                  title={isTtsMuted ? "Unmute TTS" : "Mute TTS"}
+                  whileHover={{ scale: 1.02, y: -1 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/85 shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_18px_rgba(255,105,180,0.08)] backdrop-blur-2xl transition duration-300 hover:border-pink-400/25 hover:bg-white/[0.08] hover:text-white"
+                >
+                  {isTtsMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </motion.button>
+              </div>
+
+              <AnimatePresence>
+                {weatherPanelOpen ? (
+                  <motion.div
+                    key="weather-panel"
+                    initial={{ opacity: 0, y: -12, scale: 0.965 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -12, scale: 0.965 }}
+                    transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
+                    className={`pointer-events-auto relative w-[288px] overflow-hidden rounded-[26px] border border-white/10 text-white backdrop-blur-2xl ${weatherAtmosphere}`}
+                      style={{
+                      backgroundImage: weatherThemeMode === "day"
+                        ? `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`
+                        : `linear-gradient(180deg, rgba(7,7,12,0.98), rgba(10,10,18,0.92)), radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 42%), radial-gradient(circle at 14% 0%, rgba(168,85,247,0.16), transparent 28%)`,
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)]" />
+                    {weatherThemeMode === "day" ? (
+                      <>
+                        <div className="absolute right-2 top-2 h-14 w-14 rounded-full bg-amber-200/18 blur-2xl" />
+                        <div className="absolute right-3 top-1 h-20 w-20 opacity-70">
+                          <div className="absolute right-0 top-0 h-9 w-9 rounded-full border border-amber-100/20 bg-amber-100/10 shadow-[0_0_28px_rgba(251,191,36,0.18)]" />
+                          <div className="absolute -right-2 top-2 h-12 w-[1px] rotate-12 bg-gradient-to-b from-amber-100/0 via-amber-100/40 to-amber-100/0" />
+                          <div className="absolute right-2 -top-1 h-14 w-[1px] -rotate-18 bg-gradient-to-b from-amber-100/0 via-amber-100/35 to-amber-100/0" />
+                          <div className="absolute right-5 top-0 h-12 w-[1px] rotate-30 bg-gradient-to-b from-amber-100/0 via-amber-100/28 to-amber-100/0" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl" />
+                        <div className="absolute right-4 top-3 h-10 w-10 rounded-full border border-sky-100/12 bg-white/[0.04] shadow-[0_0_30px_rgba(99,102,241,0.12)]" />
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <span
+                            key={`weather-star-${index}`}
+                            className="absolute h-1 w-1 rounded-full bg-white/70"
+                            style={{
+                              right: `${14 + index * 8}px`,
+                              top: `${10 + (index % 4) * 11}px`,
+                              opacity: 0.35 + index * 0.06,
+                              animation: `weatherStarDrift ${5 + index * 0.35}s linear infinite`,
+                            }}
+                          />
+                        ))}
+                      </>
+                    )}
+
+                    <div className="relative px-4 py-4">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+                        <div className="min-w-0 space-y-1">
+                          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/55">
+                            <Sparkles className="h-3 w-3 text-pink-200" />
+                            Weather & Time
+                          </div>
+                          <p className="max-w-[170px] text-[11px] leading-5 text-white/40">Cinematic live context</p>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1.5 pt-0.5">
+                          <div className="inline-flex items-center gap-1.5 text-[9px] font-medium tracking-[0.08em] text-white/45">
+                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+                              <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-300/25 animate-ping" />
+                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-cyan-200" />
+                            </span>
+                            <span>Silent auto refresh</span>
+                          </div>
+                          <div className="inline-flex items-center gap-2 text-[9px] font-medium tracking-[0.04em] text-white/38">
+                            <button
+                              type="button"
+                              onClick={() => setWeatherThemeOverride("day")}
+                              aria-pressed={weatherThemeMode === "day"}
+                              className={`transition duration-300 ${weatherThemeMode === "day" ? "text-amber-100" : "text-white/35 hover:text-white/65"}`}
+                            >
+                              Day Mode
+                            </button>
+                            <span className="text-white/18">/</span>
+                            <button
+                              type="button"
+                              onClick={() => setWeatherThemeOverride("night")}
+                              aria-pressed={weatherThemeMode === "night"}
+                              className={`transition duration-300 ${weatherThemeMode === "night" ? "text-indigo-100" : "text-white/35 hover:text-white/65"}`}
+                            >
+                              Night Mode
+                            </button>
+                            <span className="text-white/18">/</span>
+                            <button
+                              type="button"
+                              onClick={() => setWeatherThemeOverride("auto")}
+                              className="transition duration-300 text-white/30 hover:text-white/65"
+                            >
+                              Auto
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex items-end gap-1 text-white tabular-nums drop-shadow-[0_0_20px_rgba(255,255,255,0.08)]">
+                        <span className="text-[2.15rem] font-semibold leading-none tracking-[0.06em]">{weatherPanelTimeParts.hour}</span>
+                        <span className="pb-[0.08rem] text-[1.45rem] leading-none text-white/40">:</span>
+                        <span className="text-[2.15rem] font-semibold leading-none tracking-[0.06em]">{weatherPanelTimeParts.minute}</span>
+                        <span className="pb-[0.08rem] text-[1.45rem] leading-none text-white/40">:</span>
+                        <span className="pb-[0.12rem] text-[1.05rem] font-medium leading-none tracking-[0.12em] text-white/68">{weatherPanelTimeParts.second}</span>
+                        {weatherPanelTimeParts.meridiem ? (
+                          <span className="pb-[0.12rem] pl-1 text-[0.72rem] font-medium tracking-[0.34em] text-white/50">
+                            {weatherPanelTimeParts.meridiem}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-white/50">
+                        <span className="tracking-[0.02em]">{awareness.datetime.weekday}</span>
+                        <span className="text-white/18">•</span>
+                        <span className="tracking-[0.01em]">{awareness.datetime.currentDate}</span>
+                        <span className="text-white/18">•</span>
+                        <span className="inline-flex items-center gap-1.5 text-white/60">
+                          {weatherCurrentBadge.icon === Sun ? <Sun className="h-3 w-3 text-amber-200" /> : <Moon className="h-3 w-3 text-sky-200" />}
+                          {awareness.datetime.dayState === "day" ? "Daytime" : "Nighttime"}
+                        </span>
+                      </div>
+
+                      <div className="my-4 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
+
+                      <div className="space-y-2 text-[10.5px] leading-5 text-white/60">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-pink-200/80" />
+                            <span className="shrink-0 text-white/34">Location</span>
+                            <span className="truncate text-white/78">{weatherLocationLabel}</span>
+                          </span>
+                          <span className="text-right text-white/38">{weatherLocationStatus}</span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <CloudSun className="h-3.5 w-3.5 text-cyan-200/80" />
+                            <span className="shrink-0 text-white/34">Weather</span>
+                            <span className="truncate text-white/78">{weatherCondition}</span>
+                          </span>
+                          <span className="text-right text-white/38">{weatherTemperature} / feels {weatherFeelsLike}</span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <Thermometer className="h-3.5 w-3.5 text-amber-200/80" />
+                            <span className="shrink-0 text-white/34">Humidity</span>
+                            <span className="text-white/78">{weatherHumidity}</span>
+                          </span>
+                          <span className="inline-flex items-center justify-end gap-2 text-white/60">
+                            <Wind className="h-3.5 w-3.5 text-sky-200/80" />
+                            <span>{weatherWind}</span>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <Droplets className="h-3.5 w-3.5 text-sky-200/80" />
+                            <span className="shrink-0 text-white/34">Rain chance</span>
+                            <span className="text-white/78">{weatherRainProbability}</span>
+                          </span>
+                          <span className="text-right text-white/38">{awareness.weather?.hotColdState || "mild"}</span>
+                        </div>
+                      </div>
+
+                      <div className="my-3.5 h-px bg-gradient-to-r from-transparent via-white/12 to-transparent" />
+
+                      <div className="space-y-2 text-[10px] leading-5 text-white/55">
+                        <p className="uppercase tracking-[0.28em] text-white/32">Hourly forecast</p>
+                        <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                          <div className="flex min-w-max items-stretch gap-2 px-1">
+                            {weatherHourlyForecast.slice(0, 6).map((slot) => {
+                              const HourlyIcon = getHourlyForecastIcon(slot);
+
+                              return (
+                                <div
+                                  key={slot.timeIso}
+                                  className="flex min-w-[74px] flex-col items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-center backdrop-blur-sm transition duration-300 hover:bg-white/[0.05]"
+                                >
+                                  <span className="text-[10px] leading-none text-white/40">{slot.hourLabel}</span>
+                                  <span className="mt-2 inline-flex h-5 w-5 items-center justify-center text-white/72">
+                                    <HourlyIcon className="h-4 w-4" />
+                                  </span>
+                                  <span className="mt-1 text-[11px] font-semibold tracking-[0.03em] text-white/82">{Math.round(slot.temperatureC)}°</span>
+                                </div>
+                              );
+                            })}
+                            {weatherHourlyForecast.length === 0 ? (
+                              <div className="flex min-w-[150px] items-center justify-center rounded-[14px] border border-dashed border-white/10 bg-black/10 px-3 py-3 text-center text-[11px] text-white/35">
+                                Hourly forecast loading
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
+
+            <style>{`@keyframes weatherStarDrift { 0% { transform: translateY(0px); opacity: 0; } 12% { opacity: 0.9; } 85% { opacity: 0.6; } 100% { transform: translateY(16px); opacity: 0; } }`}</style>
+          </div>
+        ) : (
+          <div className="absolute right-4 top-4 z-40 flex items-center gap-2 pointer-events-none md:right-6 md:top-5">
+            <motion.button
+              type="button"
+              onClick={handleToggleTtsMute}
+              aria-label={isTtsMuted ? "Unmute TTS" : "Mute TTS"}
+              title={isTtsMuted ? "Unmute TTS" : "Mute TTS"}
+              whileHover={{ scale: 1.02, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+              className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/85 shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_18px_rgba(255,105,180,0.08)] backdrop-blur-2xl transition duration-300 hover:border-pink-400/25 hover:bg-white/[0.08] hover:text-white"
+            >
+              {isTtsMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </motion.button>
+          </div>
+        )}
 
         {/* --- LAYER 1 & 2: MASCOT CONTAINER & BACKGROUND --- */}
         <div 

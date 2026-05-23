@@ -556,8 +556,9 @@ export default function SettingsPanel({
                       </div>
 
                       <div className="settings-glass-card flex items-start justify-between gap-2.5 !p-2.5">
-                        <div>
-                          <p className="text-[12px] font-semibold text-white">Show day/date</p>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold text-white">Show on chat page</p>
+                          <p className="mt-0.5 text-[9px] leading-none text-white/35">Show on chat page</p>
                         </div>
                         <button
                           type="button"
@@ -823,7 +824,7 @@ export default function SettingsPanel({
 
                           <div className="settings-glass-card flex items-start justify-between gap-2.5 !p-2.5">
                             <div>
-                              <p className="text-[12px] font-semibold text-white">Show day/date</p>
+                              <p className="text-[12px] font-semibold text-white">Show on chat page</p>
                             </div>
                             <button
                               type="button"

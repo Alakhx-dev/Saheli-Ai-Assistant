@@ -25,6 +25,9 @@ export interface LocationSnapshot {
 export interface WeatherSnapshot {
   temperatureC: number;
   feelsLikeC?: number;
+  humidityPercent?: number;
+  windSpeedKph?: number;
+  rainProbabilityPercent?: number;
   hotColdState: "hot" | "cold" | "mild";
   weatherCode: number;
   condition: string;
@@ -32,6 +35,19 @@ export interface WeatherSnapshot {
   isCloudy: boolean;
   dayState: DayState;
   updatedAt: number;
+  hourlyForecast: Array<{
+    timeIso: string;
+    hourLabel: string;
+    temperatureC: number;
+    weatherCode: number;
+    condition: string;
+    precipitationProbabilityPercent?: number;
+    humidityPercent?: number;
+    windSpeedKph?: number;
+    isRainy: boolean;
+    isCloudy: boolean;
+    dayState: DayState;
+  }>;
 }
 
 export interface ConversationTiming {
