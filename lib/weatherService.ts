@@ -125,7 +125,7 @@ export async function fetchForecast(latitude: number, longitude: number) {
 
   const currentTimeIso = current?.time ? String(current.time).slice(0, 13) : null;
   const matchedCurrentIndex = currentTimeIso
-    ? forecastTimes.findIndex((timeIso) => String(timeIso).slice(0, 13) === currentTimeIso)
+    ? forecastTimes.findIndex((timeIso: string) => String(timeIso).slice(0, 13) === currentTimeIso)
     : -1;
 
   const currentHour = new Date().getHours();
@@ -137,7 +137,7 @@ export async function fetchForecast(latitude: number, longitude: number) {
 
   const hourlyForecast = forecastTimes
     .slice(startIndex, startIndex + 6)
-    .map((timeIso, index) => {
+    .map((timeIso: string, index: number) => {
       const absoluteIndex = startIndex + index;
       const temperature = typeof forecastTemps[absoluteIndex] === "number" ? forecastTemps[absoluteIndex] : temperatureC;
       const code = typeof forecastCodes[absoluteIndex] === "number" ? forecastCodes[absoluteIndex] : weatherCode;
