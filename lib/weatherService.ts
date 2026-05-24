@@ -36,36 +36,46 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 }
 
 export async function fetchGeocoding(latitude: number, longitude: number) {
+  // Validate coordinates before any API request
+  if (
+    latitude === undefined || latitude === null || isNaN(latitude) ||
+    longitude === undefined || longitude === null || isNaN(longitude) ||
+    latitude < -90 || latitude > 90 ||
+    longitude < -180 || longitude > 180
+  ) {
+    return { city: null, region: null, country: null, timezone: null };
+  }
+
   const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&language=en&format=json`;
   
   try {
     const response = await fetchWithTimeout(url);
-    if (!response.ok) {
-      throw new Error(`Reverse geocoding failed: ${response.status}`);
-    }
-    const data = await response.json();
-    const first = data.results?.[0];
-    return {
-      city: first?.name || null,
-      region: first?.admin1 || null,
-      country: first?.country || null,
-      timezone: first?.timezone || null,
-    };
-  } catch (err) {
-    console.warn("Open-Meteo geocoding failed, trying Nominatim fallback...", err);
-    try {
-      // Nominatim requires a User-Agent to avoid 403 blocks
-      const osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`;
-      const response = await fetchWithTimeout(osmUrl, {
-        headers: {
-          "User-Agent": "Saheli-AI-Assistant/1.0 (aniraj@saheli.app)"
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Nominatim fallback failed: ${response.status}`);
+    if (response.ok) {
+      const data = await response.json();
+      const first = data.results?.[0];
+      if (first?.name || first?.country) {
+        return {
+          city: first?.name || null,
+          region: first?.admin1 || null,
+          country: first?.country || null,
+          timezone: first?.timezone || null,
+        };
       }
-      
+    }
+  } catch (err) {
+    // Open-Meteo fails or times out. Catch silently.
+  }
+
+  // Graceful fallback to Nominatim
+  try {
+    const osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`;
+    const response = await fetchWithTimeout(osmUrl, {
+      headers: {
+        "User-Agent": "Saheli-AI-Assistant/1.0 (aniraj@saheli.app)"
+      }
+    });
+    
+    if (response.ok) {
       const data = await response.json();
       const addr = data.address || {};
       
@@ -75,11 +85,18 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
         country: addr.country || null,
         timezone: null,
       };
-    } catch (osmErr) {
-      console.error("Geocoding fallbacks exhausted:", osmErr);
-      throw new Error("Geocoding failed on all layers.");
     }
+  } catch (osmErr) {
+    // Nominatim fallback also fails. Catch silently to prevent console spam.
   }
+
+  // If all layers fail, return a default safe structure without throwing
+  return {
+    city: null,
+    region: null,
+    country: null,
+    timezone: null,
+  };
 }
 
 export async function fetchForecast(latitude: number, longitude: number) {

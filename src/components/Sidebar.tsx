@@ -1,6 +1,7 @@
 import React, { memo, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import SaheliLogo from "./SaheliLogo";
 
 export interface ChatSessionListItem {
   id: string;
@@ -262,19 +263,13 @@ export default function Sidebar(props: SidebarProps) {
 
         <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4 relative flex items-center justify-between">
           <div className="absolute top-1/2 left-4 w-24 h-12 -translate-y-1/2 bg-pink-500/20 blur-[20px] rounded-full pointer-events-none" />
-          <span
-            className="block px-1 text-[1.2rem] font-medium tracking-[0.18em] text-pink-100"
-            style={{ 
-              fontFamily: "'Playfair Display', serif",
-              textShadow: "0 0 10px rgba(255, 105, 180, 0.5), 0 0 20px rgba(255, 105, 180, 0.3)"
-            }}
-          >
-            Saheli AI
-          </span>
+          <div className="saheli-logo-section">
+            <SaheliLogo size={32} showText={true} />
+          </div>
           <button
             type="button"
             onClick={onToggleSidebar}
-            className="text-white/50 hover:text-white transition duration-300 p-1 mr-1"
+            className="text-white/50 hover:text-white transition duration-300 p-1 mr-1 relative z-10"
             aria-label="Hide sidebar"
           >
             <PanelLeft className="h-4 w-4" />

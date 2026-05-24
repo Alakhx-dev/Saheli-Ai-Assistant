@@ -68,6 +68,7 @@ import { useRealtimeAwareness } from "@/hooks/useRealtimeAwareness";
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "../components/Sidebar";
+import SaheliLogo from "../components/SaheliLogo";
 import CinematicAtmosphere from "../components/CinematicAtmosphere";
 import Profile from "../components/Profile";
 import MemoryModal from "../components/memory/MemoryModal";
@@ -2539,7 +2540,7 @@ export default function Chat() {
         ))}
       </div>
       
-      {/* ── Small Sleek Toggle Button (Visible only when closed) ── */}
+      {/* ── Floating Logo Button (Visible only when closed) ── */}
       <AnimatePresence>
         {!isSidebarOpen && (
           <motion.button
@@ -2551,16 +2552,14 @@ export default function Chat() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="fixed z-[9999] inline-flex h-[36px] w-[36px] items-center justify-center rounded-full border border-pink-500/30 bg-black/40 text-pink-200 transition duration-300 hover:bg-black/60 hover:text-white hover:border-pink-400/50 hover:shadow-[0_0_15px_rgba(255,105,180,0.3)]"
+            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            className="fixed z-[9999] saheli-floating-logo-btn cursor-pointer"
             style={{
-              top: "24px",
-              left: "24px",
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
+              top: "32px",
+              left: "48px",
             }}
           >
-            <PanelLeft className="h-4 w-4" />
+            <SaheliLogo size={24} showText={true} />
           </motion.button>
         )}
       </AnimatePresence>

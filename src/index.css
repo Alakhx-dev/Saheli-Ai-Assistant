@@ -71,11 +71,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 1rem;
-  margin-bottom: 1rem;
-  background: rgba(255, 182, 208, 0.03);
-  border-radius: 1.5rem;
-  border: 1px solid rgba(255, 182, 208, 0.08);
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
 }
 
 .ultra-white-nebula {
@@ -2160,129 +2158,72 @@
 }
 
 /* ===== PREMIUM SAHELI LOGO ===== */
-.saheli-logo-section {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0.5rem 0.25rem;
-  margin-bottom: 0.25rem;
-}
-
-.saheli-logo-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #ec4899, #a855f7, #8b5cf6);
-  box-shadow:
-    0 4px 16px rgba(236, 72, 153, 0.35),
-    0 0 20px rgba(168, 85, 247, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  animation: logo-icon-breathe 4s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes logo-icon-breathe {
+@keyframes saheli-logo-float {
   0%, 100% {
-    box-shadow:
-      0 4px 16px rgba(236, 72, 153, 0.35),
-      0 0 20px rgba(168, 85, 247, 0.15),
-      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(0px);
   }
   50% {
-    box-shadow:
-      0 6px 24px rgba(236, 72, 153, 0.5),
-      0 0 32px rgba(168, 85, 247, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: translateY(-3px);
   }
 }
 
-.saheli-logo-text-wrap {
-  display: flex;
+.saheli-logo-wrapper {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  animation: saheli-logo-float 5s ease-in-out infinite;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.saheli-logo-wrapper:hover {
+  transform: scale(1.04);
+}
+
+.saheli-logo-heart {
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s ease;
+}
+
+.saheli-logo-wrapper:hover .saheli-logo-heart {
+  transform: scale(1.15) rotate(-6deg);
+  filter: drop-shadow(0 0 14px rgba(244, 114, 182, 0.75)) !important;
 }
 
 .saheli-logo-name {
-  font-family: 'Great Vibes', 'Pacifico', 'Quicksand', sans-serif;
-  font-size: 1.25rem;
-  font-weight: 800;
-  background: linear-gradient(135deg, #ffb6d0, #ffffff);
-  background-size: 200% 200%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  animation: logo-gradient-shift 5s ease-in-out infinite, logo-pulse-opacity 3s ease-in-out infinite;
-  letter-spacing: 0.08em;
-  filter: drop-shadow(0 0 8px rgba(255, 105, 180, 0.5));
+  transition: text-shadow 0.3s ease, transform 0.3s ease;
 }
 
-.saheli-logo-butterfly {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  margin-left: 6px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffb6ea' d='M12 2s2 2 4 1c1.8-.9 3 2 1 3-2 1-4 0-5 2s1 4-1 5c-2 .9-2 4-4 3-1.8-.9-3-2-2-4 1-3 2-3 1-6C4 5 8 3 12 2z'/></svg>");
-  background-size: contain;
-  background-repeat: no-repeat;
-  filter: drop-shadow(0 4px 10px rgba(255,79,216,0.15));
-  vertical-align: middle;
+.saheli-logo-wrapper:hover .saheli-logo-name {
+  text-shadow: 0 0 12px rgba(244, 114, 182, 0.6);
+  transform: scale(1.02);
 }
 
-/* Cute Pulsing + Rotating Sparkle */
-.saheli-sparkle-icon {
-  display: inline-block;
-  font-size: 1.25rem;
-  margin: 0 4px;
-  animation: sparklePopPulse 1.5s cubic-bezier(0.34, 1.56, 0.64, 1) infinite, 
-             sparkleRotate 3s linear infinite;
-  transform-origin: center;
-  will-change: transform;
+/* Sidebar header logo integration */
+.saheli-logo-section {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 0.25rem;
+  margin-bottom: 0.15rem;
 }
 
-@keyframes sparklePopPulse {
-  0%, 100% { 
-    transform: scale(1) rotate(0deg);
-    opacity: 0.7;
-    filter: drop-shadow(0 0 8px rgba(255, 105, 180, 0.4));
+/* Floating Logo Button for collapsed state */
+.saheli-floating-logo-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 768px) {
+  .saheli-floating-logo-btn {
+    top: 10px !important;
+    left: 10px !important;
+    width: 42px !important;
+    height: 42px !important;
+    z-index: 120 !important;
   }
-  50% { 
-    transform: scale(1.2) rotate(0deg);
-    opacity: 1;
-    filter: drop-shadow(0 0 16px rgba(255, 105, 180, 0.8)) drop-shadow(0 0 24px rgba(255, 182, 208, 0.5));
+  .saheli-floating-logo-btn .saheli-logo-wrapper {
+    width: 42px !important;
+    height: 42px !important;
   }
-}
-
-@keyframes sparkleRotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes logo-gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
-@keyframes logo-pulse-opacity {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-.saheli-glowing-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff69b4;
-  box-shadow: 0 0 10px #ff69b4, 0 0 20px #ffb6d0;
-  animation: logo-dot-pulse 2s ease-in-out infinite;
-  margin-top: 2px;
-}
-
-@keyframes logo-dot-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.7; box-shadow: 0 0 8px #ff69b4; }
-  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 15px #ff69b4, 0 0 25px #ffb6d0; }
 }
 
 .saheli-logo-badge {

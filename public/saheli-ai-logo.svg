@@ -1,52 +1,31 @@
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <style>
-      @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
-      @keyframes glow { 0%, 100% { filter: drop-shadow(0 0 8px rgba(255, 105, 180, 0.5)); } 50% { filter: drop-shadow(0 0 16px rgba(255, 105, 180, 0.8)); } }
-      .logo-float { animation: float 3s ease-in-out infinite; }
-      .logo-glow { animation: glow 2.5s ease-in-out infinite; }
-    </style>
-    <radialGradient id="pinkGlow" cx="50%" cy="30%">
-      <stop offset="0%" style="stop-color:#ff69b4;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#ec4899;stop-opacity:0.7" />
-    </radialGradient>
-    <linearGradient id="purpleGlow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0.8" />
-    </linearGradient>
-  </defs>
-
-  <!-- Background circle glow -->
-  <circle cx="60" cy="60" r="58" fill="none" stroke="rgba(255, 105, 180, 0.15)" stroke-width="2" opacity="0.6" />
-  
-  <!-- Floating butterfly body container -->
-  <g class="logo-float logo-glow">
-    <!-- Left wing -->
-    <ellipse cx="42" cy="48" rx="16" ry="22" fill="url(#pinkGlow)" opacity="0.95" transform="rotate(-35 42 48)" />
-    <!-- Right wing -->
-    <ellipse cx="78" cy="48" rx="16" ry="22" fill="url(#purpleGlow)" opacity="0.95" transform="rotate(35 78 48)" />
-    
-    <!-- Butterfly body -->
-    <ellipse cx="60" cy="60" rx="6" ry="18" fill="#2d1f3d" />
-    <circle cx="60" cy="42" r="5" fill="#1a1025" />
-    
-    <!-- Antennae -->
-    <line x1="60" y1="38" x2="52" y2="28" stroke="#ff69b4" stroke-width="2" stroke-linecap="round" opacity="0.8" />
-    <line x1="60" y1="38" x2="68" y2="28" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" opacity="0.8" />
-    <circle cx="52" cy="26" r="2.5" fill="#ff69b4" />
-    <circle cx="68" cy="26" r="2.5" fill="#a78bfa" />
+<svg viewBox="0 0 320 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-3px); }
+    }
+    .logo-container {
+      animation: float 5s ease-in-out infinite;
+    }
+  </style>
+  <g class="logo-container">
+    <!-- Pink Heart -->
+    <path 
+      d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
+      fill="#ff77a9" 
+      transform="translate(10, 10) scale(2.8)"
+      style="filter: drop-shadow(0 2px 4px rgba(255,119,169,0.3));"
+    />
+    <!-- Text "Saheli AI" in Fredoka style -->
+    <text 
+      x="95" 
+      y="52" 
+      font-family="'Fredoka', 'Poppins', 'Quicksand', sans-serif" 
+      font-size="32" 
+      font-weight="600" 
+      fill="#ff77a9"
+    >
+      Saheli AI
+    </text>
   </g>
-
-  <!-- Decorative sparkles around butterfly -->
-  <g opacity="0.6">
-    <circle cx="30" cy="35" r="2" fill="#ff69b4" />
-    <circle cx="90" cy="40" r="2" fill="#a78bfa" />
-    <circle cx="25" cy="70" r="1.5" fill="#ec4899" />
-    <circle cx="95" cy="75" r="1.5" fill="#7c3aed" />
-  </g>
-
-  <!-- Text: "Saheli" -->
-  <text x="60" y="102" font-family="'Poppins', sans-serif" font-size="10" font-weight="600" text-anchor="middle" fill="#ec4899" letter-spacing="1">
-    SAHELI
-  </text>
 </svg>
