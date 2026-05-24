@@ -24,6 +24,7 @@ export interface OpenRouterChatRequest {
   imageBase64?: string;
   maxTokens?: number;
   temperature?: number;
+  personality?: "bestie" | "mentor";
 }
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -276,7 +277,7 @@ export async function processOpenRouterChat(
   config: OpenRouterChatConfig,
   handlers?: OpenRouterChatHandlers
 ): Promise<string> {
-  const { systemPrompt, message, messages, history, image, imageBase64, maxTokens, temperature } = payload;
+  const { systemPrompt, message, messages, history, image, imageBase64, maxTokens, temperature, personality } = payload;
 
   const latestImage = imageBase64 || image;
 
@@ -297,11 +298,18 @@ export async function processOpenRouterChat(
     throw new Error("Message is required");
   }
 
+  const activePersonality = personality || "bestie";
+  const chosenPrompt = activePersonality === "mentor"
+    ? "You are an elite academic mentor and B.Tech study coach. Your tone must be highly professional, structured, and informative. Focus strictly on clearing doubts, analyzing files/code, and giving clear explanations. Avoid overly casual slang; prioritize educational value and accuracy."
+    : "You are Swara (or the selected character), the user's ultimate AI best friend (Saheli). Speak in a highly casual, warm, empathetic, and playful Hinglish tone. Use modern conversational text emojis. Do not act like a rigid assistant; speak like a close friend who matches their energy.";
+
+  const activePrompt = personality ? chosenPrompt : (systemPrompt || chosenPrompt);
+
   const recentText = normalizedMessages.slice(-4).map((item) => item.content).join(" ");
   const lastUserText = [...normalizedMessages].reverse().find((item) => item.role !== "assistant")?.content || message || "";
   const detailedReply = maxTokens ? maxTokens > 140 : false;
   const finalSystemPrompt = [
-    systemPrompt || SWARA_SYSTEM_PROMPT,
+    activePrompt,
     buildMoodInstruction(detectMood(`${recentText} ${lastUserText}`)),
     buildResponseStyleHint(detailedReply),
     buildHinglishHint(lastUserText),

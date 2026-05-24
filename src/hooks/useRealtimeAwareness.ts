@@ -22,8 +22,6 @@ import {
   type WeatherSnapshot,
 } from "@/lib/realtime-awareness";
 
-const WEATHER_URL = "https://api.open-meteo.com/v1/forecast";
-const REVERSE_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/reverse";
 const FRIENDLY_LOCATION_PROMPT = "Location allow karoge to hum aur real-time baatein kar payenge 💜";
 const FRIENDLY_LOCATION_REQUEST = "Agar tum allow karo, main location se weather aur time vibes aur accurate rakh sakti hoon 💫";
 
@@ -127,116 +125,32 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<Partial<LocationSnapshot>> {
   const response = await fetch(
-    `${REVERSE_GEOCODE_URL}?latitude=${latitude}&longitude=${longitude}&count=1&language=en&format=json`,
+    `/api/weather?lat=${latitude}&lon=${longitude}&action=geocode`
   );
 
   if (!response.ok) {
     throw new Error(`Reverse geocode failed: ${response.status}`);
   }
 
-  const data = (await response.json()) as ReverseGeocodeResponse;
-  const first = data.results?.[0];
-
-  return {
-    city: first?.name,
-    region: first?.admin1,
-    country: first?.country,
-    timezone: first?.timezone,
-  };
+  const data = await response.json();
+  return data.location || {};
 }
 
 async function fetchWeather(latitude: number, longitude: number): Promise<WeatherSnapshot> {
   const response = await fetch(
-    `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,precipitation_probability&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&forecast_days=2&timezone=auto`,
+    `/api/weather?lat=${latitude}&lon=${longitude}&action=weather`
   );
 
   if (!response.ok) {
     throw new Error(`Weather fetch failed: ${response.status}`);
   }
 
-  const data = (await response.json()) as WeatherResponse;
-  const current = data.current;
-  const hourly = data.hourly;
+  const data = await response.json();
+  if (!data.weather) {
+    throw new Error("Weather data missing in response");
+  }
 
-  const temperatureC = typeof current?.temperature_2m === "number" ? current.temperature_2m : 0;
-  const feelsLikeC = typeof current?.apparent_temperature === "number" ? current.apparent_temperature : undefined;
-  const weatherCode = typeof current?.weather_code === "number" ? current.weather_code : 0;
-  const weatherMeta = weatherConditionFromCode(weatherCode);
-  const forecastTimes = hourly?.time ?? [];
-  const forecastTemps = hourly?.temperature_2m ?? [];
-  const forecastCodes = hourly?.weather_code ?? [];
-  const forecastRain = hourly?.precipitation_probability ?? [];
-  const forecastHumidity = hourly?.relative_humidity_2m ?? [];
-  const forecastWind = hourly?.wind_speed_10m ?? [];
-  const currentTimeIso = current?.time ? new Date(current.time).toISOString().slice(0, 13) : null;
-  const matchedCurrentIndex = currentTimeIso
-    ? forecastTimes.findIndex((timeIso) => new Date(timeIso).toISOString().slice(0, 13) === currentTimeIso)
-    : -1;
-  const currentHour = new Date().getHours();
-  const startIndex = matchedCurrentIndex >= 0
-    ? matchedCurrentIndex
-    : forecastTimes.length > 0
-      ? Math.min(Math.max(currentHour, 0), Math.max(forecastTimes.length - 1, 0))
-      : 0;
-  const hourlyForecast = forecastTimes
-    .slice(startIndex, startIndex + 6)
-    .map((timeIso, index) => {
-      const absoluteIndex = startIndex + index;
-      const temperature = typeof forecastTemps[absoluteIndex] === "number" ? forecastTemps[absoluteIndex] : temperatureC;
-      const code = typeof forecastCodes[absoluteIndex] === "number" ? forecastCodes[absoluteIndex] : weatherCode;
-      const rainProbability = typeof forecastRain[absoluteIndex] === "number" ? forecastRain[absoluteIndex] : undefined;
-      const humidity = typeof forecastHumidity[absoluteIndex] === "number" ? forecastHumidity[absoluteIndex] : undefined;
-      const wind = typeof forecastWind[absoluteIndex] === "number" ? forecastWind[absoluteIndex] : undefined;
-      const meta = weatherConditionFromCode(code);
-      const date = new Date(timeIso);
-
-      return {
-        timeIso,
-        hourLabel: date.toLocaleTimeString(undefined, { hour: "numeric", hour12: true }),
-        temperatureC: temperature,
-        weatherCode: code,
-        condition: meta.condition,
-        precipitationProbabilityPercent: rainProbability,
-        isRainy: meta.isRainy,
-        isCloudy: meta.isCloudy,
-        dayState: resolveDayState(date.getHours()),
-        humidityPercent: humidity,
-        windSpeedKph: wind,
-      };
-    });
-
-  const currentForecastIndex = matchedCurrentIndex >= 0 ? matchedCurrentIndex : startIndex;
-  const humidityPercent = typeof current?.relative_humidity_2m === "number"
-    ? current.relative_humidity_2m
-    : typeof forecastHumidity[currentForecastIndex] === "number"
-      ? forecastHumidity[currentForecastIndex]
-      : undefined;
-  const windSpeedKph = typeof current?.wind_speed_10m === "number"
-    ? current.wind_speed_10m
-    : typeof forecastWind[currentForecastIndex] === "number"
-      ? forecastWind[currentForecastIndex]
-      : undefined;
-  const rainProbabilityPercent = typeof current?.precipitation_probability === "number"
-    ? current.precipitation_probability
-    : typeof forecastRain[currentForecastIndex] === "number"
-      ? forecastRain[currentForecastIndex]
-      : undefined;
-
-  return {
-    temperatureC,
-    feelsLikeC,
-    humidityPercent,
-    windSpeedKph,
-    rainProbabilityPercent,
-    hotColdState: resolveHotColdState(temperatureC),
-    weatherCode,
-    condition: weatherMeta.condition,
-    isRainy: weatherMeta.isRainy,
-    isCloudy: weatherMeta.isCloudy,
-    dayState: current?.is_day === 1 ? "day" : "night",
-    updatedAt: Date.now(),
-    hourlyForecast,
-  };
+  return data.weather;
 }
 
 export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
@@ -350,10 +264,29 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
       const latitude = Number(position.coords.latitude.toFixed(6));
       const longitude = Number(position.coords.longitude.toFixed(6));
 
-      const [geoMeta, weather] = await Promise.all([
-        reverseGeocode(latitude, longitude).catch(() => ({})),
-        fetchWeather(latitude, longitude),
-      ]);
+      let geoMeta: Partial<LocationSnapshot> = {};
+      let weather: WeatherSnapshot;
+
+      try {
+        const response = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}&action=all`);
+        if (!response.ok) {
+          throw new Error(`Weather and geocode fetch failed: ${response.status}`);
+        }
+        const data = await response.json();
+        geoMeta = data.location || {};
+        weather = data.weather;
+        if (!weather) {
+          throw new Error("Weather data missing in response");
+        }
+      } catch (err) {
+        console.error("Backend unified weather call failed, falling back to separate calls:", err);
+        const [geoRes, weatherRes] = await Promise.all([
+          reverseGeocode(latitude, longitude).catch(() => ({})),
+          fetchWeather(latitude, longitude),
+        ]);
+        geoMeta = geoRes;
+        weather = weatherRes;
+      }
 
       const location: LocationSnapshot = {
         latitude,

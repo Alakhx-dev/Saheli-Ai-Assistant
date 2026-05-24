@@ -153,7 +153,15 @@ export default function SettingsPanel({
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [groqKey, setGroqKey] = useState("");
   const [openRouterKey, setOpenRouterKey] = useState("");
-  const [selectedPersonality, setSelectedPersonality] = useState<"bestie" | "coach">("bestie");
+  const [selectedPersonality, setSelectedPersonality] = useState<"bestie" | "mentor">(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_personality");
+      if (saved === "mentor" || saved === "bestie") {
+        return saved as "bestie" | "mentor";
+      }
+    }
+    return "bestie";
+  });
   const [personalizationChild, setPersonalizationChild] = useState<"character" | "realtime" | null>(null);
   const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
@@ -618,7 +626,10 @@ export default function SettingsPanel({
                       <div className="flex flex-col gap-2.5">
                         <button
                           type="button"
-                          onClick={() => setSelectedPersonality("bestie")}
+                          onClick={() => {
+                            setSelectedPersonality("bestie");
+                            localStorage.setItem("saheli_personality", "bestie");
+                          }}
                           className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "bestie" ? "settings-personality-card-active" : ""}`}
                         >
                           <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "bestie" ? "text-pink-100" : "text-white"}`}>
@@ -631,10 +642,13 @@ export default function SettingsPanel({
 
                         <button
                           type="button"
-                          onClick={() => setSelectedPersonality("coach")}
-                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "coach" ? "settings-personality-card-active" : ""}`}
+                          onClick={() => {
+                            setSelectedPersonality("mentor");
+                            localStorage.setItem("saheli_personality", "mentor");
+                          }}
+                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "mentor" ? "settings-personality-card-active" : ""}`}
                         >
-                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "coach" ? "text-pink-100" : "text-white"}`}>
+                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "mentor" ? "text-pink-100" : "text-white"}`}>
                             Study Coach / Mentor
                           </p>
                           <p className="mt-1 text-[12px] leading-5 text-white/58">

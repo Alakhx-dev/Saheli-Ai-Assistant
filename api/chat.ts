@@ -40,6 +40,10 @@ export default async function handler(request: Request) {
   try {
     console.log("Incoming chat request to /api/chat (OpenRouter)");
     const payload = await request.json();
+    const xPersonality = request.headers.get("x-personality");
+    if (!payload.personality && xPersonality) {
+      payload.personality = xPersonality;
+    }
     const encoder = new TextEncoder();
 
     const stream = new ReadableStream({

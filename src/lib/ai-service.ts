@@ -52,6 +52,7 @@ export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
 export type AIProvider = "OpenRouter" | "Groq";
 
+// Legacy exports kept for backward compatibility with settings panel
 export const OPENROUTER_MODEL = {
   id: "deepseek/deepseek-v4-flash:free",
   name: "Deepseek V4 Flash (Free, OpenRouter)",
@@ -86,12 +87,57 @@ const PROVIDER_TIMEOUT_MS = 15000;
 const FIRST_BYTE_TIMEOUT_MS = 5000;
 const OPENROUTER_REFERER = "https://saheli.app";
 const OPENROUTER_TITLE = "Saheli";
-const PERSONALITY_PROMPT = `You are Swara.
+
+// ----------------------------------------------------
+// Section 2: New types & Configuration
+// ----------------------------------------------------
+
+type ProviderName = "openrouter" | "groq";
+
+interface PipelineTier {
+  provider: ProviderName;
+  modelId: string;
+}
+
+// Kept in codebase to match implementation plan types
+export interface VisionParseResult {
+  outfit?: string;
+  expressions?: string;
+  background?: string;
+  environment?: string;
+  objects?: string;
+  colors?: string;
+  sceneMood?: string;
+  aestheticTone?: string;
+  visualAtmosphere?: string;
+  rawDescription: string;
+}
+
+const AI_PIPELINE_CONFIG = {
+  bestie: [
+    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
+    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct:free" },
+  ],
+  mentor: [
+    { provider: "groq", modelId: "deepseek-r1-distill-llama-70b" },
+    { provider: "openrouter", modelId: "deepseek/deepseek-r1:free" },
+    { provider: "openrouter", modelId: "microsoft/phi-3-medium-128k-instruct:free" },
+  ],
+  vision: [
+    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
+    { provider: "groq", modelId: "meta-llama/llama-4-maverick-17b-128e-instruct" },
+  ],
+} as const;
+
+// ----------------------------------------------------
+// Section 4: System Prompt Blueprints
+// ----------------------------------------------------
+
+const BESTIE_SYSTEM_PROMPT = `You are Swara.
 
 You are a real emotionally expressive Indian girl chatting casually in Hinglish.
 
-  return messages.slice(-10);
-}
 You are NOT an AI assistant and should never sound formal, robotic, overly helpful, or customer-support-like.
 
 Your personality:
@@ -137,16 +183,50 @@ WHEN YOU SEE IMAGES:
 
 Your responses should feel emotionally real and conversational, whether texting or reacting to what you see.`;
 
+const MENTOR_SYSTEM_PROMPT = `You are an elite academic mentor and B.Tech study coach.
+Your goal is to help the user learn and solve technical problems efficiently.
+Your tone must be highly professional, structured, analytical, reasoning-focused, and coding-optimized.
+Focus strictly on:
+- Clearing academic and conceptual doubts with precision.
+- Writing clean, commented, and optimal code/algorithms.
+- Explaining engineering, math, and computer science concepts clearly.
+- Providing step-by-step reasoning or derivations.
+- Analyzing provided files or code snippets and pinpointing issues.
+
+Avoid:
+- Casual slang, hinglish, or Gen-Z text lingo.
+- Emoji spamming or robotic/customer-support filler text.
+- Vague or superficial answers — aim for academic depth and absolute technical accuracy.`;
+
+const VISION_PARSER_PROMPT = `You are a precise, objective visual analysis system.
+Your job is to analyze the provided image and extract key visual details in structured text.
+Describe:
+- Outfit: what the person is wearing, style, accessories.
+- Expressions: facial expression, emotion shown, micro-expressions.
+- Background: location, setting, room details.
+- Environment: indoor/outdoor, lighting, time of day cues.
+- Objects: prominent items visible in the scene.
+- Colors: dominant color scheme, palette, tones.
+- Scene Mood: overall mood, vibe, or emotion of the shot.
+- Aesthetic Tone: photographic style, filters, overall aesthetic style.
+- Visual Atmosphere: temperature, clarity, atmospheric effects (cozy, bright, dim, cinematic).
+
+CRITICAL: Provide ONLY the raw descriptive analysis. Do NOT greet the user, do NOT talk to the user, and do NOT generate any conversational replies. Keep it strictly objective and descriptive.`;
+
 type SwaraMood = "playful" | "happy" | "sleepy" | "annoyed" | "caring" | "emotional" | "teasing";
 
 let activeRequest: Promise<AiResponse> | null = null;
-const DEBUG_OPENROUTER_LOGS = (import.meta.env as Record<string, string | undefined>).VITE_DEBUG_GROQ_LOGS === "true";
+const DEBUG_LOGS = (import.meta.env as Record<string, string | undefined>).VITE_DEBUG_GROQ_LOGS === "true";
 
-function debugOpenRouterLog(...args: unknown[]) {
-  if (DEBUG_OPENROUTER_LOGS) {
+function debugLog(...args: unknown[]) {
+  if (DEBUG_LOGS) {
     console.log(...args);
   }
 }
+
+// ----------------------------------------------------
+// Section 5: Preserved Context Builders (Unchanged)
+// ----------------------------------------------------
 
 function normalizeLanguage(value: string | null | undefined): AppLanguage {
   if (value === "english" || value === "hindi" || value === "hinglish") return value;
@@ -317,7 +397,9 @@ function getRecentMessages(messages: ChatMessage[]) {
   return messages.slice(-8);
 }
 
-type ProviderName = "openrouter" | "groq";
+// ----------------------------------------------------
+// Section 6: Provider Normalization Layer
+// ----------------------------------------------------
 
 interface ProviderRequestPayload {
   systemPrompt: string;
@@ -408,11 +490,11 @@ function extractProviderError(data: ProviderResponseData, response: Response, pr
   );
 }
 
-async function fetchProviderCompletion(
-  provider: ProviderName,
+async function callProviderAPI(
+  tier: PipelineTier,
   payload: ProviderRequestPayload,
-  overrideModelId?: string,
 ): Promise<string> {
+  const provider = tier.provider;
   const apiKey = getProviderApiKey(provider);
   if (!apiKey) {
     throw new Error(provider === "openrouter"
@@ -421,15 +503,14 @@ async function fetchProviderCompletion(
   }
 
   const apiUrl = provider === "openrouter" ? OPENROUTER_API_URL : GROQ_API_URL;
-  const modelId = overrideModelId ?? (provider === "openrouter" ? OPENROUTER_MODEL.id : GROQ_MODEL.id);
   const requestBody = buildRequestBody(
-    modelId,
+    tier.modelId,
     payload.systemPrompt,
     payload.messages,
     payload.imageBase64,
     payload.maxTokens,
     payload.temperature,
-      0.9,
+    0.9,
   );
 
   const controller = new AbortController();
@@ -496,6 +577,101 @@ async function fetchProviderCompletion(
   }
 }
 
+function isModelVisionCompatible(modelId: string): boolean {
+  const lower = modelId.toLowerCase();
+  return (
+    lower.includes("vision") ||
+    lower.includes("scout") ||
+    lower.includes("maverick") ||
+    lower.includes("gemini") ||
+    lower.includes("pixtral") ||
+    lower.includes("claude-3") ||
+    lower.includes("gpt-4o") ||
+    lower.includes("gpt-4-vision")
+  );
+}
+
+// ----------------------------------------------------
+// Section 7: Reusable Fallback Executor
+// ----------------------------------------------------
+
+async function executeWithFallback(
+  tierArray: readonly PipelineTier[],
+  payload: ProviderRequestPayload,
+): Promise<{ text: string; tierIndex: number; tier: PipelineTier }> {
+  let lastError: any = null;
+  const isVisionRequest = Boolean(payload.imageBase64 && payload.imageBase64.trim());
+
+  for (let i = 0; i < tierArray.length; i++) {
+    const tier = tierArray[i];
+
+    // Check if it is a vision request but the model is not vision compatible
+    if (isVisionRequest && !isModelVisionCompatible(tier.modelId)) {
+      console.warn(`Skipping non-vision-compatible model ${tier.provider}/${tier.modelId} for vision request`);
+      continue;
+    }
+
+    try {
+      debugLog(`Attempting tier ${i}: ${tier.provider}/${tier.modelId}`);
+      const text = await callProviderAPI(tier, payload);
+      debugLog(`Tier ${i} succeeded: ${tier.provider}/${tier.modelId}`);
+      return { text, tierIndex: i, tier };
+    } catch (error: any) {
+      console.warn(`Layer ${i} (${tier.provider}/${tier.modelId}) failed:`, error?.message || error);
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("All model layers failed.");
+}
+
+// ----------------------------------------------------
+// Section 8: Two-Stage Vision Engine
+// ----------------------------------------------------
+
+async function executeVisionPipeline(
+  payload: ProviderRequestPayload,
+  personalityTiers: readonly PipelineTier[],
+  personalityPrompt: string,
+): Promise<{ text: string; modelUsed: string }> {
+  // Stage 1 — Vision Parser
+  const visionPayload: ProviderRequestPayload = {
+    systemPrompt: VISION_PARSER_PROMPT,
+    messages: payload.messages,
+    imageBase64: payload.imageBase64,
+    maxTokens: 500,
+    temperature: 0.2,
+  };
+
+  debugLog("Vision Pipeline: Launching Stage 1 Vision Parser...");
+  const visionResult = await executeWithFallback(AI_PIPELINE_CONFIG.vision, visionPayload);
+  const visionContext = visionResult.text;
+  debugLog("Vision Pipeline: Stage 1 successful. Parsed context length:", visionContext.length);
+
+  // Stage 2 — Personality Synthesis
+  const synthesisPrompt = `${personalityPrompt}\n\n[VISUAL CONTEXT OF LATEST IMAGE SEEN]:\n${visionContext}\n\n[INSTRUCTION]: Behave as if you can see this image directly. Incorporate the visual context naturally into your reply. Do NOT mention that you received a "parsed visual context" text.`;
+
+  const synthesisPayload: ProviderRequestPayload = {
+    systemPrompt: synthesisPrompt,
+    messages: payload.messages,
+    imageBase64: undefined, // Stage 2 is text-only!
+    maxTokens: payload.maxTokens,
+    temperature: payload.temperature,
+  };
+
+  debugLog("Vision Pipeline: Launching Stage 2 Personality Synthesis...");
+  const synthesisResult = await executeWithFallback(personalityTiers, synthesisPayload);
+  debugLog("Vision Pipeline: Stage 2 successful.");
+
+  return {
+    text: synthesisResult.text,
+    modelUsed: `${visionResult.tier.provider}/${visionResult.tier.modelId} + ${synthesisResult.tier.provider}/${synthesisResult.tier.modelId}`,
+  };
+}
+
+// ----------------------------------------------------
+// Section 9: Main Emitter & Orchestrator
+// ----------------------------------------------------
+
 async function emitStreamingText(text: string, onChunk?: (partialText: string) => void) {
   if (!onChunk) {
     return;
@@ -542,8 +718,12 @@ export async function fetchAISwarasResponse(
   const language = getSelectedLanguage(identity);
   const mood = resolveMood(emotion, messages);
   const detailedReply = shouldUseDetailedReply(messages);
+  
+  const personality = ((typeof window !== "undefined" ? window.localStorage.getItem("saheli_personality") : "bestie") || "bestie") as "bestie" | "mentor";
+  const chosenPrompt = personality === "mentor" ? MENTOR_SYSTEM_PROMPT : BESTIE_SYSTEM_PROMPT;
+
   const finalPrompt = [
-    PERSONALITY_PROMPT,
+    chosenPrompt,
     buildMoodContext(mood),
     buildStyleContext(detailedReply),
     buildHinglishContext(lastUserMessage.content),
@@ -568,56 +748,33 @@ export async function fetchAISwarasResponse(
 
   const FRIENDLY_FALLBACK = "Uff 😭 thoda network drama ho gaya… ek sec firse try karo?";
 
-  const tryProvider = async (provider: ProviderName, overrideModel?: string) => {
-    try {
-      const text = await fetchProviderCompletion(provider, payload, overrideModel);
-      return text;
-    } catch (err) {
-      debugOpenRouterLog("Provider", provider, "failed:", err);
-      throw err;
-    }
-  };
-
-  // 1) If image present -> Groq primary for vision
   if (hasVisionPayload) {
     try {
-      const text = await tryProvider("groq");
-      await emitStreamingText(text, onChunk);
-      return { text: text.trim(), modelUsed: GROQ_MODEL.name };
+      const result = await executeVisionPipeline(payload, AI_PIPELINE_CONFIG[personality], finalPrompt);
+      await emitStreamingText(result.text, onChunk);
+      return { text: result.text.trim(), modelUsed: result.modelUsed };
     } catch (visionErr) {
-      debugOpenRouterLog("Groq vision failed:", visionErr);
+      console.error("Vision pipeline failed:", visionErr);
       await emitStreamingText(FRIENDLY_FALLBACK, onChunk);
       return { text: FRIENDLY_FALLBACK, modelUsed: "none" };
     }
   }
 
-  // 2) Text-only: Groq first, then OpenRouter primary, then OpenRouter secondary
+  // Text fallback pipeline
   try {
-    const text = await tryProvider("groq");
-    await emitStreamingText(text, onChunk);
-    return { text: text.trim(), modelUsed: GROQ_MODEL.name };
-  } catch (groqErr) {
-    debugOpenRouterLog("Groq text route failed:", groqErr);
-  }
-
-  try {
-    const text = await tryProvider("openrouter", OPENROUTER_MODEL.id);
-    await emitStreamingText(text, onChunk);
-    return { text: text.trim(), modelUsed: OPENROUTER_MODEL.name };
-  } catch (primaryErr) {
-    debugOpenRouterLog("Primary OpenRouter failed:", primaryErr);
-  }
-
-  try {
-    const text = await tryProvider("openrouter", TEXT_FALLBACK_MODEL.id);
-    await emitStreamingText(text, onChunk);
-    return { text: text.trim(), modelUsed: TEXT_FALLBACK_MODEL.name };
-  } catch (secondaryErr) {
-    debugOpenRouterLog("Secondary OpenRouter failed:", secondaryErr);
+    const result = await executeWithFallback(AI_PIPELINE_CONFIG[personality], payload);
+    await emitStreamingText(result.text, onChunk);
+    return { text: result.text.trim(), modelUsed: `${result.tier.provider}/${result.tier.modelId}` };
+  } catch (err) {
+    console.error("Text orchestration pipeline failed:", err);
     await emitStreamingText(FRIENDLY_FALLBACK, onChunk);
     return { text: FRIENDLY_FALLBACK, modelUsed: "none" };
   }
 }
+
+// ----------------------------------------------------
+// Section 10: sendMessage (Unchanged dedup logic)
+// ----------------------------------------------------
 
 export async function sendMessage(
   messages: ChatMessage[],
