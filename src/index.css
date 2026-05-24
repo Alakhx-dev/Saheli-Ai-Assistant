@@ -2723,3 +2723,10 @@
    🦋 HYPER-REALISTIC BUTTERFLY SYSTEM
    ═══════════════════════════════════════════════════════════════ */
 
+@keyframes softFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.animate-soft-float {
+  animation: softFloat 4s ease-in-out infinite;
+}

@@ -951,15 +951,27 @@ export default function Chat() {
     }
 
     const mediaQuery = window.matchMedia("(max-width: 767px)");
+    let timeoutId: number | null = null;
+    
     const syncSidebarState = () => {
       setIsSidebarOpen(!mediaQuery.matches);
     };
+    
+    const handleMediaQueryChange = () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutId = window.setTimeout(syncSidebarState, 150);
+    };
 
     syncSidebarState();
-    mediaQuery.addEventListener("change", syncSidebarState);
+    mediaQuery.addEventListener("change", handleMediaQueryChange);
 
     return () => {
-      mediaQuery.removeEventListener("change", syncSidebarState);
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      mediaQuery.removeEventListener("change", handleMediaQueryChange);
     };
   }, []);
 

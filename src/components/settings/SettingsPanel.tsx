@@ -60,14 +60,15 @@ const characterCards = [
 
 function NavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
   return (
-    <button
+    <motion.button
+      whileTap={{ scale: 0.96 }}
       type="button"
       onClick={onClick}
       className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${active ? "border-pink-400/20 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.1)]" : "border-pink-500/5 bg-gradient-to-r from-pink-500/5 to-purple-500/5 text-white/65 hover:border-pink-500/15 hover:from-pink-500/10 hover:to-purple-500/10 hover:text-white"}`}
     >
       <span>{label}</span>
       {active ? <Check className="h-4 w-4 text-pink-200" /> : null}
-    </button>
+    </motion.button>
   );
 }
 
@@ -212,20 +213,21 @@ export default function SettingsPanel({
           {/* Overlay to close */}
           <div className="absolute inset-0 pointer-events-auto" onClick={() => onOpenChange(false)} />
 
-          {/* Level 1: Menu */}
-          <motion.div
-            initial={{ opacity: 0, x: -20, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
-            style={{
-              background: "rgba(15, 15, 15, 0.4)",
-              backdropFilter: "blur(25px)",
-              border: "0.5px solid rgba(255, 255, 255, 0.06)",
-              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
-            }}
-            className="relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
-          >
+          <div className="flex items-end animate-soft-float pointer-events-none">
+            {/* Level 1: Menu */}
+            <motion.div
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
+              style={{
+                background: "rgba(15, 15, 15, 0.4)",
+                backdropFilter: "blur(25px)",
+                border: "0.5px solid rgba(255, 255, 255, 0.06)",
+                boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+              }}
+              className="relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
+            >
             <div className="mb-2 px-2">
               <h2 className="text-xl font-semibold tracking-tight text-white">{t.settings.title}</h2>
               <p className="text-[11px] text-white/50">{t.settings.description}</p>
@@ -253,11 +255,11 @@ export default function SettingsPanel({
           <AnimatePresence>
           {showContentPanel ? (
           <motion.div
-            key={activeSection || "empty"}
+            key="content-panel"
             initial={{ opacity: 0, x: -20, scale: 0.95 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -20, scale: 0.95 }}
-            transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
+            transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
             style={{
               background: "rgba(15, 15, 15, 0.4)",
               backdropFilter: "blur(25px)",
@@ -269,7 +271,7 @@ export default function SettingsPanel({
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
               {activeSection === "personalization" ? (
-                <motion.div key="personalization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="personalization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                   <SectionShell
                     label="Personalization"
                     title="Customize your experience"
@@ -278,7 +280,8 @@ export default function SettingsPanel({
                   >
                     <div className="flex flex-col gap-2">
                       {personalizationSections.map((section) => (
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.96 }}
                           key={section.id}
                           type="button"
                           onClick={() => setPersonalizationChild(section.id)}
@@ -286,7 +289,7 @@ export default function SettingsPanel({
                         >
                           <span className="font-medium">{section.label}</span>
                           {personalizationChild === section.id ? <Check className="h-4 w-4 text-pink-300" /> : null}
-                        </button>
+                        </motion.button>
                       ))}
                     </div>
                   </SectionShell>
@@ -294,12 +297,13 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "character" ? (
-                <motion.div key="character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                     <div className="flex flex-col gap-2">
                       {characterCards.map((card) => {
                         const active = selectedCharacter === card.id;
                         return (
-                          <button
+                          <motion.button
+                            whileTap={{ scale: 0.96 }}
                             key={card.id}
                             type="button"
                             onClick={() => onCharacterChange(card.id)}
@@ -312,7 +316,7 @@ export default function SettingsPanel({
                                 Active
                               </span>
                             ) : null}
-                          </button>
+                          </motion.button>
                         );
                       })}
                     </div>
@@ -320,7 +324,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "memory" ? (
-                <motion.div key="memory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="memory" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                     <div className="space-y-4">
                       <div className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
                         <div className="min-w-0">
@@ -367,7 +371,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "account" ? (
-                <motion.div key="account" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="account" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                     {/* Hidden file input for image upload */}
                     <input
                       ref={accountFileRef}
@@ -525,7 +529,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "realtime" ? (
-                <motion.div key="realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                   <section className="space-y-2">
                     <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Date, Time & Weather</h3>
                     <div className="space-y-2">
@@ -615,7 +619,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "appearance" ? (
-                <motion.div key="appearance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="appearance" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                   {activeInnerTab === "personality" ? (
                     <SectionShell
                       label="Personality"
@@ -663,7 +667,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "voice" ? (
-                <motion.div key="voice" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="voice" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                   {activeInnerTab === "bond" ? (
                     <SectionShell
                       label="Bond Level"
@@ -695,7 +699,7 @@ export default function SettingsPanel({
               ) : null}
 
               {activeSection === "about" ? (
-                <motion.div key="about" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                <motion.div key="about" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                   {activeInnerTab === "privacy" ? (
                     <div className="space-y-4">
                       <p className="text-[11px] font-medium uppercase tracking-[0.26em] text-white/35">Privacy control</p>
@@ -754,30 +758,32 @@ export default function SettingsPanel({
           ) : null}
           </AnimatePresence>
 
+          <AnimatePresence>
           {showContentPanel && activeSection === "personalization" && personalizationChild ? (
             <motion.div
-              key={`personalization-child-${personalizationChild}`}
+              key="personalization-child-panel"
               initial={{ opacity: 0, x: -20, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -20, scale: 0.95 }}
-              transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
+              transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
               style={{
                 background: "rgba(15, 15, 15, 0.4)",
                 backdropFilter: "blur(25px)",
                 border: "0.5px solid rgba(255, 255, 255, 0.06)",
                 boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
               }}
-              className={`relative pointer-events-auto ml-4 mb-2 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${personalizationChild === "character" ? "w-[280px]" : "w-[340px]"}`}
+              className={`relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${personalizationChild === "character" ? "w-[280px]" : "w-[340px]"}`}
             >
               <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <AnimatePresence mode="wait">
                   {personalizationChild === "character" ? (
-                    <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                    <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                       <div className="flex flex-col gap-2">
                         {characterCards.map((card) => {
                           const active = selectedCharacter === card.id;
                           return (
-                            <button
+                            <motion.button
+                              whileTap={{ scale: 0.96 }}
                               key={card.id}
                               type="button"
                               onClick={() => onCharacterChange(card.id)}
@@ -790,7 +796,7 @@ export default function SettingsPanel({
                                   Active
                                 </span>
                               ) : null}
-                            </button>
+                            </motion.button>
                           );
                         })}
                       </div>
@@ -798,7 +804,7 @@ export default function SettingsPanel({
                   ) : null}
 
                   {personalizationChild === "realtime" ? (
-                    <motion.div key="personalization-realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
+                    <motion.div key="personalization-realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
                       <section className="space-y-2">
                         <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Date, Time & Weather</h3>
                         <div className="space-y-2">
@@ -889,6 +895,8 @@ export default function SettingsPanel({
               </div>
             </motion.div>
           ) : null}
+          </AnimatePresence>
+          </div>
         </div>
       )}
     </AnimatePresence>
