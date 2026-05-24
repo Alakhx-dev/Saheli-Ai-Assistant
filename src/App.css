@@ -126,21 +126,70 @@ h1, h2, h3, .font-display {
   @apply hover-scale neon-glow;
 }
 
-/* Message Bubble Overhaul */
-.saheli-message-user {
-  background: linear-gradient(135deg, rgba(255, 105, 180, 0.08) 0%, rgba(168, 85, 247, 0.04) 100%);
-  border: 1px solid rgba(255, 105, 180, 0.22);
-  box-shadow: 0 8px 32px rgba(255, 105, 180, 0.04), inset 0 1px 2px rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+/* Premium Frosted Cyber-Glass User Bubble */
+.saheli-premium-user-bubble {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 105, 180, 0.14) 0%,
+    rgba(147, 51, 234, 0.08) 50%,
+    rgba(20, 10, 30, 0.65) 100%
+  ) !important;
+  border: 1px solid rgba(255, 105, 180, 0.28) !important;
+  border-top-color: rgba(255, 255, 255, 0.25) !important;
+  border-left-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 
+    0 12px 30px -5px rgba(0, 0, 0, 0.5),
+    0 4px 15px rgba(255, 105, 180, 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
+  border-radius: 22px 22px 4px 22px !important;
+  padding: 0.85rem 1.35rem !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative;
 }
 
-.saheli-message-ai {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 192, 203, 0.02) 100%);
-  border: 1px solid rgba(255, 192, 203, 0.09);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+.saheli-premium-user-bubble:hover {
+  transform: translateY(-3px) scale(1.01);
+  border-color: rgba(255, 105, 180, 0.45) !important;
+  border-top-color: rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 
+    0 20px 40px -8px rgba(0, 0, 0, 0.6),
+    0 8px 25px rgba(255, 105, 180, 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Premium Frosted Cyber-Glass AI Bubble */
+.saheli-premium-ai-bubble {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(168, 85, 247, 0.04) 50%,
+    rgba(10, 5, 25, 0.7) 100%
+  ) !important;
+  border: 1px solid rgba(168, 85, 247, 0.2) !important;
+  border-top-color: rgba(255, 255, 255, 0.18) !important;
+  border-left-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 
+    0 12px 30px -5px rgba(0, 0, 0, 0.65),
+    0 4px 15px rgba(168, 85, 247, 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(20px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
+  border-radius: 22px 22px 22px 4px !important;
+  padding: 0.85rem 1.35rem !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative;
+}
+
+.saheli-premium-ai-bubble:hover {
+  transform: translateY(-3px) scale(1.01);
+  border-color: rgba(168, 85, 247, 0.35) !important;
+  border-top-color: rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 
+    0 20px 40px -8px rgba(0, 0, 0, 0.75),
+    0 8px 25px rgba(168, 85, 247, 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.15) !important;
 }
 
 .saheli-composer-container {

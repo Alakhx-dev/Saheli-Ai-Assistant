@@ -548,14 +548,13 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
       <div
         data-role={isUser ? 'user' : 'assistant'}
         className={`
-        max-w-[85%] md:max-w-[45%] px-5 py-4 text-sm leading-relaxed font-medium relative text-neutral-50
-        transition-colors duration-300 rounded-[28px]
-        ${isNew ? "msg-sheen" : ""}
-        ${isUser
-          ? "rounded-br-[10px] saheli-message-user"
-          : "rounded-bl-[10px] saheli-message-ai"
-        }
-      `}
+          max-w-[85%] md:max-w-[45%] px-5 py-4 text-sm leading-relaxed font-medium relative transition-all duration-300
+          ${isNew ? "msg-sheen" : ""}
+          ${isUser
+            ? "saheli-premium-user-bubble text-white/95"
+            : "saheli-premium-ai-bubble text-[#fdf2f8]"
+          }
+        `}
         style={{ 
           fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
           letterSpacing: "0.01em",
@@ -595,7 +594,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
         WebkitOverflowScrolling: "touch",
       }}
     >
-      <div className="h-4" />
+      <div className="h-16 md:h-20" />
       <AnimatePresence initial={false} mode="sync">
         {messages.map((msg, idx) => (
           <ScrollFadeMessageItem key={getMessageKey(msg, idx)} msg={msg} isNew={idx >= lastMsgCount} />
