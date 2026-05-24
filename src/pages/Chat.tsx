@@ -82,19 +82,28 @@ import {
 const SettingsPanel = lazy(() => import("../components/settings/SettingsPanel"));
 
 // Intent-based vision trigger — matches natural Hindi/English phrases asking to be looked at.
-const isVisionIntent = (text: string) => {
+const isVisionIntent = (text: string, lastModelMessage?: string) => {
   const input = text.toLowerCase();
   
-  // Pattern 1: Action (dekho, dkeho, dekh, btao, look, check, see)
-  const action = /(de[k|kh|gh|k]o|d[k|kh]o|look|check|see|batao|btao)/i.test(input);
-  
-  // Pattern 2: Subject (mujhe, mera, meri, mai, main, camera, look, outfit, me, ham, hum)
-  const subject = /(mujhe|mera|meri|mai|main|camera|look|outfit|me|ham|hum)/i.test(input);
+  // 1. Direct explicit commands to open camera
+  const isDirectCameraCommand = /\b(camera open|open camera|camera chalu|chalu karo camera|start camera|camera start|open default camera)\b/i.test(input);
+  if (isDirectCameraCommand) return true;
 
-  // Pattern 3: Direct Style Queries
-  const direct = /(kaisa lag raha|kaisi lag rahi|how do i look|fit check|kaisa hai ham)/i.test(input);
+  // 2. Consent check: did the model suggest camera, and did the user agree?
+  if (lastModelMessage) {
+    const lastModelLower = lastModelMessage.toLowerCase();
+    const modelAskedForCamera = /camera|camera open|dekh lu|dekhna padega|dekh sakti|open the camera|inspect the diagram|look at the screen/i.test(lastModelLower);
+    
+    const userAgreed = /^(haan|ha|yes|yep|ok|okay|open|dekho|dikhata|dikhati|sure|go ahead|karlo|kar lo|ya|yeah)/i.test(input) || 
+                       /\b(haan|ha|yes|ok|okay|open|dekho|sure|go ahead|karlo|kar lo|open camera)\b/i.test(input);
 
-  return (action && subject) || direct || (input.includes("camera") && action);
+    if (modelAskedForCamera && userAgreed) {
+      console.log("🎥 [DEBUG] User consented to camera open request.");
+      return true;
+    }
+  }
+
+  return false;
 };
 const GUEST_PROFILE_NAME_KEY = "swara_guest_profile_name";
 const GUEST_PROFILE_PHOTO_KEY = "swara_guest_profile_photo";
@@ -2243,7 +2252,8 @@ export default function Chat() {
       });
     }
 
-    const shouldUseVision = isVisionIntent(userText);
+    const lastModelMessage = [...messagesRef.current].reverse().find(msg => msg.role === "model")?.content || "";
+    const shouldUseVision = isVisionIntent(userText, lastModelMessage);
     if (mobile && shouldUseVision) {
       const pendingRequest: PendingMobileVisionRequest = {
         id: ++mobileVisionRequestIdRef.current,
