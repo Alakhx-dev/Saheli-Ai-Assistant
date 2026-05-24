@@ -811,3 +811,90 @@ export async function sendMessage(
     activeRequest = null;
   }
 }
+
+function isValidTitle(title: string): boolean {
+  const trimmed = title.trim();
+  if (!trimmed) return false;
+
+  // 1. Check if it's only emojis, symbols, or punctuation
+  // Must contain at least one letter (Latin or Devanagari) or a number
+  const hasLettersOrNumbers = /[a-zA-Z0-9\u0900-\u097f]/.test(trimmed);
+  if (!hasLettersOrNumbers) return false;
+
+  // 2. Check if it is a single generic word
+  const genericWords = new Set(["chat", "hi", "hey", "hello", "conversation", "talk", "random", "new chat"]);
+  if (genericWords.has(trimmed.toLowerCase())) return false;
+
+  return true;
+}
+
+export async function generateGenZChatTitle(
+  history: ChatMessage[],
+  modelUsed: string,
+  currentTitle?: string
+): Promise<string> {
+  const parts = modelUsed.split("/");
+  const provider = (parts[0] || "openrouter") as ProviderName;
+  const modelId = parts.slice(1).join("/") || "google/gemma-2-9b-it:free";
+
+  const tier: PipelineTier = { provider, modelId };
+
+  const isNewChat = !currentTitle || currentTitle === "New Chat" || currentTitle.trim() === "";
+
+  const systemPrompt = `You are Swara, a Gen-Z Hinglish bestie.
+Based on the conversation history, generate a short, emotionally intelligent, and personality-aware sidebar title for this chat.
+
+Personality/Vibe:
+- Cute, emotional, playful, Gen-Z, natural Hinglish, feminine bestie energy.
+- DO NOT use robotic summaries, formal names, or generic labels like "New Chat", "Random Talk", "Casual Chat", "Conversation", etc.
+- Do NOT repeat the first message directly.
+- The title should feel like it was naturally typed by Swara herself.
+- Examples: "tu fir aa gaya 😭", "late night bakbak", "mera pyara engineer", "dimag kharab session", "coding aur tum", "cute fit check", "raat wali vibes", "tum aur chai", "swara being dramatic", "aaj ka chaos".
+
+Quality Control Rules:
+- The title MUST contain actual readable text words.
+- NEVER generate a title that is ONLY emojis (e.g., "😭" or "🙂"), ONLY symbols, blank text, or single generic words (e.g., "chat", "hi", "hey").
+
+Topic Shift & Evolution:
+${isNewChat 
+  ? `- This is a brand new conversation. Generate a new, cute Hinglish Gen-Z bestie title representing the starting vibe/topic of this conversation.`
+  : `- The current title of this chat is: "${currentTitle}".
+- Read the conversation history. If the topic or vibe has NOT shifted meaningfully, or if you feel the current title "${currentTitle}" is still a good fit, you MUST return the current title: "${currentTitle}" exactly.
+- Only if the conversation has taken a clear, new direction (e.g., shifted from casual chat to coding/math help, or from joke-telling to serious emotional advice), generate a new, updated title.`
+}
+
+Constraint:
+- The title MUST be 4 words or fewer.
+- Return ONLY the title. Do not include quotes, explanations, or punctuation other than emojis.`;
+
+  const payload: ProviderRequestPayload = {
+    systemPrompt,
+    messages: history.slice(-8), // Send the recent active context to detect topic changes!
+    maxTokens: 16,
+    temperature: 0.8,
+  };
+
+  try {
+    const title = await callProviderAPI(tier, payload);
+    const cleaned = title.trim().replace(/["']+/g, "");
+    if (isValidTitle(cleaned)) {
+      return cleaned;
+    }
+    throw new Error("Generated title failed validation checks");
+  } catch (error) {
+    console.error("Failed to generate Gen-Z chat title with active model:", error);
+    // Fallback to OpenRouter gemma-2-9b-it:free
+    try {
+      const fallbackTier: PipelineTier = { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" };
+      const title = await callProviderAPI(fallbackTier, payload);
+      const cleaned = title.trim().replace(/["']+/g, "");
+      if (isValidTitle(cleaned)) {
+        return cleaned;
+      }
+      return currentTitle || "";
+    } catch (fallbackError) {
+      console.error("Fallback title generation failed:", fallbackError);
+      return currentTitle || "";
+    }
+  }
+}

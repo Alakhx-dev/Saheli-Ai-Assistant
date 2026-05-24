@@ -1902,38 +1902,35 @@ export default function Chat() {
     await refreshChatSessions(currentChatId === chatId ? chatId : currentChatId);
   }, [currentChatId, refreshChatSessions, user]);
 
-  const requestChatTitle = useCallback(async (message: string) => {
-    try {
-      const response = await fetch("/api/title", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message }),
-      });
-
-      if (!response.ok) {
-        return message.slice(0, 30);
-      }
-
-      const data = (await response.json()) as { title?: string };
-      const title = (data.title ?? "").trim();
-      return title || message.slice(0, 30);
-    } catch {
-      return message.slice(0, 30);
-    }
-  }, []);
-
-  const generateFirstChatTitle = useCallback(async (chatId: string, firstMessage: string) => {
+  const generateFirstChatTitle = useCallback(async (chatId: string, history: ChatMessage[], modelUsed: string) => {
     const currentChat = chatSessionsRef.current.find((chat) => chat.id === chatId);
-    if (currentChat?.titleGenerated) {
+    const currentTitle = currentChat?.title || "";
+
+    const isFirstTime = !currentChat?.titleGenerated || currentTitle === "New Chat";
+    const isPeriodicCheck = history.length > 2 && history.length % 6 === 0;
+
+    if (!isFirstTime && !isPeriodicCheck) {
       return;
     }
 
-    const title = await requestChatTitle(firstMessage);
-    await updateChatSessionTitle(chatId, title, user);
-    await refreshChatSessions(chatId);
-  }, [refreshChatSessions, requestChatTitle, user]);
+    try {
+      const { generateGenZChatTitle } = await import("@/lib/ai-service");
+      const title = await generateGenZChatTitle(history, modelUsed, currentTitle);
+      if (title && title.trim() !== currentTitle.trim()) {
+        await updateChatSessionTitle(chatId, title, user);
+        await refreshChatSessions(chatId);
+      }
+    } catch (error) {
+      console.error("Failed to generate Gen-Z chat title:", error);
+      if (isFirstTime) {
+        // Fallback: use first message slice
+        const firstMsgText = history[0]?.content || "Chat";
+        const fallbackTitle = firstMsgText.slice(0, 30);
+        await updateChatSessionTitle(chatId, fallbackTitle, user);
+        await refreshChatSessions(chatId);
+      }
+    }
+  }, [refreshChatSessions, user]);
 
   const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatIdRef.current ?? routeChatId ?? null;
@@ -1942,10 +1939,11 @@ export default function Chat() {
       chatId = await createChatSession(user);
       setCurrentChatId(chatId);
       currentChatIdRef.current = chatId;
+      await refreshChatSessions(chatId);
     }
 
     return { chatId };
-  }, [routeChatId, user]);
+  }, [refreshChatSessions, routeChatId, user]);
 
   const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
     try {
@@ -2039,7 +2037,7 @@ export default function Chat() {
         toast.warning(response.warning);
       }
       
-      return response.text;
+      return { text: response.text, modelUsed: response.modelUsed };
     } catch (error: any) {
       console.error("Stream response error:", error);
       throw error;
@@ -2065,7 +2063,7 @@ export default function Chat() {
       const requestIdentity = getRequestIdentityContext();
 
       lastMsgCountRef.current = request.history.length;
-      const responseText = await streamResponse(
+      const responseResult = await streamResponse(
         request.history[request.history.length - 1]?.content ?? "",
         request.chatId,
         request.history,
@@ -2074,6 +2072,8 @@ export default function Chat() {
         requestIdentity as any,
         request.memoryProfile,
       );
+      const responseText = responseResult.text;
+      const modelUsed = responseResult.modelUsed;
       saveFinalMessage(request.chatId, responseText);
       // Note: Image was already saved during capture, no need to save again
       if (imageBase64) {
@@ -2085,6 +2085,9 @@ export default function Chat() {
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
 
+      void generateFirstChatTitle(request.chatId, nextHistory, modelUsed).catch((error) => {
+        console.error("Failed to update chat title (mobile vision)", error);
+      });
 
       void persistChatMessage(request.chatId, {
         role: "model",
@@ -2236,11 +2239,6 @@ export default function Chat() {
       navigate(`/chat/${chatId}`);
     }
 
-    if (nextHistory.length === 1) {
-      void generateFirstChatTitle(chatId, userText).catch((error) => {
-        console.error("Failed to generate first chat title", error);
-      });
-    }
 
     let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
     if (memoryEnabled) {
@@ -2333,7 +2331,7 @@ export default function Chat() {
       // The model (google/gemini-3.1-flash-lite) will analyze it natively
       const finalContent = nextHistory[nextHistory.length - 1]?.content ?? userText;
 
-      responseText = await streamResponse(
+      const responseResult = await streamResponse(
         finalContent,
         chatId,
         nextHistory,
@@ -2342,6 +2340,8 @@ export default function Chat() {
         requestIdentity as any,
         nextMemoryProfile,
       );
+      responseText = responseResult.text;
+      const modelUsed = responseResult.modelUsed;
 
       // Note: Image was already saved immediately after capture, no need to save again
       if (base64Image) {
@@ -2354,7 +2354,9 @@ export default function Chat() {
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
 
-
+      void generateFirstChatTitle(chatId, finalHistory, modelUsed).catch((error) => {
+        console.error("Failed to update chat title", error);
+      });
 
       void persistChatMessage(chatId, {
         role: "model",
