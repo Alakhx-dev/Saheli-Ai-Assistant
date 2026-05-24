@@ -8,6 +8,7 @@ import {
   X,
   Plus,
   Upload,
+  
   PanelLeft,
   Volume2,
   VolumeX,
@@ -2371,10 +2372,65 @@ export default function Chat() {
     return `${awareness.datetime.currentTime} · ${temperature}`;
   }, [awareness.datetime.currentTime, awareness.weather?.temperatureC]);
   const weatherThemeMode = weatherThemeOverride === "auto" ? awareness.datetime.dayState : weatherThemeOverride;
-  const weatherAtmosphere = weatherThemeMode === "day"
-    ? "shadow-[0_24px_60px_rgba(249,115,22,0.12),0_0_40px_rgba(255,255,255,0.04)]"
-    : "shadow-[0_24px_60px_rgba(59,130,246,0.12),0_0_40px_rgba(168,85,247,0.12)]";
+
+  const deriveVisualTheme = (hour24: number) => {
+    if (hour24 >= 5 && hour24 < 11) return "morning";
+    if (hour24 >= 11 && hour24 < 16) return "afternoon";
+    if (hour24 >= 16 && hour24 < 20) return "evening";
+    return "night";
+  };
+
+  const visualTheme = weatherThemeOverride === "auto"
+    ? deriveVisualTheme(awareness.datetime.hour24)
+    : weatherThemeMode === "day"
+      ? "afternoon"
+      : "night";
+
+  const weatherAtmosphere = visualTheme === "morning"
+    ? "shadow-[0_20px_48px_rgba(252,165,89,0.08),0_0_36px_rgba(255,99,132,0.04)]"
+    : visualTheme === "afternoon"
+      ? "shadow-[0_22px_50px_rgba(250,204,21,0.10),0_0_36px_rgba(255,238,170,0.03)]"
+      : visualTheme === "evening"
+        ? "shadow-[0_22px_52px_rgba(249,115,22,0.10),0_0_38px_rgba(249,115,22,0.04)]"
+        : "shadow-[0_24px_60px_rgba(59,130,246,0.12),0_0_40px_rgba(124,58,237,0.10)]";
   const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
+  const hourlyScrollRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
+
+  const onWheelHourly = useCallback((e: React.WheelEvent) => {
+    const el = hourlyScrollRef.current;
+    if (!el) return;
+    e.preventDefault();
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    const deltaScale = e.deltaMode === 1 ? 18 : e.deltaMode === 2 ? el.clientWidth : 1;
+    el.scrollTo({
+      left: el.scrollLeft + delta * deltaScale * 0.42,
+      behavior: "smooth",
+    });
+  }, []);
+
+  const onPointerDownHourly = useCallback((e: React.PointerEvent) => {
+    const el = hourlyScrollRef.current;
+    if (!el) return;
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
+    dragStateRef.current.active = true;
+    dragStateRef.current.startX = e.clientX;
+    dragStateRef.current.scrollLeft = el.scrollLeft;
+  }, []);
+
+  const onPointerMoveHourly = useCallback((e: React.PointerEvent) => {
+    const el = hourlyScrollRef.current;
+    if (!el || !dragStateRef.current.active) return;
+    const dx = e.clientX - dragStateRef.current.startX;
+    el.scrollLeft = dragStateRef.current.scrollLeft - dx;
+  }, []);
+
+  const onPointerUpHourly = useCallback((e: React.PointerEvent) => {
+    const el = hourlyScrollRef.current;
+    if (!el) return;
+    dragStateRef.current.active = false;
+    try { el.releasePointerCapture(e.pointerId); } catch (err) {}
+  }, []);
   const weatherLocationLabel = awareness.location
     ? [awareness.location.city, awareness.location.region, awareness.location.country].filter(Boolean).join(", ") || "Detected location"
     : "Location unavailable";
@@ -2672,23 +2728,17 @@ export default function Chat() {
                     transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
                     className={`pointer-events-auto relative w-[288px] overflow-hidden rounded-[26px] border border-white/10 text-white backdrop-blur-2xl ${weatherAtmosphere}`}
                       style={{
-                      backgroundImage: weatherThemeMode === "day"
-                        ? `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`
-                        : `linear-gradient(180deg, rgba(7,7,12,0.98), rgba(10,10,18,0.92)), radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 42%), radial-gradient(circle at 14% 0%, rgba(168,85,247,0.16), transparent 28%)`,
+                      backgroundImage: visualTheme === "night"
+                        ? `linear-gradient(180deg, rgba(7,7,12,0.98), rgba(10,10,18,0.92)), radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 42%), radial-gradient(circle at 14% 0%, rgba(168,85,247,0.16), transparent 28%)`
+                        : visualTheme === "morning"
+                          ? `linear-gradient(180deg, rgba(255,247,237,0.06), rgba(255,245,240,0.03)), radial-gradient(circle at top right, rgba(255,183,77,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(255,206,102,0.10), transparent 26%)`
+                          : visualTheme === "afternoon"
+                            ? `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`
+                            : `linear-gradient(180deg, rgba(255,244,230,0.05), rgba(255,240,230,0.02)), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(250,204,21,0.10), transparent 26%)`,
                     }}
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)]" />
-                    {weatherThemeMode === "day" ? (
-                      <>
-                        <div className="absolute right-2 top-2 h-14 w-14 rounded-full bg-amber-200/18 blur-2xl" />
-                        <div className="absolute right-3 top-1 h-20 w-20 opacity-70">
-                          <div className="absolute right-0 top-0 h-9 w-9 rounded-full border border-amber-100/20 bg-amber-100/10 shadow-[0_0_28px_rgba(251,191,36,0.18)]" />
-                          <div className="absolute -right-2 top-2 h-12 w-[1px] rotate-12 bg-gradient-to-b from-amber-100/0 via-amber-100/40 to-amber-100/0" />
-                          <div className="absolute right-2 -top-1 h-14 w-[1px] -rotate-18 bg-gradient-to-b from-amber-100/0 via-amber-100/35 to-amber-100/0" />
-                          <div className="absolute right-5 top-0 h-12 w-[1px] rotate-30 bg-gradient-to-b from-amber-100/0 via-amber-100/28 to-amber-100/0" />
-                        </div>
-                      </>
-                    ) : (
+                    {visualTheme === "night" ? (
                       <>
                         <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl" />
                         <div className="absolute right-4 top-3 h-10 w-10 rounded-full border border-sky-100/12 bg-white/[0.04] shadow-[0_0_30px_rgba(99,102,241,0.12)]" />
@@ -2705,53 +2755,39 @@ export default function Chat() {
                           />
                         ))}
                       </>
+                    ) : (
+                      <>
+                        <div className="absolute right-2 top-2 h-14 w-14 rounded-full bg-amber-200/18 blur-2xl" />
+                        <div className="absolute right-3 top-1 h-20 w-20 opacity-70">
+                          <div className="absolute right-0 top-0 h-9 w-9 rounded-full border border-amber-100/20 bg-amber-100/10 shadow-[0_0_28px_rgba(251,191,36,0.18)]" />
+                          <div className="absolute -right-2 top-2 h-12 w-[1px] rotate-12 bg-gradient-to-b from-amber-100/0 via-amber-100/40 to-amber-100/0" />
+                          <div className="absolute right-2 -top-1 h-14 w-[1px] -rotate-18 bg-gradient-to-b from-amber-100/0 via-amber-100/35 to-amber-100/0" />
+                          <div className="absolute right-5 top-0 h-12 w-[1px] rotate-30 bg-gradient-to-b from-amber-100/0 via-amber-100/28 to-amber-100/0" />
+                        </div>
+                      </>
                     )}
 
                     <div className="relative px-4 py-4">
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
                         <div className="min-w-0 space-y-1">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/55">
+                          <div className="flex items-center gap-2">
                             <Sparkles className="h-3 w-3 text-pink-200" />
-                            Weather & Time
+                            <h3
+                              className="font-serif text-[10px] uppercase tracking-[0.2em] text-[#e5e7eb] opacity-90 drop-shadow-md"
+                              style={{
+                                letterSpacing: '0.2em',
+                                fontFamily: '"Cormorant Garamond", "Cinzel", "Playfair Display", Georgia, serif',
+                                textShadow: '0 0 14px rgba(255,255,255,0.06), 0 0 22px rgba(255,255,255,0.04)'
+                              }}
+                            >
+                              WEATHER & TIME
+                            </h3>
                           </div>
                           <p className="max-w-[170px] text-[11px] leading-5 text-white/40">Cinematic live context</p>
                         </div>
 
                         <div className="flex flex-col items-end gap-1.5 pt-0.5">
-                          <div className="inline-flex items-center gap-1.5 text-[9px] font-medium tracking-[0.08em] text-white/45">
-                            <span className="relative flex h-2.5 w-2.5 items-center justify-center">
-                              <span className="absolute inline-flex h-full w-full rounded-full bg-cyan-300/25 animate-ping" />
-                              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-cyan-200" />
-                            </span>
-                            <span>Silent auto refresh</span>
-                          </div>
-                          <div className="inline-flex items-center gap-2 text-[9px] font-medium tracking-[0.04em] text-white/38">
-                            <button
-                              type="button"
-                              onClick={() => setWeatherThemeOverride("day")}
-                              aria-pressed={weatherThemeMode === "day"}
-                              className={`transition duration-300 ${weatherThemeMode === "day" ? "text-amber-100" : "text-white/35 hover:text-white/65"}`}
-                            >
-                              Day Mode
-                            </button>
-                            <span className="text-white/18">/</span>
-                            <button
-                              type="button"
-                              onClick={() => setWeatherThemeOverride("night")}
-                              aria-pressed={weatherThemeMode === "night"}
-                              className={`transition duration-300 ${weatherThemeMode === "night" ? "text-indigo-100" : "text-white/35 hover:text-white/65"}`}
-                            >
-                              Night Mode
-                            </button>
-                            <span className="text-white/18">/</span>
-                            <button
-                              type="button"
-                              onClick={() => setWeatherThemeOverride("auto")}
-                              className="transition duration-300 text-white/30 hover:text-white/65"
-                            >
-                              Auto
-                            </button>
-                          </div>
+                          <div className="h-4 w-4" />
                         </div>
                       </div>
 
@@ -2823,29 +2859,41 @@ export default function Chat() {
 
                       <div className="space-y-2 text-[10px] leading-5 text-white/55">
                         <p className="uppercase tracking-[0.28em] text-white/32">Hourly forecast</p>
-                        <div className="-mx-1 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                          <div className="flex min-w-max items-stretch gap-2 px-1">
-                            {weatherHourlyForecast.slice(0, 6).map((slot) => {
-                              const HourlyIcon = getHourlyForecastIcon(slot);
+                        <div className="relative">
+                          <div
+                            ref={hourlyScrollRef}
+                            onPointerDown={onPointerDownHourly}
+                            onPointerMove={onPointerMoveHourly}
+                            onPointerUp={onPointerUpHourly}
+                            onPointerCancel={onPointerUpHourly}
+                            onWheel={onWheelHourly}
+                            className="-mx-2 overflow-x-auto pb-1 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                            style={{ WebkitOverflowScrolling: "touch" }}
+                          >
+                            <div className="flex min-w-max items-center gap-3 px-2">
+                              {weatherHourlyForecast.slice(0, 12).map((slot) => {
+                                const HourlyIcon = getHourlyForecastIcon(slot);
 
-                              return (
-                                <div
-                                  key={slot.timeIso}
-                                  className="flex min-w-[74px] flex-col items-center justify-center rounded-[14px] border border-white/8 bg-white/[0.03] px-2.5 py-2 text-center backdrop-blur-sm transition duration-300 hover:bg-white/[0.05]"
-                                >
-                                  <span className="text-[10px] leading-none text-white/40">{slot.hourLabel}</span>
-                                  <span className="mt-2 inline-flex h-5 w-5 items-center justify-center text-white/72">
-                                    <HourlyIcon className="h-4 w-4" />
-                                  </span>
-                                  <span className="mt-1 text-[11px] font-semibold tracking-[0.03em] text-white/82">{Math.round(slot.temperatureC)}°</span>
+                                return (
+                                  <div
+                                    key={slot.timeIso}
+                                    className="flex min-w-[64px] flex-col items-center justify-center px-2 py-2 text-center"
+                                  >
+                                    <span className="text-[10px] leading-none text-white/50 font-medium drop-shadow-[0_8px_18px_rgba(0,0,0,0.45)]">{slot.hourLabel}</span>
+                                    <span className="mt-1 inline-flex h-6 w-6 items-center justify-center text-white/85 drop-shadow-[0_6px_20px_rgba(255,255,255,0.02)]">
+                                      <HourlyIcon className="h-5 w-5" />
+                                    </span>
+                                    <span className="mt-1 text-[12px] font-semibold tracking-[0.03em] text-white drop-shadow-[0_6px_18px_rgba(255,255,255,0.03)]">{Math.round(slot.temperatureC)}°</span>
+                                  </div>
+                                );
+                              })}
+
+                              {weatherHourlyForecast.length === 0 ? (
+                                <div className="flex min-w-[150px] items-center justify-center px-3 py-3 text-center text-[11px] text-white/35">
+                                  Hourly forecast loading
                                 </div>
-                              );
-                            })}
-                            {weatherHourlyForecast.length === 0 ? (
-                              <div className="flex min-w-[150px] items-center justify-center rounded-[14px] border border-dashed border-white/10 bg-black/10 px-3 py-3 text-center text-[11px] text-white/35">
-                                Hourly forecast loading
-                              </div>
-                            ) : null}
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       </div>
