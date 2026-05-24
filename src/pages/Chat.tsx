@@ -2675,7 +2675,7 @@ export default function Chat() {
         <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
           <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm pointer-events-auto" style={{ fontFamily: "'Sour Gummy', cursive" }}>
             <Heart className="w-5 h-5 fill-current" />
-            Saheli AI
+            Saheli Ai
           </div>
         </header>
 

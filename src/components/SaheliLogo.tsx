@@ -35,7 +35,7 @@ const SaheliLogo = ({ size = 28, showText = false, className = "" }: SaheliLogoP
           className="font-['Fredoka',_sans-serif] font-semibold text-[#ff77a9] tracking-wide whitespace-nowrap"
           style={{ fontSize: `${size * 0.65}px` }}
         >
-          Saheli AI
+          Saheli Ai
         </span>
       )}
     </div>

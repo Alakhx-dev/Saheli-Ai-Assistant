@@ -263,8 +263,8 @@ export default function Sidebar(props: SidebarProps) {
 
         <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4 relative flex items-center justify-between">
           <div className="absolute top-1/2 left-4 w-24 h-12 -translate-y-1/2 bg-pink-500/20 blur-[20px] rounded-full pointer-events-none" />
-          <div className="saheli-logo-section">
-            <SaheliLogo size={32} showText={true} />
+          <div className="saheli-logo-section ml-1.5">
+            <SaheliLogo size={25} showText={true} />
           </div>
           <button
             type="button"
