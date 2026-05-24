@@ -2586,12 +2586,13 @@ export default function Chat() {
       />
 
       <div 
-        className="chat-content relative z-10 flex h-full flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]" 
+        className="chat-content relative z-10 flex h-full flex-col transition-all duration-500" 
         style={{ 
           isolation: 'isolate', 
           background: '#000000',
           marginLeft: isSidebarOpen ? '300px' : '0px',
-          width: isSidebarOpen ? 'calc(100% - 300px)' : '100%'
+          width: isSidebarOpen ? 'calc(100% - 300px)' : '100%',
+          transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
         <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">

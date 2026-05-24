@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { handleWeatherRequest } from "../lib/weatherService";
 
 export const runtime = "edge";
