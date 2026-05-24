@@ -114,8 +114,173 @@ const REPLY_LANGUAGE_MODE_STORAGE_KEY = "reply_language_mode";
 const SELECTED_CHARACTER_STORAGE_KEY = "saheli_selected_character";
 const PROFILE_CROP_OUTPUT_SIZE = 512;
 const TITLE_UPDATE_INTERVAL = 3;
+const TITLE_EVOLUTION_DEBOUNCE_MS = 1200;
+const TITLE_EVOLUTION_MIN_NEW_MESSAGES = 6;
+const TITLE_EVOLUTION_WINDOW_SIZE = 4;
+const TITLE_TOPIC_SHIFT_THRESHOLD = 0.24;
 const STREAM_TTS_MIN_WORDS = 4;
 const STREAM_TTS_PREVIEW_WORDS = 10;
+
+const TITLE_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "at",
+  "bhi",
+  "but",
+  "by",
+  "cha",
+  "chalo",
+  "ek",
+  "for",
+  "from",
+  "gaya",
+  "gayi",
+  "gaye",
+  "ha",
+  "haan",
+  "hai",
+  "hain",
+  "ho",
+  "how",
+  "i",
+  "in",
+  "is",
+  "it",
+  "ka",
+  "ke",
+  "ki",
+  "ko",
+  "kya",
+  "kyu",
+  "kyun",
+  "main",
+  "me",
+  "mein",
+  "mere",
+  "meri",
+  "mujhe",
+  "mujhse",
+  "na",
+  "nahi",
+  "nhi",
+  "of",
+  "on",
+  "or",
+  "pls",
+  "please",
+  "rha",
+  "rhi",
+  "raha",
+  "rahi",
+  "se",
+  "so",
+  "taaki",
+  "that",
+  "the",
+  "to",
+  "toh",
+  "tum",
+  "tu",
+  "us",
+  "waala",
+  "waali",
+  "we",
+  "what",
+  "when",
+  "where",
+  "why",
+  "with",
+  "wo",
+  "woh",
+  "ye",
+  "yeah",
+  "you",
+  "aur",
+  "ab",
+  "bas",
+  "fir",
+  "phir",
+  "karo",
+  "kar",
+  "karna",
+  "kuch",
+  "koi",
+  "mujh",
+  "hum",
+  "humne",
+  "humko",
+  "unka",
+  "unki",
+  "unse",
+]);
+
+function normalizeTitleContext(text: string) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0900-\u097f\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeTitleContext(text: string) {
+  return normalizeTitleContext(text)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !TITLE_STOPWORDS.has(token));
+}
+
+function collectTitlePhaseText(messages: ChatMessage[]) {
+  return messages
+    .map((message) => message.content.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function calculateTokenSimilarity(leftTokens: string[], rightTokens: string[]) {
+  if (!leftTokens.length || !rightTokens.length) {
+    return 0;
+  }
+
+  const leftSet = new Set(leftTokens);
+  const rightSet = new Set(rightTokens);
+  let sharedTokens = 0;
+
+  leftSet.forEach((token) => {
+    if (rightSet.has(token)) {
+      sharedTokens += 1;
+    }
+  });
+
+  const unionSize = new Set([...leftSet, ...rightSet]).size;
+  return unionSize === 0 ? 0 : sharedTokens / unionSize;
+}
+
+function getTitleEvolutionSnapshot(history: ChatMessage[]) {
+  const recentWindow = history.slice(-TITLE_EVOLUTION_WINDOW_SIZE);
+  const olderWindow = history.slice(
+    Math.max(0, history.length - (TITLE_EVOLUTION_WINDOW_SIZE * 2)),
+    Math.max(0, history.length - TITLE_EVOLUTION_WINDOW_SIZE),
+  );
+
+  const recentText = collectTitlePhaseText(recentWindow);
+  const olderText = collectTitlePhaseText(olderWindow);
+  const recentTokens = tokenizeTitleContext(recentText);
+  const olderTokens = tokenizeTitleContext(olderText);
+  const similarity = calculateTokenSimilarity(olderTokens, recentTokens);
+  const semanticShift = olderTokens.length >= 3 && recentTokens.length >= 3 && similarity <= TITLE_TOPIC_SHIFT_THRESHOLD;
+  const phaseSignature = Array.from(new Set(recentTokens)).sort().join("|");
+
+  return {
+    olderText,
+    recentText,
+    similarity,
+    semanticShift,
+    phaseSignature,
+  };
+}
 function getStreamingTtsPreview(text: string) {
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) {
@@ -843,6 +1008,14 @@ export default function Chat() {
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
+  const lastModelUsedRef = useRef("openrouter/google/gemma-2-9b-it:free");
+  const titleEvolutionTimerRef = useRef<number | null>(null);
+  const titleEvolutionFlightRef = useRef(false);
+  const titleEvolutionCheckpointRef = useRef({
+    chatId: null as string | null,
+    messageCount: 0,
+    phaseSignature: "",
+  });
   // chatLanguageRef: auto-detected language for AI replies - SEPARATE from UI language.
   // UI language (localStorage app_language) is never modified by this system.
   const chatLanguageRef = useRef(getStoredLanguage());
@@ -1063,6 +1236,19 @@ export default function Chat() {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  useEffect(() => {
+    if (titleEvolutionTimerRef.current) {
+      window.clearTimeout(titleEvolutionTimerRef.current);
+      titleEvolutionTimerRef.current = null;
+    }
+
+    titleEvolutionCheckpointRef.current = {
+      chatId: currentChatId,
+      messageCount: messages.length,
+      phaseSignature: getTitleEvolutionSnapshot(messages).phaseSignature,
+    };
+  }, [currentChatId]);
 
   useEffect(() => {
     if (!latestSaheliMessage) {
@@ -1828,6 +2014,108 @@ export default function Chat() {
     }
   }, [setStoreChats, user]);
 
+  const syncChatSessionsTitle = useCallback((chatId: string, nextTitle: string) => {
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle) {
+      return false;
+    }
+
+    const nextSessions = chatSessionsRef.current.map((chat) => (
+      chat.id === chatId
+        ? { ...chat, title: trimmedTitle, titleGenerated: true }
+        : chat
+    ));
+
+    chatSessionsRef.current = nextSessions;
+    setChatSessions(nextSessions);
+
+    const storeChats = useAppStore.getState().chats ?? [];
+    const storeChatsById = new Map(storeChats.map((chat: any) => [chat.id, chat]));
+    setStoreChats(nextSessions.map((chat) => {
+      const existing = storeChatsById.get(chat.id);
+      return existing ? { ...existing, ...chat } : { ...chat, messages: [] };
+    }));
+
+    return true;
+  }, [setStoreChats]);
+
+  const persistChatTitleUpdate = useCallback(async (chatId: string, nextTitle: string) => {
+    const trimmedTitle = nextTitle.trim();
+    if (!trimmedTitle) {
+      return false;
+    }
+
+    syncChatSessionsTitle(chatId, trimmedTitle);
+
+    try {
+      await updateChatSessionTitle(chatId, trimmedTitle, user);
+      return true;
+    } catch (error) {
+      console.error("Failed to persist chat title update", error);
+      await refreshChatSessions(chatId);
+      throw error;
+    }
+  }, [refreshChatSessions, syncChatSessionsTitle, user]);
+
+  useEffect(() => {
+    if (!currentChatId || isLoading || submitLockRef.current) {
+      return;
+    }
+
+    if (titleEvolutionTimerRef.current) {
+      window.clearTimeout(titleEvolutionTimerRef.current);
+    }
+
+    titleEvolutionTimerRef.current = window.setTimeout(async () => {
+      if (titleEvolutionFlightRef.current || !currentChatIdRef.current || currentChatIdRef.current !== currentChatId) {
+        return;
+      }
+
+      const currentChat = chatSessionsRef.current.find((chat) => chat.id === currentChatId);
+      const currentTitle = currentChat?.title || "";
+      const snapshot = getTitleEvolutionSnapshot(messagesRef.current);
+      const messageDelta = messagesRef.current.length - titleEvolutionCheckpointRef.current.messageCount;
+      const shouldEvolve = messageDelta >= TITLE_EVOLUTION_MIN_NEW_MESSAGES || snapshot.semanticShift;
+
+      if (!shouldEvolve) {
+        titleEvolutionCheckpointRef.current = {
+          chatId: currentChatId,
+          messageCount: messagesRef.current.length,
+          phaseSignature: snapshot.phaseSignature,
+        };
+        return;
+      }
+
+      titleEvolutionFlightRef.current = true;
+      try {
+        const { generateGenZChatTitle } = await import("@/lib/ai-service");
+        const nextTitle = await generateGenZChatTitle(messagesRef.current, lastModelUsedRef.current, currentTitle);
+        const trimmedNextTitle = nextTitle.trim();
+
+        if (trimmedNextTitle && trimmedNextTitle !== currentTitle.trim()) {
+          await persistChatTitleUpdate(currentChatId, trimmedNextTitle);
+        }
+
+        titleEvolutionCheckpointRef.current = {
+          chatId: currentChatId,
+          messageCount: messagesRef.current.length,
+          phaseSignature: snapshot.phaseSignature,
+        };
+      } catch (error) {
+        console.error("Failed to evolve chat title", error);
+      } finally {
+        titleEvolutionFlightRef.current = false;
+      }
+    }, TITLE_EVOLUTION_DEBOUNCE_MS);
+
+    return () => {
+      if (titleEvolutionTimerRef.current) {
+        window.clearTimeout(titleEvolutionTimerRef.current);
+        titleEvolutionTimerRef.current = null;
+      }
+    };
+  }, [currentChatId, isLoading, messages.length, persistChatTitleUpdate]);
+
   const getRequestIdentityContext = useCallback((
     detectedLanguage?: AppLanguage,
   ): UserIdentityContext => ({
@@ -1846,7 +2134,13 @@ export default function Chat() {
     const storedMessages = await loadChatMessages(chatId, user);
     const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
     setCurrentChatId(chatId);
+    currentChatIdRef.current = chatId;
     setMessages(normalizedMessages);
+    titleEvolutionCheckpointRef.current = {
+      chatId,
+      messageCount: normalizedMessages.length,
+      phaseSignature: getTitleEvolutionSnapshot(normalizedMessages).phaseSignature,
+    };
     setStoreChats(chatSessionsRef.current.map((chat: any) => (
       chat.id === chatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] }
     )));
@@ -1867,6 +2161,11 @@ export default function Chat() {
     currentChatIdRef.current = null;
     messagesRef.current = [];
     lastMsgCountRef.current = 0;
+    titleEvolutionCheckpointRef.current = {
+      chatId: null,
+      messageCount: 0,
+      phaseSignature: "",
+    };
     setInput("");
     setIsLoading(false);
     setPendingMobileVisionRequest(null);
@@ -1898,9 +2197,8 @@ export default function Chat() {
       return;
     }
 
-    await updateChatSessionTitle(chatId, trimmed, user);
-    await refreshChatSessions(currentChatId === chatId ? chatId : currentChatId);
-  }, [currentChatId, refreshChatSessions, user]);
+    await persistChatTitleUpdate(chatId, trimmed);
+  }, [persistChatTitleUpdate]);
 
   const generateFirstChatTitle = useCallback(async (chatId: string, history: ChatMessage[], modelUsed: string) => {
     const currentChat = chatSessionsRef.current.find((chat) => chat.id === chatId);
@@ -1917,8 +2215,7 @@ export default function Chat() {
       const { generateGenZChatTitle } = await import("@/lib/ai-service");
       const title = await generateGenZChatTitle(history, modelUsed, currentTitle);
       if (title && title.trim() !== currentTitle.trim()) {
-        await updateChatSessionTitle(chatId, title, user);
-        await refreshChatSessions(chatId);
+        await persistChatTitleUpdate(chatId, title);
       }
     } catch (error) {
       console.error("Failed to generate Gen-Z chat title:", error);
@@ -1926,11 +2223,10 @@ export default function Chat() {
         // Fallback: use first message slice
         const firstMsgText = history[0]?.content || "Chat";
         const fallbackTitle = firstMsgText.slice(0, 30);
-        await updateChatSessionTitle(chatId, fallbackTitle, user);
-        await refreshChatSessions(chatId);
+        await persistChatTitleUpdate(chatId, fallbackTitle);
       }
     }
-  }, [refreshChatSessions, user]);
+  }, [persistChatTitleUpdate]);
 
   const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatIdRef.current ?? routeChatId ?? null;
@@ -2074,6 +2370,7 @@ export default function Chat() {
       );
       const responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
+      lastModelUsedRef.current = modelUsed;
       saveFinalMessage(request.chatId, responseText);
       // Note: Image was already saved during capture, no need to save again
       if (imageBase64) {
@@ -2342,6 +2639,7 @@ export default function Chat() {
       );
       responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
+      lastModelUsedRef.current = modelUsed;
 
       // Note: Image was already saved immediately after capture, no need to save again
       if (base64Image) {

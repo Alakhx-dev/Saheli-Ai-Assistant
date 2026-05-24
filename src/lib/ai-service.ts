@@ -828,6 +828,113 @@ function isValidTitle(title: string): boolean {
   return true;
 }
 
+function normalizeChatTitleText(title: string): string {
+  return title
+    .trim()
+    .replace(/^[\s,.;:!?\-–—]+/, "")
+    .replace(/["'`]+/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function toHeadingStyle(title: string): string {
+  const normalized = normalizeChatTitleText(title).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function looksLikeRawChatFragment(title: string): boolean {
+  const normalized = normalizeChatTitleText(title);
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^[,.;:!?\-–—]/.test(title.trim())) {
+    return true;
+  }
+
+  if (/[,.…]/.test(title) || title.includes("...")) {
+    return true;
+  }
+
+  const words = normalized.split(" ").filter(Boolean);
+  if (words.length < 2 || words.length > 4) {
+    return true;
+  }
+
+  const fragmentStarts = new Set([
+    "aur",
+    "ab",
+    "acha",
+    "achha",
+    "ar",
+    "arre",
+    "batao",
+    "bolo",
+    "chal",
+    "chalo",
+    "fir",
+    "phir",
+    "haan",
+    "ha",
+    "hai",
+    "hain",
+    "ho",
+    "kya",
+    "kaisi",
+    "kaisa",
+    "kuch",
+    "koi",
+    "nahi",
+    "nhi",
+    "sun",
+    "tum",
+    "tu",
+    "waise",
+    "yaar",
+  ]);
+
+  if (fragmentStarts.has(words[0].toLowerCase())) {
+    return true;
+  }
+
+  return false;
+}
+
+async function refineGeneratedTitleFormatting(
+  tier: PipelineTier,
+  rawTitle: string,
+): Promise<string> {
+  const systemPrompt = `You rewrite chat titles into proper heading-style labels.
+
+Rules:
+- Return 2 to 4 words only.
+- Make it feel like a real short heading, playlist name, or Pinterest-style label.
+- Capitalize naturally with the first letter uppercase.
+- Never start with punctuation or a comma.
+- Never return a copied chat fragment or sentence fragment.
+- Never use quotes, ellipsis, or emojis-only output.
+- Keep the vibe cute, Gen-Z, Hinglish, and human.
+- Return only the final rewritten title.`;
+
+  const payload: ProviderRequestPayload = {
+    systemPrompt,
+    messages: [
+      {
+        role: "user",
+        content: `Rewrite this title into a proper heading-style chat label: ${JSON.stringify(rawTitle)}`,
+      },
+    ],
+    maxTokens: 12,
+    temperature: 0.2,
+  };
+
+  const refined = await callProviderAPI(tier, payload);
+  return refined.trim();
+}
+
 export async function generateGenZChatTitle(
   history: ChatMessage[],
   modelUsed: string,
@@ -842,30 +949,40 @@ export async function generateGenZChatTitle(
   const isNewChat = !currentTitle || currentTitle === "New Chat" || currentTitle.trim() === "";
 
   const systemPrompt = `You are Swara, a Gen-Z Hinglish bestie.
-Based on the conversation history, generate a short, emotionally intelligent, and personality-aware sidebar title for this chat.
+Generate a sidebar chat title that feels human, cute, natural, and a little playful.
 
-Personality/Vibe:
-- Cute, emotional, playful, Gen-Z, natural Hinglish, feminine bestie energy.
-- DO NOT use robotic summaries, formal names, or generic labels like "New Chat", "Random Talk", "Casual Chat", "Conversation", etc.
-- Do NOT repeat the first message directly.
-- The title should feel like it was naturally typed by Swara herself.
-- Examples: "tu fir aa gaya 😭", "late night bakbak", "mera pyara engineer", "dimag kharab session", "coding aur tum", "cute fit check", "raat wali vibes", "tum aur chai", "swara being dramatic", "aaj ka chaos".
+Hard Title Rules:
+- Title length must be 2 to 4 words only.
+- If your first instinct is a long phrase, sentence fragment, or copied user line, compress it into a short title before answering.
+- Never copy raw user messages or near-verbatim phrases.
+- Never output single-word titles.
 
-Quality Control Rules:
-- The title MUST contain actual readable text words.
-- NEVER generate a title that is ONLY emojis (e.g., "😭" or "🙂"), ONLY symbols, blank text, or single generic words (e.g., "chat", "hi", "hey").
+Style Rules:
+- Use natural Hinglish with feminine bestie energy.
+- Capture the vibe, not the exact wording.
+- Prefer short, evocative titles like "late night bakbak", "dil ki baatein", "coding wali help", "brainrot hours".
+- Avoid robotic summaries, formal labels, generic names like "New Chat", "Random Talk", "Casual Chat", or obvious sentence-like titles.
+
+Formatting Rules:
+- No punctuation at the beginning.
+- No commas.
+- No ellipsis.
+- No quotes.
+- No emojis-only titles.
+- No blank text or symbol-only titles.
 
 Topic Shift & Evolution:
 ${isNewChat 
-  ? `- This is a brand new conversation. Generate a new, cute Hinglish Gen-Z bestie title representing the starting vibe/topic of this conversation.`
+  ? `- This is a brand new conversation. Infer the starting vibe/topic and create a compact bestie-style title from it.`
   : `- The current title of this chat is: "${currentTitle}".
-- Read the conversation history. If the topic or vibe has NOT shifted meaningfully, or if you feel the current title "${currentTitle}" is still a good fit, you MUST return the current title: "${currentTitle}" exactly.
-- Only if the conversation has taken a clear, new direction (e.g., shifted from casual chat to coding/math help, or from joke-telling to serious emotional advice), generate a new, updated title.`
+- Read the conversation history.
+- If the topic or vibe has NOT shifted meaningfully, or if the current title "${currentTitle}" still fits, return "${currentTitle}" exactly.
+- Only generate a new title when the conversation clearly moves into a different vibe or topic.`
 }
 
-Constraint:
-- The title MUST be 4 words or fewer.
-- Return ONLY the title. Do not include quotes, explanations, or punctuation other than emojis.`;
+Output Rule:
+- Return only the final title text.
+- Before responding, automatically refine anything longer than 4 words into a shorter bestie-style title.`;
 
   const payload: ProviderRequestPayload = {
     systemPrompt,
@@ -876,10 +993,18 @@ Constraint:
 
   try {
     const title = await callProviderAPI(tier, payload);
-    const cleaned = title.trim().replace(/["']+/g, "");
-    if (isValidTitle(cleaned)) {
-      return cleaned;
+    const cleaned = normalizeChatTitleText(title);
+    const formatted = toHeadingStyle(cleaned);
+    if (isValidTitle(formatted) && !looksLikeRawChatFragment(formatted)) {
+      return formatted;
     }
+
+    const refined = await refineGeneratedTitleFormatting(tier, cleaned);
+    const refinedFormatted = toHeadingStyle(refined);
+    if (isValidTitle(refinedFormatted) && !looksLikeRawChatFragment(refinedFormatted)) {
+      return refinedFormatted;
+    }
+
     throw new Error("Generated title failed validation checks");
   } catch (error) {
     console.error("Failed to generate Gen-Z chat title with active model:", error);
@@ -887,9 +1012,16 @@ Constraint:
     try {
       const fallbackTier: PipelineTier = { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" };
       const title = await callProviderAPI(fallbackTier, payload);
-      const cleaned = title.trim().replace(/["']+/g, "");
-      if (isValidTitle(cleaned)) {
-        return cleaned;
+      const cleaned = normalizeChatTitleText(title);
+      const formatted = toHeadingStyle(cleaned);
+      if (isValidTitle(formatted) && !looksLikeRawChatFragment(formatted)) {
+        return formatted;
+      }
+
+      const refined = await refineGeneratedTitleFormatting(fallbackTier, cleaned);
+      const refinedFormatted = toHeadingStyle(refined);
+      if (isValidTitle(refinedFormatted) && !looksLikeRawChatFragment(refinedFormatted)) {
+        return refinedFormatted;
       }
       return currentTitle || "";
     } catch (fallbackError) {

@@ -1,5 +1,5 @@
 import React, { memo, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import SaheliLogo from "./SaheliLogo";
 
@@ -112,7 +112,20 @@ const ChatItem = memo(function ChatItem({
           style={{ color: "rgba(255,255,255,0.85)" }}
           className="min-w-0 flex-1 overflow-hidden text-left text-[13px] hover:text-white transition-colors duration-200"
         >
-          <span className="block truncate">{title}</span>
+          <span className="block truncate">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={title}
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -2 }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
+                className="block"
+              >
+                {title}
+              </motion.span>
+            </AnimatePresence>
+          </span>
         </button>
       )}
 
