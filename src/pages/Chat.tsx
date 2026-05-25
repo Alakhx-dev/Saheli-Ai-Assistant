@@ -43,6 +43,7 @@ import {
   loadChatSessions,
   saveChatMessage,
   updateChatSessionTitle,
+  getChatEmoji,
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
@@ -2040,7 +2041,7 @@ export default function Chat() {
 
     const nextSessions = chatSessionsRef.current.map((chat) => (
       chat.id === chatId
-        ? { ...chat, title: trimmedTitle, titleGenerated: true }
+        ? { ...chat, title: trimmedTitle, emoji: getChatEmoji(trimmedTitle), titleGenerated: true }
         : chat
     ));
 

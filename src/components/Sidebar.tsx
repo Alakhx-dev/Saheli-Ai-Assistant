@@ -6,6 +6,7 @@ import SaheliLogo from "./SaheliLogo";
 export interface ChatSessionListItem {
   id: string;
   title: string;
+  emoji?: string;
 }
 
 interface SidebarProps {
@@ -80,11 +81,21 @@ const ChatItem = memo(function ChatItem({
   return (
     <motion.div
       layout
-      whileHover={{ y: -2, scale: 1.01 }}
       whileTap={{ scale: 0.99 }}
-      className={`group relative flex items-center gap-3 rounded-2xl px-3 py-2.5 transition duration-300 ${isActive ? "bg-white/[0.07] text-white" : "bg-transparent hover:bg-white/[0.04]"}`}
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-300 ${
+        isActive 
+          ? "bg-white/[0.03] backdrop-blur-[1px]" 
+          : "bg-transparent hover:bg-white/[0.015] hover:backdrop-blur-[0.5px]"
+      }`}
     >
-      <MessageCircle className="h-4 w-4 shrink-0 text-white/40 transition group-hover:text-pink-200" />
+      {/* Thin soft gradient accent line for active chat */}
+      {isActive && (
+        <div className="absolute left-0 top-2 bottom-2 w-[2px] bg-gradient-to-b from-pink-400/45 to-purple-400/15 rounded-full pointer-events-none" />
+      )}
+
+      <span className="text-[14px] shrink-0 w-4 h-4 flex items-center justify-center select-none transition duration-300 group-hover:scale-105">
+        {chat.emoji || "💬"}
+      </span>
       {isEditing ? (
         <input
           ref={inputRef}
@@ -109,8 +120,11 @@ const ChatItem = memo(function ChatItem({
           type="button"
           onClick={() => void onSelectChat(chat.id)}
           onDoubleClick={() => onStartEdit(chat.id, title)}
-          style={{ color: "rgba(255,255,255,0.85)" }}
-          className="min-w-0 flex-1 overflow-hidden text-left text-[13px] hover:text-white transition-colors duration-200"
+          className={`min-w-0 flex-1 overflow-hidden text-left text-[13px] tracking-wide transition-all duration-300 ease-out select-none ${
+            isActive 
+              ? "text-pink-100/85 font-medium drop-shadow-[0_0_4px_rgba(244,63,94,0.2)]" 
+              : "text-slate-400/65 hover:text-slate-300/85 group-hover:text-slate-200/85"
+          }`}
         >
           <span className="block truncate">
             <AnimatePresence mode="wait" initial={false}>

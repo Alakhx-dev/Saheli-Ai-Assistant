@@ -157,7 +157,22 @@ export default function SettingsPanel({
   });
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [groqKey, setGroqKey] = useState("");
-  const [personalizationChild, setPersonalizationChild] = useState<"character" | "realtime" | null>(null);
+  const [personalizationChild, setPersonalizationChild] = useState<"character" | "realtime" | "color" | null>(null);
+  const [selectedColor, setSelectedColor] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_theme_color");
+      if (saved) return saved;
+    }
+    return "pink";
+  });
+
+  const handleColorChange = (color: string) => {
+    setSelectedColor(color);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_theme_color", color);
+      window.dispatchEvent(new Event("saheli_theme_color_changed"));
+    }
+  };
   const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
     { id: "personalization" as const, label: "Personalization" },
@@ -170,6 +185,7 @@ export default function SettingsPanel({
   const personalizationSections = useMemo(() => ([
     { id: "character" as const, label: "Character" },
     { id: "realtime" as const, label: "Date, Time & Weather" },
+    { id: "color" as const, label: "Theme Color" },
   ]), []);
 
   const selectedCharacterCard = characterCards.find((card) => card.id === selectedCharacter) ?? characterCards[0];
@@ -757,7 +773,7 @@ export default function SettingsPanel({
                 border: "0.5px solid rgba(255, 255, 255, 0.06)",
                 boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
               }}
-              className={`relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${personalizationChild === "character" ? "w-[280px]" : "w-[340px]"}`}
+              className={`relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${(personalizationChild === "character" || personalizationChild === "color") ? "w-[280px]" : "w-[340px]"}`}
             >
               <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <AnimatePresence mode="wait">
@@ -784,6 +800,48 @@ export default function SettingsPanel({
                             </motion.button>
                           );
                         })}
+                      </div>
+                    </motion.div>
+                  ) : null}
+
+                  {personalizationChild === "color" ? (
+                    <motion.div key="personalization-color" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Theme Color</h3>
+                          <p className="text-[11.5px] text-white/50 leading-relaxed">Customize Saheli AI's visual accents.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2.5">
+                          {[
+                            { id: "pink", label: "Pink", gradient: "from-pink-500 to-rose-500" },
+                            { id: "yellow", label: "Yellow", gradient: "from-amber-400 to-yellow-500" },
+                            { id: "blue", label: "Blue", gradient: "from-blue-500 to-cyan-500" },
+                            { id: "orange", label: "Orange", gradient: "from-orange-500 to-amber-500" },
+                          ].map((item) => {
+                            const active = selectedColor === item.id;
+                            return (
+                              <motion.button
+                                whileTap={{ scale: 0.95 }}
+                                key={item.id}
+                                type="button"
+                                onClick={() => handleColorChange(item.id)}
+                                className={`relative flex flex-col items-center justify-center gap-2 rounded-[20px] border px-3 py-4 text-center text-sm transition-all duration-300 ${
+                                  active 
+                                    ? "border-pink-500/40 bg-gradient-to-br from-white/[0.04] to-white/[0.01] text-white shadow-[0_12px_24px_rgba(0,0,0,0.4)]" 
+                                    : "border-white/5 bg-white/[0.02] text-white/70 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
+                                }`}
+                              >
+                                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg ${active ? "ring-2 ring-white/50 scale-105" : ""}`} />
+                                <span className={`font-semibold text-[11px] ${active ? "text-white" : "text-white/60"}`}>{item.label}</span>
+                                {active ? (
+                                  <div className="absolute top-2 right-2 rounded-full bg-white/10 p-0.5 border border-white/20">
+                                    <Check className="h-2.5 w-2.5 text-white" />
+                                  </div>
+                                ) : null}
+                              </motion.button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </motion.div>
                   ) : null}
