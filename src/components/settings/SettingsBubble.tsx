@@ -140,11 +140,6 @@ export default function SettingsBubble({
         icon={<UserRound className="h-4 w-4 text-purple-300" />}
         onClick={() => setSection("account")}
       />
-      <BubbleAction
-        label="AI Model"
-        icon={<Atom className="h-4 w-4 text-pink-300" />}
-        onClick={() => setSection("model")}
-      />
     </motion.div>
   );
 
@@ -182,29 +177,7 @@ export default function SettingsBubble({
     </motion.div>
   );
 
-  const renderModel = () => (
-    <motion.div layout className="space-y-1.5">
-      <div className="bubble-action-glass justify-between cursor-default">
-        <div className="min-w-0 pr-4">
-          <div className="bubble-label-text">Primary Model</div>
-          <div className="text-[11px] text-white/45">Off = primary route</div>
-        </div>
-        <LiquidSwitch
-          checked={activeProvider === "Groq"}
-          onChange={(checked) => onSelectProvider(checked ? "Groq" : "OpenRouter")}
-        />
-      </div>
-      <div className="bubble-action-glass justify-between cursor-default">
-        <div className="min-w-0 pr-4">
-          <div className="bubble-label-text">Fast Route</div>
-          <div className="text-[11px] text-white/45">On = fast route only</div>
-        </div>
-        <div className="text-xs font-semibold text-pink-100">
-          {activeProvider === "Groq" ? "Selected" : ""}
-        </div>
-      </div>
-    </motion.div>
-  );
+  const renderModel = () => null;
 
   return (
     <AnimatePresence>

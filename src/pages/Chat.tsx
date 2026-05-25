@@ -35,7 +35,7 @@ import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "fi
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { sendMessage, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
+import { sendMessage, detectChatMode, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -982,6 +982,17 @@ export default function Chat() {
   const [isTtsMuted, setIsTtsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [thinkingLabel, setThinkingLabel] = useState("hmm... 🤔");
+  const [currentMode, setCurrentMode] = useState<"bestie" | "mentor">(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_personality");
+      if (saved === "mentor" || saved === "bestie") {
+        return saved as "bestie" | "mentor";
+      }
+    }
+    return "bestie";
+  });
+  const [modeSwitchNotification, setModeSwitchNotification] = useState<string | null>(null);
+  const modeNotificationTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isLoading) {
@@ -997,6 +1008,13 @@ export default function Chat() {
       setThinkingLabel(randomText);
     }
   }, [isLoading]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_personality", currentMode);
+    }
+  }, [currentMode]);
+
   const [mood, setMood] = useState("neutral");
   const [isScrolling, setIsScrolling] = useState(false);
   const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
@@ -1008,7 +1026,7 @@ export default function Chat() {
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
-  const lastModelUsedRef = useRef("openrouter/google/gemma-2-9b-it:free");
+  const lastModelUsedRef = useRef("groq/meta-llama/llama-3.3-70b-versatile");
   const titleEvolutionTimerRef = useRef<number | null>(null);
   const titleEvolutionFlightRef = useRef(false);
   const titleEvolutionCheckpointRef = useRef({
@@ -2289,6 +2307,7 @@ export default function Chat() {
     detectedEmotion?: EmotionLabel,
     requestIdentity?: UserIdentityContext,
     nextMemoryProfile?: MemoryProfile | null,
+    activeMode: "bestie" | "mentor" = "bestie",
     onPartialText?: (partialText: string) => void,
   ) => {
     let didTriggerEarlyTts = false;
@@ -2326,6 +2345,7 @@ export default function Chat() {
         requestIdentity,
         realtimeAwarenessContext,
         memoryEnabled ? "enabled" : "disabled",
+        activeMode,
         handleChunk,
       );
       
@@ -2367,6 +2387,7 @@ export default function Chat() {
         undefined, // emotion no longer used from Rekognition
         requestIdentity as any,
         request.memoryProfile,
+        currentMode,
       );
       const responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
@@ -2514,6 +2535,18 @@ export default function Chat() {
       chatLanguageRef.current = detectedLang;
     }
 
+    const nextMode = detectChatMode(userText);
+    if (nextMode !== currentMode) {
+      setCurrentMode(nextMode);
+      setModeSwitchNotification(nextMode === "mentor" ? "Mentor mode active" : "Bestie mode active");
+      if (modeNotificationTimeoutRef.current) {
+        clearTimeout(modeNotificationTimeoutRef.current);
+      }
+      modeNotificationTimeoutRef.current = window.setTimeout(() => {
+        setModeSwitchNotification(null);
+      }, 1800);
+    }
+
     const requestIdentity = getRequestIdentityContext(detectedLang);
 
     const userMessage: StoredChatMessage = {
@@ -2624,8 +2657,7 @@ export default function Chat() {
         throw new Error("Image clear nahi hai. Please dubara try karo.");
       }
 
-      // Send image directly to OpenRouter as multimodal payload
-      // The model (google/gemini-3.1-flash-lite) will analyze it natively
+      // Send image directly to Groq as multimodal payload
       const finalContent = nextHistory[nextHistory.length - 1]?.content ?? userText;
 
       const responseResult = await streamResponse(
@@ -2636,6 +2668,7 @@ export default function Chat() {
         undefined,
         requestIdentity as any,
         nextMemoryProfile,
+        currentMode,
       );
       responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
@@ -2704,6 +2737,14 @@ export default function Chat() {
       : visualTheme === "evening"
         ? "shadow-[0_22px_52px_rgba(249,115,22,0.10),0_0_38px_rgba(249,115,22,0.04)]"
         : "shadow-[0_24px_60px_rgba(59,130,246,0.12),0_0_40px_rgba(124,58,237,0.10)]";
+
+  const isRainy = awareness.weather?.isRainy;
+  const isCloudy = awareness.weather?.isCloudy;
+  const isFoggy = awareness.weather?.condition?.toLowerCase().includes("fog") || awareness.weather?.condition?.toLowerCase().includes("mist");
+  const isClearNight = visualTheme === "night" && !isCloudy && !isRainy;
+  const isHotWeather = awareness.weather?.hotColdState === "hot";
+  const isSunset = awareness.datetime.hour24 >= 17 && awareness.datetime.hour24 < 19;
+
   const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
   const hourlyScrollRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef({ active: false, startX: 0, scrollLeft: 0 });
@@ -3011,7 +3052,10 @@ export default function Chat() {
                     <Clock3 className="h-3.5 w-3.5" />
                   </span>
                   <span className="whitespace-nowrap">{floatingTimeWeatherLabel}</span>
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-200">
+                  <span className="inline-flex h-6 w-6 relative items-center justify-center rounded-full bg-cyan-500/10 text-cyan-200">
+                    {isRefreshingRealtime ? (
+                      <span className="absolute inset-0 rounded-full border border-cyan-400/40 border-t-transparent animate-spin" />
+                    ) : null}
                     <CloudSun className="h-3.5 w-3.5" />
                   </span>
                 </motion.button>
@@ -3049,6 +3093,43 @@ export default function Chat() {
                     }}
                   >
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)]" />
+
+                    {/* CINEMATIC WEATHER THEMES */}
+                    <div className="absolute inset-0 pointer-events-none transition-opacity duration-1500 ease-in-out">
+                      {isRainy && (
+                        <div className="absolute inset-0 opacity-80 mix-blend-screen">
+                          <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent" />
+                          {Array.from({ length: 12 }).map((_, i) => (
+                            <div 
+                              key={`rain-${i}`}
+                              className="absolute bg-gradient-to-b from-white/20 to-white/0 w-[1px]"
+                              style={{
+                                left: `${Math.random() * 100}%`,
+                                top: `-20px`,
+                                height: `${20 + Math.random() * 40}px`,
+                                animation: `weatherRainDrop ${0.4 + Math.random() * 0.3}s linear infinite`,
+                                animationDelay: `${Math.random() * 2}s`
+                              }}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      
+                      {isFoggy && (
+                        <div className="absolute inset-0 opacity-40 mix-blend-screen overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-[200%] animate-[weatherFog_8s_ease-in-out_infinite_alternate]" />
+                        </div>
+                      )}
+                      
+                      {isHotWeather && !isRainy && (
+                        <div className="absolute inset-0 mix-blend-overlay opacity-30 bg-gradient-to-t from-orange-500/20 to-transparent animate-[weatherHeatShimmer_3s_ease-in-out_infinite_alternate]" />
+                      )}
+                      
+                      {isSunset && !isRainy && !isFoggy && (
+                        <div className="absolute inset-0 mix-blend-screen opacity-40 bg-gradient-to-tr from-purple-500/20 via-orange-500/20 to-transparent" />
+                      )}
+                    </div>
+
                     {visualTheme === "night" ? (
                       <>
                         <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl" />
@@ -3214,7 +3295,12 @@ export default function Chat() {
               </AnimatePresence>
             </div>
 
-            <style>{`@keyframes weatherStarDrift { 0% { transform: translateY(0px); opacity: 0; } 12% { opacity: 0.9; } 85% { opacity: 0.6; } 100% { transform: translateY(16px); opacity: 0; } }`}</style>
+            <style>{`
+              @keyframes weatherStarDrift { 0% { transform: translateY(0px); opacity: 0; } 12% { opacity: 0.9; } 85% { opacity: 0.6; } 100% { transform: translateY(16px); opacity: 0; } }
+              @keyframes weatherRainDrop { 0% { transform: translateY(0) rotate(10deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(300px) rotate(10deg); opacity: 0; } }
+              @keyframes weatherFog { 0% { transform: translateX(-20%); } 100% { transform: translateX(0%); } }
+              @keyframes weatherHeatShimmer { 0% { opacity: 0.2; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.05); } }
+            `}</style>
           </div>
         ) : (
           <div className="absolute right-4 top-4 z-40 flex items-center gap-2 pointer-events-none md:right-6 md:top-5">
@@ -3384,6 +3470,69 @@ export default function Chat() {
               borderRadius: "24px",
             }}
           >
+            {/* Pop-up inside the form to guarantee perfect centering above the text box */}
+            <AnimatePresence>
+              {modeSwitchNotification && (() => {
+                const isMentor = modeSwitchNotification.toLowerCase().includes("mentor");
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95, filter: "blur(3px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95, filter: "blur(3px)" }}
+                    transition={{ 
+                      type: "spring",
+                      stiffness: 350,
+                      damping: 26,
+                      mass: 0.7
+                    }}
+                    className="absolute -top-[52px] left-1/2 -translate-x-1/2 flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-[#160d2b]/65 backdrop-blur-xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_2px_rgba(255,255,255,0.15)] pointer-events-none z-50 whitespace-nowrap"
+                  >
+                    {/* Left glow overlay */}
+                    <div 
+                      className={`absolute inset-0 -z-10 rounded-full opacity-15 blur-sm transition-all duration-300 ${
+                        isMentor 
+                          ? "bg-gradient-to-r from-cyan-500/25 to-blue-500/25 shadow-[inset_0_0_12px_rgba(34,211,238,0.15)]" 
+                          : "bg-gradient-to-r from-pink-500/25 to-purple-500/25 shadow-[inset_0_0_12px_rgba(244,63,94,0.15)]"
+                      }`} 
+                    />
+
+                    {/* Outer glowing border */}
+                    <div 
+                      className={`absolute inset-0 rounded-full border transition-all duration-500 ${
+                        isMentor ? "border-cyan-500/25 shadow-[0_0_10px_rgba(34,211,238,0.1)]" : "border-pink-500/25 shadow-[0_0_10px_rgba(244,63,94,0.1)]"
+                      }`}
+                    />
+
+                    {/* Icon container */}
+                    <div className={`p-1.5 rounded-full flex items-center justify-center ${
+                      isMentor ? "bg-cyan-500/15" : "bg-pink-500/15"
+                    }`}>
+                      {isMentor ? (
+                        <svg className="w-4 h-4 text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.6)] animate-pulse" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4 text-pink-400 drop-shadow-[0_0_6px_rgba(244,63,94,0.6)] fill-pink-400 animate-pulse" viewBox="0 0 24 24">
+                          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                      )}
+                    </div>
+
+                    {/* Text contents */}
+                    <div className="flex flex-col text-left pr-1">
+                      <span className={`text-[8.5px] font-bold tracking-[0.15em] uppercase ${
+                        isMentor ? "text-cyan-400 drop-shadow-[0_0_6px_rgba(34,211,238,0.4)]" : "text-pink-400 drop-shadow-[0_0_6px_rgba(244,63,94,0.4)]"
+                      }`}>
+                        {isMentor ? "Mentor Mode" : "Bestie Mode"}
+                      </span>
+                      <span className="text-[10px] text-white/85 font-medium mt-0.5">
+                        {isMentor ? "Swara switched to Study Coach 🧠" : "Swara is now your Bestie 💖"}
+                      </span>
+                    </div>
+                  </motion.div>
+                );
+              })()}
+            </AnimatePresence>
             {/* Perched Composer Butterfly */}
             <div className="cinematic-hero-butterfly cinematic-hero-butterfly--perched-composer">
               <div className="cinematic-hero-butterfly__form cinematic-hero-butterfly__form--perched cinematic-hero-butterfly__form--pink">
@@ -3575,6 +3724,8 @@ export default function Chat() {
               onToggleTtsMute={handleToggleTtsMute}
               selectedCharacter={selectedCharacter}
               onCharacterChange={handleCharacterChange}
+              activeMode={currentMode}
+              onModeChange={setCurrentMode}
               profileDraftName={profileDraftName}
               onProfileNameChange={setProfileDraftName}
               onProfileImageSelect={handleProfileImageSelect}

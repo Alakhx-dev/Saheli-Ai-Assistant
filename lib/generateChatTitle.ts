@@ -1,14 +1,14 @@
 /**
- * Chat title generation using OpenRouter.
- * Uses a lightweight OpenRouter call to generate short chat titles.
+ * Chat title generation using Groq.
+ * Uses a lightweight Groq call to generate short chat titles.
  */
 
 function clean(value: string | undefined) {
   return value?.trim().replace(/["']+/g, "") || "";
 }
 
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
-const OPENROUTER_MODEL = "qwen/qwen-2.5-32b-instruct";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 export async function generateChatTitle(firstMessage: string): Promise<string> {
   const message = firstMessage.trim();
@@ -16,7 +16,7 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
     return "";
   }
 
-  const apiKey = clean(process.env.OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY);
+  const apiKey = clean(process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY);
   const siteUrl = clean(process.env.SITE_URL || process.env.VITE_SITE_URL) || "http://localhost:3000";
 
   if (!apiKey) {
@@ -24,16 +24,14 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
   }
 
   try {
-    const response = await fetch(OPENROUTER_API_URL, {
+    const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
-        "X-Title": "Saheli AI",
-        "HTTP-Referer": siteUrl,
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: GROQ_MODEL,
         messages: [
           { role: "system", content: "Create a short chat title. Return only the title. Keep it concise and meaningful." },
           {

@@ -29,6 +29,8 @@ interface SettingsPanelProps {
   onToggleTtsMute: () => void;
   selectedCharacter: string;
   onCharacterChange: (character: string) => void;
+  activeMode: "bestie" | "mentor";
+  onModeChange: (mode: "bestie" | "mentor") => void;
   // Inline account editing props
   profileDraftName: string;
   onProfileNameChange: (name: string) => void;
@@ -118,6 +120,8 @@ export default function SettingsPanel({
   onToggleTtsMute,
   selectedCharacter,
   onCharacterChange,
+  activeMode,
+  onModeChange,
   profileDraftName,
   onProfileNameChange,
   onProfileImageSelect,
@@ -153,16 +157,6 @@ export default function SettingsPanel({
   });
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [groqKey, setGroqKey] = useState("");
-  const [openRouterKey, setOpenRouterKey] = useState("");
-  const [selectedPersonality, setSelectedPersonality] = useState<"bestie" | "mentor">(() => {
-    if (typeof window !== "undefined") {
-      const saved = window.localStorage.getItem("saheli_personality");
-      if (saved === "mentor" || saved === "bestie") {
-        return saved as "bestie" | "mentor";
-      }
-    }
-    return "bestie";
-  });
   const [personalizationChild, setPersonalizationChild] = useState<"character" | "realtime" | null>(null);
   const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
@@ -631,12 +625,11 @@ export default function SettingsPanel({
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedPersonality("bestie");
-                            localStorage.setItem("saheli_personality", "bestie");
+                            onModeChange("bestie");
                           }}
-                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "bestie" ? "settings-personality-card-active" : ""}`}
+                          className={`settings-glass-card settings-personality-card text-left !p-3 ${activeMode === "bestie" ? "settings-personality-card-active" : ""}`}
                         >
-                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "bestie" ? "text-pink-100" : "text-white"}`}>
+                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${activeMode === "bestie" ? "text-pink-100" : "text-white"}`}>
                             Bestie Mode
                           </p>
                           <p className="mt-1 text-[12px] leading-5 text-white/58">
@@ -647,12 +640,11 @@ export default function SettingsPanel({
                         <button
                           type="button"
                           onClick={() => {
-                            setSelectedPersonality("mentor");
-                            localStorage.setItem("saheli_personality", "mentor");
+                            onModeChange("mentor");
                           }}
-                          className={`settings-glass-card settings-personality-card text-left !p-3 ${selectedPersonality === "mentor" ? "settings-personality-card-active" : ""}`}
+                          className={`settings-glass-card settings-personality-card text-left !p-3 ${activeMode === "mentor" ? "settings-personality-card-active" : ""}`}
                         >
-                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${selectedPersonality === "mentor" ? "text-pink-100" : "text-white"}`}>
+                          <p className={`text-[13px] font-semibold tracking-[-0.02em] ${activeMode === "mentor" ? "text-pink-100" : "text-white"}`}>
                             Study Coach / Mentor
                           </p>
                           <p className="mt-1 text-[12px] leading-5 text-white/58">
@@ -735,13 +727,6 @@ export default function SettingsPanel({
                                 onChange={(event) => setGroqKey(event.target.value)}
                                 type="password"
                                 placeholder="Enter Groq API Key (gsk_...)"
-                                className="settings-api-input py-2.5 text-[13px]"
-                              />
-                              <input
-                                value={openRouterKey}
-                                onChange={(event) => setOpenRouterKey(event.target.value)}
-                                type="password"
-                                placeholder="Enter OpenRouter API Key (sk-or-v1-...)"
                                 className="settings-api-input py-2.5 text-[13px]"
                               />
                             </div>

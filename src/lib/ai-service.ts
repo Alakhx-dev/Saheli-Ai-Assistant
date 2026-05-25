@@ -50,25 +50,13 @@ export interface RealtimeAwarenessContext {
 
 export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
-export type AIProvider = "OpenRouter" | "Groq";
+export type AIProvider = "Groq";
 
 // Legacy exports kept for backward compatibility with settings panel
-export const OPENROUTER_MODEL = {
-  id: "deepseek/deepseek-v4-flash:free",
-  name: "Deepseek V4 Flash (Free, OpenRouter)",
-  vision: false,
-};
-
 export const GROQ_MODEL = {
   id: "meta-llama/llama-4-scout-17b-16e-instruct",
   name: "Llama 3.2 11B Vision Preview (Groq)",
   vision: true,
-};
-
-export const TEXT_FALLBACK_MODEL = {
-  id: "openai/gpt-oss-120b:free",
-  name: "GPT-OSS 120B (Free, OpenRouter)",
-  vision: false,
 };
 
 export interface AiResponse {
@@ -81,18 +69,14 @@ const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
 const DEFAULT_MICROCHAT_MAX_TOKENS = 72;
 const DETAILED_REPLY_MAX_TOKENS = 220;
-const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const PROVIDER_TIMEOUT_MS = 15000;
-const FIRST_BYTE_TIMEOUT_MS = 5000;
-const OPENROUTER_REFERER = "https://saheli.app";
-const OPENROUTER_TITLE = "Saheli";
 
 // ----------------------------------------------------
 // Section 2: New types & Configuration
 // ----------------------------------------------------
 
-type ProviderName = "openrouter" | "groq";
+type ProviderName = "groq";
 
 interface PipelineTier {
   provider: ProviderName;
@@ -116,19 +100,33 @@ export interface VisionParseResult {
 const AI_PIPELINE_CONFIG = {
   bestie: [
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
-    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct:free" },
+    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
+    { provider: "groq", modelId: "qwen-qwq-32b" },
   ],
   mentor: [
-    { provider: "groq", modelId: "deepseek-r1-distill-llama-70b" },
-    { provider: "openrouter", modelId: "deepseek/deepseek-r1:free" },
-    { provider: "openrouter", modelId: "microsoft/phi-3-medium-128k-instruct:free" },
+    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
+    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
+    { provider: "groq", modelId: "llama-3.2-3b-preview" },
   ],
   vision: [
-    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
-    { provider: "groq", modelId: "meta-llama/llama-4-maverick-17b-128e-instruct" },
+    { provider: "groq", modelId: "llama-3.2-11b-vision-preview" },
+    { provider: "groq", modelId: "llava-v1.5-7b-4096-preview" },
   ],
 } as const;
+
+/**
+ * Intelligently routes the user message based on technical vs casual context.
+ * Silently switches mode without adding LLM latency.
+ */
+export function detectChatMode(message: string): "bestie" | "mentor" {
+  const technicalPattern = /\b(code|coding|program|programming|debug|debugging|math|maths|mathematics|engineer|engineering|algorithm|algorithms|dbms|sql|database|recursion|equation|physics|chemistry|biology|science|explain|explanation|solve|assignment|homework|error|exception|syntax|logic|concept|framework|react|javascript|python|c\+\+|java)\b/i;
+  
+  if (technicalPattern.test(message)) {
+    return "mentor";
+  }
+  
+  return "bestie";
+}
 
 // ----------------------------------------------------
 // Section 4: System Prompt Blueprints
@@ -438,9 +436,7 @@ type ProviderResponseData = {
 
 function getProviderApiKey(provider: ProviderName) {
   const env = import.meta.env as Record<string, string | undefined>;
-  return provider === "openrouter"
-    ? (env.VITE_OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "").trim()
-    : (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
+  return (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
 }
 
 function buildProviderMessages(messages: ChatMessage[], imageBase64?: string) {
@@ -512,12 +508,10 @@ async function callProviderAPI(
   const provider = tier.provider;
   const apiKey = getProviderApiKey(provider);
   if (!apiKey) {
-    throw new Error(provider === "openrouter"
-      ? "Missing VITE_OPENROUTER_API_KEY in environment"
-      : "Missing VITE_GROQ_API_KEY in environment");
+    throw new Error("Missing VITE_GROQ_API_KEY in environment");
   }
 
-  const apiUrl = provider === "openrouter" ? OPENROUTER_API_URL : GROQ_API_URL;
+  const apiUrl = GROQ_API_URL;
   const requestBody = buildRequestBody(
     tier.modelId,
     payload.systemPrompt,
@@ -529,15 +523,7 @@ async function callProviderAPI(
   );
 
   const controller = new AbortController();
-  let firstByteTimedOut = false;
   const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
-  let firstByteTimer: ReturnType<typeof setTimeout> | null = null;
-  if (provider === "openrouter") {
-    firstByteTimer = globalThis.setTimeout(() => {
-      firstByteTimedOut = true;
-      controller.abort();
-    }, FIRST_BYTE_TIMEOUT_MS);
-  }
 
   try {
     const response = await fetch(apiUrl, {
@@ -545,12 +531,6 @@ async function callProviderAPI(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
-        ...(provider === "openrouter"
-          ? {
-              "X-Title": OPENROUTER_TITLE,
-              "HTTP-Referer": OPENROUTER_REFERER,
-            }
-          : {}),
         "Connection": "keep-alive",
       },
       keepalive: true,
@@ -559,31 +539,19 @@ async function callProviderAPI(
     });
 
     const data = (await response.json().catch(() => ({}))) as ProviderResponseData;
-    if (firstByteTimer !== null) {
-      try { globalThis.clearTimeout(firstByteTimer as any); } catch {}
-      firstByteTimer = null;
-    }
     if (!response.ok) {
-      throw new Error(extractProviderError(data, response, provider === "openrouter" ? "OpenRouter" : "Groq"));
+      throw new Error(extractProviderError(data, response, "Groq"));
     }
 
     const text = extractCompletionText(data);
     if (!text) {
-      throw new Error(provider === "openrouter"
-        ? "OpenRouter se empty response aaya"
-        : "Groq se empty response aaya");
+      throw new Error("Groq se empty response aaya");
     }
 
     return text;
   } catch (error) {
-    if (firstByteTimedOut) {
-      throw new Error("FirstByteTimeout");
-    }
-
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error(provider === "openrouter"
-        ? "OpenRouter request timeout ho gaya"
-        : "Groq request timeout ho gaya");
+      throw new Error("Groq request timeout ho gaya");
     }
 
     throw error;
@@ -723,6 +691,7 @@ export async function fetchAISwarasResponse(
   identity?: UserIdentityContext,
   realtimeAwareness?: RealtimeAwarenessContext,
   memoryMode?: MemoryMode,
+  activeMode: "bestie" | "mentor" = "bestie",
   onChunk?: (partialText: string) => void,
 ): Promise<AiResponse> {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
@@ -734,7 +703,7 @@ export async function fetchAISwarasResponse(
   const mood = resolveMood(emotion, messages);
   const detailedReply = shouldUseDetailedReply(messages);
   
-  const personality = ((typeof window !== "undefined" ? window.localStorage.getItem("saheli_personality") : "bestie") || "bestie") as "bestie" | "mentor";
+  const personality = activeMode;
   const chosenPrompt = personality === "mentor" ? MENTOR_SYSTEM_PROMPT : BESTIE_SYSTEM_PROMPT;
 
   const finalPrompt = [
@@ -799,12 +768,13 @@ export async function sendMessage(
   identity?: UserIdentityContext,
   realtimeAwareness?: RealtimeAwarenessContext,
   memoryMode?: MemoryMode,
+  activeMode: "bestie" | "mentor" = "bestie",
   onChunk?: (partialText: string) => void,
   _selectedModelId?: string,
   _autoSwitchEnabled?: boolean,
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
-  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, realtimeAwareness, memoryMode, onChunk);
+  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, realtimeAwareness, memoryMode, activeMode, onChunk);
   try {
     return await activeRequest;
   } finally {
@@ -940,56 +910,41 @@ export async function generateGenZChatTitle(
   modelUsed: string,
   currentTitle?: string
 ): Promise<string> {
-  const parts = modelUsed.split("/");
-  const provider = (parts[0] || "openrouter") as ProviderName;
-  const modelId = parts.slice(1).join("/") || "google/gemma-2-9b-it:free";
-
-  const tier: PipelineTier = { provider, modelId };
-
   const isNewChat = !currentTitle || currentTitle === "New Chat" || currentTitle.trim() === "";
 
-  const systemPrompt = `You are Swara, a Gen-Z Hinglish bestie.
-Generate a sidebar chat title that feels human, cute, natural, and a little playful.
+  const systemPrompt = `You are Swara, a Gen-Z Hinglish bestie. Your task is to generate a sidebar chat title.
+Follow these rules strictly:
+1. Title length must be 2 to 4 words only.
+2. Use natural Hinglish with feminine bestie energy (e.g., "late night bakbak", "coding wali help", "dil ki baatein").
+3. Output ONLY the final title text, with no quotes, no emojis, no punctuation, and no extra explanation.`;
 
-Hard Title Rules:
-- Title length must be 2 to 4 words only.
-- If your first instinct is a long phrase, sentence fragment, or copied user line, compress it into a short title before answering.
-- Never copy raw user messages or near-verbatim phrases.
-- Never output single-word titles.
+  const conversationText = history
+    .map((m) => `${m.role === "user" ? "User" : "Swara"}: ${m.content}`)
+    .join("\n");
 
-Style Rules:
-- Use natural Hinglish with feminine bestie energy.
-- Capture the vibe, not the exact wording.
-- Prefer short, evocative titles like "late night bakbak", "dil ki baatein", "coding wali help", "brainrot hours".
-- Avoid robotic summaries, formal labels, generic names like "New Chat", "Random Talk", "Casual Chat", or obvious sentence-like titles.
+  const userContent = `Here is the recent conversation history:
+${conversationText}
 
-Formatting Rules:
-- No punctuation at the beginning.
-- No commas.
-- No ellipsis.
-- No quotes.
-- No emojis-only titles.
-- No blank text or symbol-only titles.
+Current Chat Title: "${currentTitle || "New Chat"}"
 
-Topic Shift & Evolution:
+Based on the conversation, generate a short chat title.
 ${isNewChat 
-  ? `- This is a brand new conversation. Infer the starting vibe/topic and create a compact bestie-style title from it.`
-  : `- The current title of this chat is: "${currentTitle}".
-- Read the conversation history.
-- If the topic or vibe has NOT shifted meaningfully, or if the current title "${currentTitle}" still fits, return "${currentTitle}" exactly.
-- Only generate a new title when the conversation clearly moves into a different vibe or topic.`
+  ? `This is a brand new conversation. Infer the starting vibe/topic and create a compact bestie-style title from it.`
+  : `If the topic or vibe has NOT shifted meaningfully, or if the current title "${currentTitle}" still fits, return "${currentTitle}" exactly. Otherwise, generate a new title.`
 }
 
-Output Rule:
-- Return only the final title text.
-- Before responding, automatically refine anything longer than 4 words into a shorter bestie-style title.`;
+Remember:
+- Title length must be 2 to 4 words.
+- Output ONLY the final title text (no comments, no quotes, no formatting).`;
 
   const payload: ProviderRequestPayload = {
     systemPrompt,
-    messages: history.slice(-8), // Send the recent active context to detect topic changes!
-    maxTokens: 16,
-    temperature: 0.8,
+    messages: [{ role: "user", content: userContent }],
+    maxTokens: 30,
+    temperature: 0.7,
   };
+
+  const tier: PipelineTier = { provider: "groq", modelId: "llama-3.3-70b-versatile" };
 
   try {
     const title = await callProviderAPI(tier, payload);
@@ -1005,28 +960,19 @@ Output Rule:
       return refinedFormatted;
     }
 
-    throw new Error("Generated title failed validation checks");
-  } catch (error) {
-    console.error("Failed to generate Gen-Z chat title with active model:", error);
-    // Fallback to OpenRouter gemma-2-9b-it:free
-    try {
-      const fallbackTier: PipelineTier = { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" };
-      const title = await callProviderAPI(fallbackTier, payload);
-      const cleaned = normalizeChatTitleText(title);
-      const formatted = toHeadingStyle(cleaned);
-      if (isValidTitle(formatted) && !looksLikeRawChatFragment(formatted)) {
-        return formatted;
-      }
-
-      const refined = await refineGeneratedTitleFormatting(fallbackTier, cleaned);
-      const refinedFormatted = toHeadingStyle(refined);
-      if (isValidTitle(refinedFormatted) && !looksLikeRawChatFragment(refinedFormatted)) {
-        return refinedFormatted;
-      }
-      return currentTitle || "";
-    } catch (fallbackError) {
-      console.error("Fallback title generation failed:", fallbackError);
-      return currentTitle || "";
+    if (isNewChat && history.length > 0) {
+      const firstMsgText = history[0]?.content || "Chat";
+      const fallbackTitle = firstMsgText.slice(0, 30).trim();
+      return toHeadingStyle(normalizeChatTitleText(fallbackTitle)) || "New Chat";
     }
+    return currentTitle || "";
+  } catch (error) {
+    console.warn("Failed to generate Gen-Z chat title with active model, using fallback text:", error);
+    if (isNewChat && history.length > 0) {
+      const firstMsgText = history[0]?.content || "Chat";
+      const fallbackTitle = firstMsgText.slice(0, 30).trim();
+      return toHeadingStyle(normalizeChatTitleText(fallbackTitle)) || "New Chat";
+    }
+    return currentTitle || "";
   }
 }

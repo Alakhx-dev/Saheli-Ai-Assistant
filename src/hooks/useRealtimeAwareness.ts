@@ -159,6 +159,9 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const lastTimingWriteRef = useRef(0);
   const deniedToastShownRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<number | null>(null);
+  const hasLoggedErrorRef = useRef(false);
 
   const persistAwareness = useCallback((next: RealtimeAwarenessSnapshot) => {
     setAwareness(next);
@@ -265,7 +268,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
       const longitude = Number(position.coords.longitude.toFixed(6));
 
       let geoMeta: Partial<LocationSnapshot> = {};
-      let weather: WeatherSnapshot;
+      let weather: WeatherSnapshot | undefined = undefined;
 
       try {
         const response = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}&action=all`);
@@ -274,18 +277,35 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
         }
         const data = await response.json();
         geoMeta = data.location || {};
-        weather = data.weather;
-        if (!weather) {
+        if (data.weather) {
+          weather = data.weather;
+        } else {
           throw new Error("Weather data missing in response");
         }
       } catch (err) {
-        console.error("Backend unified weather call failed, falling back to separate calls:", err);
-        const [geoRes, weatherRes] = await Promise.all([
-          reverseGeocode(latitude, longitude).catch(() => ({})),
-          fetchWeather(latitude, longitude),
-        ]);
-        geoMeta = geoRes;
-        weather = weatherRes;
+        if (!hasLoggedErrorRef.current) {
+          console.error("Backend unified weather call failed, falling back to separate calls:", err);
+          hasLoggedErrorRef.current = true; // throttle console spam
+        }
+        try {
+          const [geoRes, weatherRes] = await Promise.all([
+            reverseGeocode(latitude, longitude).catch(() => ({})),
+            fetchWeather(latitude, longitude),
+          ]);
+          geoMeta = geoRes;
+          weather = weatherRes;
+        } catch (fallbackErr) {
+          // If fallback fails, we intentionally throw to trigger retry logic
+          throw new Error("Fallback weather fetch failed");
+        }
+      }
+
+      // Success - reset retry logic
+      retryCountRef.current = 0;
+      hasLoggedErrorRef.current = false;
+      if (retryTimeoutRef.current) {
+        window.clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
       }
 
       const location: LocationSnapshot = {
@@ -303,7 +323,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
           ...prev,
           permission: "granted",
           location,
-          weather,
+          weather: weather || prev.weather, // fallback to cache if somehow undefined
         };
         writeAwarenessCache(next);
         return next;
@@ -320,6 +340,19 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
           deniedToastShownRef.current = true;
           toast.message(FRIENDLY_LOCATION_PROMPT);
         }
+      } else {
+        // Schedule backoff retry for network/weather errors
+        const delays = [5000, 15000, 30000, 120000]; // 5s, 15s, 30s, 2m
+        const nextDelay = delays[Math.min(retryCountRef.current, delays.length - 1)];
+        
+        if (retryTimeoutRef.current) {
+          window.clearTimeout(retryTimeoutRef.current);
+        }
+        
+        retryTimeoutRef.current = window.setTimeout(() => {
+          retryCountRef.current += 1;
+          void runLocationWeatherRefresh({ force: true, requestPermission: false });
+        }, nextDelay);
       }
     } finally {
       setIsRefreshing(false);
@@ -342,13 +375,13 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
     refreshTimeNow();
     void runLocationWeatherRefresh({ requestPermission: true });
 
-    const minuteInterval = window.setInterval(() => {
+    const timeInterval = window.setInterval(() => {
       refreshTimeNow();
-    }, 60000);
+    }, 1000); // 1 second
 
     const weatherInterval = window.setInterval(() => {
       void runLocationWeatherRefresh({ requestPermission: false });
-    }, 20 * 60 * 1000);
+    }, 10 * 60 * 1000); // 10 minutes
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -366,7 +399,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
     window.addEventListener("keydown", onInteraction);
 
     return () => {
-      window.clearInterval(minuteInterval);
+      window.clearInterval(timeInterval);
       window.clearInterval(weatherInterval);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pointerdown", onInteraction);

@@ -9,11 +9,11 @@ const ACTIVE_AI_ENGINE_STORAGE_KEY = "active_ai_engine";
 
 function getStoredActiveProvider(): AIProvider {
   if (typeof window === "undefined") {
-    return "OpenRouter";
+    return "Groq";
   }
 
   const storedValue = window.localStorage.getItem(ACTIVE_AI_ENGINE_STORAGE_KEY);
-  return storedValue === "Groq" ? "Groq" : "OpenRouter";
+  return storedValue === "Groq" ? "Groq" : "Groq";
 }
 
 type AppState = {
