@@ -1,7 +1,69 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+
+const THEME_BLOBS: Record<string, number[][]> = {
+  pink: [
+    [340, 70, 60], // pink
+    [280, 60, 55], // purple/lavender
+    [320, 65, 50], // rose
+    [260, 55, 45], // indigo
+  ],
+  yellow: [
+    [48, 85, 55],  // warm gold/yellow
+    [36, 75, 50],  // amber
+    [60, 80, 50],  // yellow
+    [24, 70, 45],  // light orange
+  ],
+  blue: [
+    [195, 85, 55], // sky blue
+    [210, 75, 50], // deep sky blue
+    [180, 80, 45], // cyan
+    [230, 65, 45], // light blue-purple
+  ],
+  peach: [
+    [12, 85, 60],  // coral peach
+    [25, 80, 55],  // soft orange
+    [355, 75, 55], // rose peach
+    [340, 60, 50], // light warm pink
+  ],
+  lavender: [
+    [265, 75, 60], // lavender
+    [250, 70, 55], // soft violet
+    [285, 65, 55], // orchid lavender
+    [220, 60, 50], // deep lavender blue
+  ],
+  orchid: [
+    [300, 85, 60], // orchid magenta
+    [320, 80, 55], // cyber magenta
+    [280, 75, 55], // deep violet
+    [340, 70, 50], // bright pinkish purple
+  ],
+  teal: [
+    [165, 80, 50], // aqua teal
+    [185, 85, 45], // minty cyan
+    [150, 75, 45], // light jade green
+    [200, 70, 45], // soft blue-teal
+  ],
+};
 
 const AnimatedBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [activeTheme, setActiveTheme] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_theme_color") || "pink";
+    }
+    return "pink";
+  });
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      const color = window.localStorage.getItem("saheli_theme_color") || "pink";
+      setActiveTheme(color);
+    };
+    window.addEventListener("saheli_theme_color_changed", handleThemeChange);
+    return () => {
+      window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,11 +79,13 @@ const AnimatedBackground = () => {
     resize();
     window.addEventListener("resize", resize);
 
+    // Initial HSL colors from the starting theme
+    const initialColors = THEME_BLOBS[activeTheme] || THEME_BLOBS.pink;
     const blobs = [
-      { x: 0.3, y: 0.3, r: 350, color: [220, 50, 80] },   // pink
-      { x: 0.7, y: 0.6, r: 300, color: [270, 50, 55] },   // lavender
-      { x: 0.5, y: 0.8, r: 280, color: [175, 45, 35] },   // teal
-      { x: 0.2, y: 0.7, r: 260, color: [340, 60, 50] },   // rose
+      { x: 0.3, y: 0.3, r: 350, color: [...initialColors[0]] },
+      { x: 0.7, y: 0.6, r: 300, color: [...initialColors[1]] },
+      { x: 0.5, y: 0.8, r: 280, color: [...initialColors[2]] },
+      { x: 0.2, y: 0.7, r: 260, color: [...initialColors[3]] },
     ];
 
     const draw = () => {
@@ -30,7 +94,19 @@ const AnimatedBackground = () => {
       ctx.fillStyle = "hsl(230, 25%, 7%)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Access latest target colors ref or active state value inside draw loop
+      // Reading from window localstorage is safe here too, but reading from our state is clean.
+      // We will read activeTheme from a local variable captured at draw start or window storage.
+      const currentTheme = window.localStorage.getItem("saheli_theme_color") || "pink";
+      const targetColors = THEME_BLOBS[currentTheme] || THEME_BLOBS.pink;
+
       blobs.forEach((b, i) => {
+        const target = targetColors[i] || targetColors[0];
+        // Smoothly interpolate (lerp) current HSL values to target HSL values over frames
+        b.color[0] += (target[0] - b.color[0]) * 0.035;
+        b.color[1] += (target[1] - b.color[1]) * 0.035;
+        b.color[2] += (target[2] - b.color[2]) * 0.035;
+
         const cx = canvas.width * (b.x + Math.sin(t + i * 1.5) * 0.12);
         const cy = canvas.height * (b.y + Math.cos(t * 0.8 + i) * 0.1);
         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, b.r);
@@ -48,7 +124,7 @@ const AnimatedBackground = () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", resize);
     };
-  }, []);
+  }, [activeTheme]);
 
   return (
     <canvas

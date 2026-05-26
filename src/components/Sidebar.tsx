@@ -90,7 +90,7 @@ const ChatItem = memo(function ChatItem({
     >
       {/* Thin soft gradient accent line for active chat */}
       {isActive && (
-        <div className="absolute left-0 top-2 bottom-2 w-[2px] bg-gradient-to-b from-pink-400/45 to-purple-400/15 rounded-full pointer-events-none" />
+        <div className="sidebar-active-chat-accent-line absolute left-0 top-2 bottom-2 w-[2px] bg-gradient-to-b from-pink-400/45 to-purple-400/15 rounded-full pointer-events-none" />
       )}
 
       <span className="text-[14px] shrink-0 w-4 h-4 flex items-center justify-center select-none transition duration-300 group-hover:scale-105">
@@ -286,10 +286,10 @@ export default function Sidebar(props: SidebarProps) {
           transition: "transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
-        <div className="pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />
+        <div className="sidebar-bottom-glow pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />
 
         <div className="border-b border-white/[0.03] px-3 pb-2.5 pt-4 relative flex items-center justify-between">
-          <div className="absolute top-1/2 left-4 w-24 h-12 -translate-y-1/2 bg-pink-500/20 blur-[20px] rounded-full pointer-events-none" />
+          <div className="sidebar-logo-glow absolute top-1/2 left-4 w-24 h-12 -translate-y-1/2 bg-pink-500/20 blur-[20px] rounded-full pointer-events-none" />
           <div className="saheli-logo-section ml-1.5">
             <SaheliLogo size={25} showText={true} />
           </div>
@@ -317,7 +317,7 @@ export default function Sidebar(props: SidebarProps) {
           onClick={() => void onCreateChat()}
           whileHover={{ y: -1, scale: 1.02 }}
           whileTap={{ scale: 0.96 }}
-          className="group mx-3 mt-3 inline-flex items-center justify-center gap-2 rounded-full border border-pink-400/20 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-3 py-2.5 text-xs font-medium tracking-[0.08em] text-pink-100/90 shadow-[0_12px_28px_rgba(0,0,0,0.3),0_0_20px_rgba(255,105,180,0.15)] backdrop-blur-xl transition duration-300 hover:border-pink-400/40 hover:from-pink-500/20 hover:to-purple-500/20 hover:text-white"
+          className="sidebar-new-chat-btn group mx-3 mt-3 inline-flex items-center justify-center gap-2 rounded-full border border-pink-400/20 bg-gradient-to-r from-pink-500/10 to-purple-500/10 px-3 py-2.5 text-xs font-medium tracking-[0.08em] text-pink-100/90 shadow-[0_12px_28px_rgba(0,0,0,0.3),0_0_20px_rgba(255,105,180,0.15)] backdrop-blur-xl transition duration-300 hover:border-pink-400/40 hover:from-pink-500/20 hover:to-purple-500/20 hover:text-white"
         >
           <Plus className="h-4 w-4 transition-transform duration-300 group-hover:rotate-90 text-pink-300" />
           {newChatLabel}
@@ -352,8 +352,8 @@ export default function Sidebar(props: SidebarProps) {
         </div>
 
         <div className="mt-auto border-t border-white/[0.05] px-2.5 pb-2.5 pt-3 bg-gradient-to-t from-black/40 to-transparent">
-          <div className="flex items-center gap-2.5 rounded-[20px] border border-pink-400/20 bg-black/40 px-3 py-2.5 backdrop-blur-2xl transition duration-300 hover:border-pink-400/40 hover:bg-black/50 hover:shadow-[0_0_30px_rgba(255,105,180,0.15)]" style={{ boxShadow: "0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 105, 180, 0.15)" }}>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-400/30 bg-gradient-to-br from-pink-500/20 to-purple-500/20 shadow-[0_0_15px_rgba(255,105,180,0.2)]">
+          <div className="sidebar-profile-box flex items-center gap-2.5 rounded-[20px] border border-pink-400/20 bg-black/40 px-3 py-2.5 backdrop-blur-2xl transition duration-300 hover:border-pink-400/40 hover:bg-black/50 hover:shadow-[0_0_30px_rgba(255,105,180,0.15)]">
+            <div className="sidebar-profile-avatar-box flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-pink-400/30 bg-gradient-to-br from-pink-500/20 to-purple-500/20 shadow-[0_0_15px_rgba(255,105,180,0.2)]">
               {userPhotoUrl ? (
                 <img src={userPhotoUrl} alt="avatar" className="h-full w-full object-cover" />
               ) : (
@@ -363,14 +363,14 @@ export default function Sidebar(props: SidebarProps) {
 
             <div className="min-w-0 flex-1">
               <p className="truncate text-[12px] font-semibold text-white/95">{userName || "User"}</p>
-              <p className="truncate text-[10px] text-pink-200/60 font-medium tracking-wide">{userEmail || (isGuest ? "Guest mode" : "Connected")}</p>
+              <p className="sidebar-user-email truncate text-[10px] text-pink-200/60 font-medium tracking-wide">{userEmail || (isGuest ? "Guest mode" : "Connected")}</p>
             </div>
 
             <button
               type="button"
               onClick={() => { playPopSound(); onOpenSettings(); }}
               aria-label={settingsLabel}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/30 hover:text-pink-100 hover:shadow-[0_0_20px_rgba(255,105,180,0.3)]"
+              className="sidebar-profile-settings-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/30 hover:text-pink-100 hover:shadow-[0_0_20px_rgba(255,105,180,0.3)]"
               style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
             >
               <Settings className="h-4 w-4" />

@@ -75,6 +75,7 @@ import CinematicAtmosphere from "../components/CinematicAtmosphere";
 import Profile from "../components/Profile";
 import MemoryModal from "../components/memory/MemoryModal";
 import { useAppStore } from "@/store/app-store";
+import ThemeTransitionOverlay from "../components/ThemeTransitionOverlay";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1052,6 +1053,29 @@ export default function Chat() {
   const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId());
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
+
+  const [activeTheme, setActiveTheme] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_theme_color") || "pink";
+    }
+    return "pink";
+  });
+  const [targetTheme, setTargetTheme] = useState<string | null>(null);
+  const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      const color = window.localStorage.getItem("saheli_theme_color") || "pink";
+      if (color !== activeTheme && !isThemeTransitioning) {
+        setTargetTheme(color);
+        setIsThemeTransitioning(true);
+      }
+    };
+    window.addEventListener("saheli_theme_color_changed", handleThemeChange);
+    return () => {
+      window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
+    };
+  }, [activeTheme, isThemeTransitioning]);
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -2933,11 +2957,12 @@ export default function Chat() {
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
   return (
-    <div
-      className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
-      data-mood={mood}
-      style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
-    >
+    <div className={`saheli-app-wrapper theme-${activeTheme} h-full w-full`}>
+      <div
+        className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
+        data-mood={mood}
+        style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
+      >
       <div ref={cursorRef} className="cursor-glow" />
       <CinematicAtmosphere layer="ambient" />
       
@@ -3833,7 +3858,16 @@ export default function Chat() {
           ) : null}
         </AnimatePresence>
       </div>
+      <ThemeTransitionOverlay
+        targetTheme={targetTheme}
+        onThemeUpdate={(theme) => setActiveTheme(theme)}
+        onTransitionComplete={() => {
+          setTargetTheme(null);
+          setIsThemeTransitioning(false);
+        }}
+      />
     </div>
+  </div>
   );
 }
 

@@ -2722,6 +2722,200 @@
 /* ═══════════════════════════════════════════════════════════════
    🦋 HYPER-REALISTIC BUTTERFLY SYSTEM
    ═══════════════════════════════════════════════════════════════ */
+.liquid-switch-thumb-glass {
+  display: block;
+  height: 1.1rem;
+  width: 1.1rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.liquid-switch-track[aria-checked="true"] {
+  background: linear-gradient(135deg, rgba(255, 85, 195, 0.22), rgba(112, 84, 255, 0.2));
+}
+
+.liquid-switch-thumb {
+  display: block;
+  height: 1.6rem;
+  width: 1.6rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff, #ffd4ef);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24), 0 0 18px rgba(255, 255, 255, 0.24);
+}
+
+@keyframes sidebarPulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    box-shadow: 0 0 10px rgba(255, 92, 198, 0.5);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 18px rgba(255, 92, 198, 0.9);
+  }
+}
+
+/* Empty State Greeting Text */
+.welcome-text-cinematic {
+  font-family: 'Great Vibes', cursive;
+  font-size: clamp(2rem, 4.8vw, 42px);
+  color: #ffffff;
+  text-shadow: 0 0 20px rgba(255, 120, 200, 0.6);
+  text-align: center;
+  z-index: 50;
+  pointer-events: none;
+  max-width: min(90vw, 820px);
+  line-height: 1.25;
+  padding: 0 1rem;
+}
+
+.welcome-hint {
+  font-family: 'Poppins', sans-serif;
+  font-size: 14px;
+  color: #ff8cd2;
+  opacity: 0.8;
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-style: italic;
+}
+
+.glass-input-container {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 8px 16px;
+  width: 100%;
+  max-width: 700px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 0, 200, 0.18) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 0, 200, 0.16);
+  border-radius: 999px;
+}
+
+.cursor-glow {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(255, 0, 200, 0.08) 0%, transparent 70%);
+  position: fixed;
+  pointer-events: none;
+  z-index: 1;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.1s ease-out;
+}
+
+.video-blend {
+  mix-blend-mode: lighten;
+  filter: brightness(1.1) contrast(1.1);
+  -webkit-mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+}
+
+@media (max-width: 768px) {
+  .cursor-glow {
+    display: none;
+  }
+}
+
+/* ===== MEMORY MODAL ===== */
+.memory-modal-content {
+  max-height: 90vh;
+  width: min(64rem, calc(100vw - 2rem));
+  max-width: 64rem;
+  overflow-y: auto;
+  border-radius: 20px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(18, 12, 24, 0.96) !important;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  padding: 0 !important;
+  color: white;
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 50px rgba(168, 85, 247, 0.05);
+}
+
+.memory-tab-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.memory-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 11px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+.memory-tab:hover {
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.memory-tab-active {
+  color: #fbb6d0;
+  background: linear-gradient(135deg, rgba(255, 85, 195, 0.15), rgba(131, 84, 255, 0.1));
+  border-color: rgba(255, 154, 226, 0.2);
+  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.1);
+}
+
+.memory-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.memory-tab-active .memory-tab-count {
+  background: rgba(236, 72, 153, 0.2);
+  color: #f9a8d4;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   🦋 HYPER-REALISTIC BUTTERFLY SYSTEM
+   ═══════════════════════════════════════════════════════════════ */
 
 @keyframes softFloat {
   0%, 100% { transform: translateY(0); }
@@ -2730,3 +2924,572 @@
 .animate-soft-float {
   animation: softFloat 4s ease-in-out infinite;
 }
+
+/* ==========================================================================
+   DYNAMIC THEME ACCENT SYSTEM (SCOPED TO MAIN INTERFACE)
+   ========================================================================== */
+
+/* 1. Theme Variables Definitions */
+.saheli-app-wrapper.theme-pink {
+  --theme-primary: #ff0078;
+  --theme-primary-rgb: 255, 0, 120;
+  --theme-glow: #ff69b4;
+  --theme-glow-rgb: 255, 105, 180;
+  --theme-border: rgba(255, 105, 180, 0.2);
+  --theme-soft: rgba(255, 105, 180, 0.1);
+  --theme-light: #ffd4ef;
+}
+
+.saheli-app-wrapper.theme-blue {
+  --theme-primary: #00E5FF;
+  --theme-primary-rgb: 0, 229, 255;
+  --theme-glow: rgba(0, 229, 255, 0.3);
+  --theme-glow-rgb: 0, 229, 255;
+  --theme-border: rgba(0, 229, 255, 0.15);
+  --theme-surface-tint: rgba(0, 229, 255, 0.03);
+  --theme-ambient-light: 0, 229, 255;
+  --theme-soft: rgba(0, 229, 255, 0.1);
+  --theme-light: #b2f9ff;
+}
+
+.saheli-app-wrapper.theme-peach {
+  --theme-primary: #FF9E80;
+  --theme-primary-rgb: 255, 158, 128;
+  --theme-glow: rgba(255, 158, 128, 0.3);
+  --theme-glow-rgb: 255, 158, 128;
+  --theme-border: rgba(255, 158, 128, 0.15);
+  --theme-surface-tint: rgba(255, 158, 128, 0.03);
+  --theme-ambient-light: 255, 158, 128;
+  --theme-soft: rgba(255, 158, 128, 0.1);
+  --theme-light: #ffebe5;
+}
+
+.saheli-app-wrapper.theme-yellow {
+  --theme-primary: #FFD700;
+  --theme-primary-rgb: 255, 215, 0;
+  --theme-glow: rgba(255, 215, 0, 0.3);
+  --theme-glow-rgb: 255, 215, 0;
+  --theme-border: rgba(255, 215, 0, 0.15);
+  --theme-surface-tint: rgba(255, 215, 0, 0.03);
+  --theme-ambient-light: 255, 215, 0;
+  --theme-soft: rgba(255, 215, 0, 0.1);
+  --theme-light: #fff9db;
+}
+
+.saheli-app-wrapper.theme-lavender {
+  --theme-primary: #B388FF;
+  --theme-primary-rgb: 179, 136, 255;
+  --theme-glow: rgba(179, 136, 255, 0.3);
+  --theme-glow-rgb: 179, 136, 255;
+  --theme-border: rgba(179, 136, 255, 0.15);
+  --theme-surface-tint: rgba(179, 136, 255, 0.03);
+  --theme-ambient-light: 179, 136, 255;
+  --theme-soft: rgba(179, 136, 255, 0.1);
+  --theme-light: #f2ebff;
+}
+
+.saheli-app-wrapper.theme-orchid {
+  --theme-primary: #D500F9;
+  --theme-primary-rgb: 213, 0, 249;
+  --theme-glow: rgba(213, 0, 249, 0.3);
+  --theme-glow-rgb: 213, 0, 249;
+  --theme-border: rgba(213, 0, 249, 0.15);
+  --theme-surface-tint: rgba(213, 0, 249, 0.03);
+  --theme-ambient-light: 213, 0, 249;
+  --theme-soft: rgba(213, 0, 249, 0.1);
+  --theme-light: #fbe6ff;
+}
+
+.saheli-app-wrapper.theme-teal {
+  --theme-primary: #1DE9B6;
+  --theme-primary-rgb: 29, 233, 182;
+  --theme-glow: rgba(29, 233, 182, 0.3);
+  --theme-glow-rgb: 29, 233, 182;
+  --theme-border: rgba(29, 233, 182, 0.15);
+  --theme-surface-tint: rgba(29, 233, 182, 0.03);
+  --theme-ambient-light: 29, 233, 182;
+  --theme-soft: rgba(29, 233, 182, 0.1);
+  --theme-light: #e6fffa;
+}
+
+/* 2. Scoped Component Accents & Glow Overrides - Only active on NOT theme-pink */
+.saheli-app-wrapper:not(.theme-pink) .girl-spotlight {
+  background: radial-gradient(ellipse at 50% 0%,
+    rgba(var(--theme-primary-rgb), 0.28) 0%,
+    rgba(var(--theme-primary-rgb), 0.16) 20%,
+    rgba(var(--theme-primary-rgb), 0.08) 40%,
+    transparent 65%
+  ) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .girl-ground-light {
+  background: radial-gradient(ellipse at center,
+    rgba(var(--theme-glow-rgb), 0.45) 0%,
+    rgba(var(--theme-ambient-light), 0.22) 40%,
+    rgba(20, 5, 25, 0.1) 65%,
+    transparent 85%
+  ) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .girl-ambient-glow {
+  background: radial-gradient(ellipse at center,
+    rgba(var(--theme-primary-rgb), 0.06) 0%,
+    rgba(var(--theme-ambient-light), 0.04) 35%,
+    rgba(var(--theme-ambient-light), 0.02) 55%,
+    transparent 70%
+  ) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-shell {
+  box-shadow: 
+    0 18px 46px rgba(0, 0, 0, 0.36),
+    0 22px 54px rgba(var(--theme-primary-rgb), 0.08),
+    0 56px 120px rgba(var(--theme-primary-rgb), 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 0 30px rgba(168, 85, 247, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-shell:focus-within {
+  box-shadow: 
+    0 24px 58px rgba(0, 0, 0, 0.44),
+    0 24px 60px rgba(var(--theme-primary-rgb), 0.12),
+    0 64px 140px rgba(var(--theme-primary-rgb), 0.1),
+    0 0 0 1.5px rgba(var(--theme-glow-rgb), 0.2) inset,
+    0 0 34px rgba(var(--theme-primary-rgb), 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn {
+  background: linear-gradient(135deg, 
+    rgba(var(--theme-primary-rgb), 0.16),
+    rgba(168, 85, 247, 0.12),
+    rgba(255, 255, 255, 0.05)) !important;
+  border: 1px solid rgba(var(--theme-glow-rgb), 0.18) !important;
+  box-shadow: 
+    0 8px 22px rgba(0, 0, 0, 0.26),
+    0 0 18px rgba(var(--theme-primary-rgb), 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn:hover {
+  background: linear-gradient(135deg, 
+    rgba(var(--theme-primary-rgb), 0.24),
+    rgba(168, 85, 247, 0.18),
+    rgba(255, 255, 255, 0.08)) !important;
+  border-color: rgba(var(--theme-glow-rgb), 0.3) !important;
+  box-shadow: 
+    0 12px 28px rgba(0, 0, 0, 0.28),
+    0 0 24px rgba(var(--theme-primary-rgb), 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-bubble {
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.34),
+    0 0 20px rgba(var(--theme-primary-rgb), 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-bubble::before {
+  background: linear-gradient(90deg, transparent, rgba(var(--theme-primary-rgb), 0.5), rgba(168, 85, 247, 0.35), transparent) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .bubble-glow {
+  filter: drop-shadow(0 0 8px rgba(var(--theme-primary-rgb), 0.20)) drop-shadow(0 0 18px rgba(168, 85, 247, 0.10)) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-logo-heart {
+  fill: var(--theme-primary) !important;
+  filter: drop-shadow(0 2px 4px rgba(var(--theme-primary-rgb), 0.3)) !important;
+}
+
+/* 3. Scoped Tailwind Pink Color Class Overrides */
+.saheli-app-wrapper:not(.theme-pink) .text-pink-400 { color: var(--theme-primary) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-300 { color: var(--theme-light) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-200 { color: var(--theme-light) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-100 { color: var(--theme-light) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-200\/90 { color: rgba(var(--theme-primary-rgb), 0.9) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-200\/80 { color: rgba(var(--theme-primary-rgb), 0.8) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-200\/60 { color: rgba(var(--theme-primary-rgb), 0.6) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-100\/90 { color: #ffffff !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-100\/85 { color: #ffffff !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-500\/10 { background-color: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-500\/15 { background-color: rgba(var(--theme-primary-rgb), 0.15) !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-500\/20 { background-color: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-500\/25 { background-color: rgba(var(--theme-primary-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-600 { background-color: var(--theme-primary) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/10 { border-color: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/15 { border-color: rgba(var(--theme-primary-rgb), 0.15) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/20 { border-color: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/25 { border-color: rgba(var(--theme-primary-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/30 { border-color: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/40 { border-color: rgba(var(--theme-primary-rgb), 0.4) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/20 { border-color: rgba(var(--theme-glow-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/25 { border-color: rgba(var(--theme-glow-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/30 { border-color: rgba(var(--theme-glow-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/35 { border-color: rgba(var(--theme-glow-rgb), 0.35) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/40 { border-color: rgba(var(--theme-glow-rgb), 0.4) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-300\/30 { border-color: rgba(var(--theme-glow-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-300\/45 { border-color: rgba(var(--theme-glow-rgb), 0.45) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:border-pink-400\/25:hover { border-color: rgba(var(--theme-glow-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:border-pink-400\/40:hover { border-color: rgba(var(--theme-glow-rgb), 0.4) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:border-pink-500\/20:hover { border-color: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:border-pink-500\/30:hover { border-color: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:from-pink-500\/10:hover { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:from-pink-500\/20:hover { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:to-purple-500\/20:hover { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:text-pink-100:hover { color: var(--theme-light) !important; }
+.saheli-app-wrapper:not(.theme-pink) .focus\:border-pink-300\/45:focus { border-color: rgba(var(--theme-glow-rgb), 0.45) !important; }
+.saheli-app-wrapper:not(.theme-pink) .selection\:bg-pink-500\/30 *::selection { background-color: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .selection\:bg-pink-500\/30::selection { background-color: rgba(var(--theme-primary-rgb), 0.3) !important; }
+
+/* Gradient stop variables mapping */
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/5 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.05) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/10 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/15 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.15) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/20 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/25 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.25) !important; }
+
+.saheli-app-wrapper:not(.theme-pink) .from-pink-400\/20 { --tw-gradient-from: rgba(var(--theme-glow-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-400\/25 { --tw-gradient-from: rgba(var(--theme-glow-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-400\/30 { --tw-gradient-from: rgba(var(--theme-glow-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-400\/35 { --tw-gradient-from: rgba(var(--theme-glow-rgb), 0.35) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-400\/45 { --tw-gradient-from: rgba(var(--theme-glow-rgb), 0.45) !important; }
+
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/5 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.05) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/10 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/15 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.15) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/20 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/25 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.25) !important; }
+
+/* Custom shadow class overrides */
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_20px_rgba\(255\,105\,180\,0\.15\)\] {
+  box-shadow: 0 0 20px rgba(var(--theme-glow-rgb), 0.15) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_12px_28px_rgba\(0\,0\,0\,0\.3\)\,0_0_20px_rgba\(255\,105\,180\,0\.15\)\] {
+  box-shadow: 0 12px 28px rgba(0,0,0,0.3), 0 0 20px rgba(var(--theme-glow-rgb), 0.15) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_14px_30px_rgba\(0\,0\,0\,0\.28\)\,0_0_18px_rgba\(255\,105\,180\,0\.08\)\] {
+  box-shadow: 0 14px 30px rgba(0,0,0,0.28), 0 0 18px rgba(var(--theme-glow-rgb), 0.08) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_15px_rgba\(255\,105\,180\,0\.3\)\] {
+  box-shadow: 0 0 15px rgba(var(--theme-glow-rgb), 0.3) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_15px_rgba\(255\,105\,180\,0\.2\)\] {
+  box-shadow: 0 0 15px rgba(var(--theme-glow-rgb), 0.2) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_22px_rgba\(255\,0\,120\,0\.14\)\] {
+  box-shadow: 0 0 22px rgba(var(--theme-primary-rgb), 0.14) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_14px_rgba\(255\,105\,180\,0\.16\)\] {
+  box-shadow: 0 0 14px rgba(var(--theme-glow-rgb), 0.16) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .shadow-\[0_0_10px_rgba\(244\,63\,94\,0\.1\)\] {
+  box-shadow: 0 0 10px rgba(var(--theme-primary-rgb), 0.1) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .drop-shadow-\[0_0_4px_rgba\(244\,63\,94\,0\.2\)\] {
+  filter: drop-shadow(0 0 4px rgba(var(--theme-primary-rgb), 0.2)) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .drop-shadow-\[0_0_8px_rgba\(244\,63\,94\,0\.55\)\] {
+  filter: drop-shadow(0 0 8px rgba(var(--theme-primary-rgb), 0.55)) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .drop-shadow-\[0_0_6px_rgba\(244\,63\,94\,0\.6\)\] {
+  filter: drop-shadow(0 0 6px rgba(var(--theme-primary-rgb), 0.6)) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .drop-shadow-\[0_0_6px_rgba\(244\,63\,94\,0\.4\)\] {
+  filter: drop-shadow(0 0 6px rgba(var(--theme-primary-rgb), 0.4)) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .fill-pink-400 {
+  fill: var(--theme-primary) !important;
+}
+
+/* Scoped elements */
+.saheli-app-wrapper:not(.theme-pink) .saheli-logo-wrapper span {
+  color: var(--theme-primary) !important;
+}
+
+/* Toggle track/switches styled with themed colors */
+.saheli-app-wrapper:not(.theme-pink) [aria-checked="true"] {
+  border-color: rgba(var(--theme-primary-rgb), 0.4) !important;
+  box-shadow: 0 0 15px rgba(var(--theme-primary-rgb), 0.3) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) [aria-checked="true"] span {
+  box-shadow: 0 0 15px rgba(var(--theme-primary-rgb), 0.8) !important;
+}
+
+/* Sidebar profile boxes - default pink styles */
+.sidebar-profile-box {
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(255, 105, 180, 0.15) !important;
+}
+.sidebar-profile-avatar-box {
+  box-shadow: 0 0 15px rgba(255, 105, 180, 0.2) !important;
+}
+.sidebar-profile-settings-btn:hover {
+  box-shadow: 0 0 20px rgba(255, 105, 180, 0.3) !important;
+}
+
+/* Sidebar profile boxes - themed overrides */
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-box {
+  border-color: rgba(var(--theme-glow-rgb), 0.2) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 2px rgba(var(--theme-glow-rgb), 0.15) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-box:hover {
+  border-color: rgba(var(--theme-glow-rgb), 0.4) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.65), 0 0 30px rgba(var(--theme-glow-rgb), 0.15), inset 0 1px 2px rgba(var(--theme-glow-rgb), 0.25) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-avatar-box {
+  border-color: rgba(var(--theme-glow-rgb), 0.3) !important;
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.2), rgba(var(--theme-primary-rgb), 0.05)) !important;
+  box-shadow: 0 0 15px rgba(var(--theme-glow-rgb), 0.2) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-settings-btn:hover {
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.2), rgba(var(--theme-primary-rgb), 0.05)) !important;
+  border-color: rgba(var(--theme-glow-rgb), 0.3) !important;
+  color: var(--theme-light) !important;
+  box-shadow: 0 0 20px rgba(var(--theme-glow-rgb), 0.3) !important;
+}
+
+/* Sidebar structure overrides */
+.saheli-app-wrapper:not(.theme-pink) .sidebar {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(var(--theme-primary-rgb), 0.08) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-bottom-glow {
+  background: radial-gradient(ellipse at center, rgba(var(--theme-primary-rgb), 0.28) 0%, rgba(var(--theme-primary-rgb), 0.14) 34%, transparent 74%) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-logo-glow {
+  background-color: rgba(var(--theme-primary-rgb), 0.2) !important;
+}
+
+/* Sidebar New Chat Button overrides */
+.saheli-app-wrapper:not(.theme-pink) .sidebar-new-chat-btn {
+  border-color: rgba(var(--theme-primary-rgb), 0.2) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.1), rgba(var(--theme-primary-rgb), 0.03)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 20px rgba(var(--theme-glow-rgb), 0.15) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-new-chat-btn:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.4) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.2), rgba(var(--theme-primary-rgb), 0.06)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.3), 0 0 24px rgba(var(--theme-glow-rgb), 0.25) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .sidebar-new-chat-btn .lucide-plus {
+  color: var(--theme-primary) !important;
+}
+
+/* White email text override */
+.saheli-app-wrapper:not(.theme-pink) .sidebar-user-email {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+/* Message Bubbles overrides */
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-user-bubble {
+  background: linear-gradient(
+    135deg,
+    rgba(var(--theme-primary-rgb), 0.14) 0%,
+    rgba(147, 51, 234, 0.08) 50%,
+    rgba(20, 10, 30, 0.65) 100%
+  ) !important;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.28) !important;
+  box-shadow: 
+    0 12px 30px -5px rgba(0, 0, 0, 0.5),
+    0 4px 15px rgba(var(--theme-primary-rgb), 0.08),
+    inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-user-bubble:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.45) !important;
+  box-shadow: 
+    0 20px 40px -8px rgba(0, 0, 0, 0.6),
+    0 8px 25px rgba(var(--theme-primary-rgb), 0.18),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-ai-bubble {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(var(--theme-primary-rgb), 0.04) 50%,
+    rgba(10, 5, 25, 0.7) 100%
+  ) !important;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.2) !important;
+  box-shadow: 
+    0 12px 30px -5px rgba(0, 0, 0, 0.65),
+    0 4px 15px rgba(var(--theme-primary-rgb), 0.05),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-ai-bubble:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.35) !important;
+  box-shadow: 
+    0 20px 40px -8px rgba(0, 0, 0, 0.75),
+    0 8px 25px rgba(var(--theme-primary-rgb), 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Message Input Bubble (Composer) overrides */
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-container {
+  border-color: rgba(var(--theme-primary-rgb), 0.15) !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(var(--theme-primary-rgb), 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.1) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-container:focus-within {
+  border-color: rgba(var(--theme-primary-rgb), 0.4) !important;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.9), 0 0 60px rgba(var(--theme-primary-rgb), 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-btn:hover:not(:disabled) {
+  background: rgba(var(--theme-primary-rgb), 0.15) !important;
+  color: rgba(255, 255, 255, 1) !important;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.4) !important;
+  box-shadow: 0 0 20px rgba(var(--theme-primary-rgb), 0.3) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn {
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.2), rgba(168, 85, 247, 0.2)) !important;
+  color: rgba(var(--theme-primary-rgb), 0.9) !important;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.3) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.8), rgba(168, 85, 247, 0.8)) !important;
+  color: white !important;
+  box-shadow: 0 0 25px rgba(var(--theme-primary-rgb), 0.6) !important;
+}
+
+/* Toggle Switch themed overrides */
+.saheli-app-wrapper:not(.theme-pink) .saheli-theme-toggle[data-state="checked"] {
+  background: linear-gradient(135deg, var(--theme-primary), var(--theme-glow)) !important;
+  border-color: rgba(var(--theme-primary-rgb), 0.4) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .saheli-theme-toggle[data-state="unchecked"] {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .sidebar-active-chat-accent-line {
+  background: linear-gradient(to bottom, rgba(var(--theme-glow-rgb), 0.45), rgba(var(--theme-glow-rgb), 0.05)) !important;
+}
+
+/* Smooth color crossfade transition for themed elements */
+.saheli-app-wrapper:not(.theme-pink) .sidebar,
+.saheli-app-wrapper:not(.theme-pink) .sidebar-new-chat-btn,
+.saheli-app-wrapper:not(.theme-pink) .sidebar-active-chat-accent-line,
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-box,
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-avatar-box,
+.saheli-app-wrapper:not(.theme-pink) .sidebar-profile-settings-btn,
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-user-bubble,
+.saheli-app-wrapper:not(.theme-pink) .saheli-premium-ai-bubble,
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-container,
+.saheli-app-wrapper:not(.theme-pink) .saheli-composer-btn,
+.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn,
+.saheli-app-wrapper:not(.theme-pink) .saheli-theme-toggle {
+  transition: border-color 1.2s ease-in-out, box-shadow 1.2s ease-in-out, color 1.2s ease-in-out, background 1.2s ease-in-out, filter 1.2s ease-in-out !important;
+}
+
+/* Custom Overrides for remaining pink/purple leaks in settings panel and other items */
+.saheli-app-wrapper:not(.theme-pink) .settings-toggle-track-on {
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.35), rgba(var(--theme-glow-rgb), 0.25)) !important;
+  border-color: rgba(var(--theme-primary-rgb), 0.3) !important;
+  box-shadow: 0 0 15px rgba(var(--theme-primary-rgb), 0.15) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-toggle-track-on .settings-toggle-thumb {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18), 0 0 10px rgba(var(--theme-primary-rgb), 0.5) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-personality-card-active {
+  border-color: rgba(var(--theme-primary-rgb), 0.25) !important;
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.12), rgba(var(--theme-glow-rgb), 0.08)) !important;
+  box-shadow: 0 0 20px rgba(var(--theme-primary-rgb), 0.12), 0 0 0 1px rgba(255, 255, 255, 0.04) inset !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-personality-card-active p:first-child {
+  text-shadow: 0 0 12px rgba(var(--theme-primary-rgb), 0.2) !important;
+  color: var(--theme-light) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-progress-fill {
+  background: linear-gradient(90deg, var(--theme-primary), var(--theme-glow)) !important;
+  box-shadow: 0 0 18px rgba(var(--theme-glow-rgb), 0.25) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-nav-button {
+  border-color: rgba(var(--theme-primary-rgb), 0.05) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.05), rgba(var(--theme-glow-rgb), 0.03)) !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-nav-button.border-pink-400\/20 {
+  border-color: rgba(var(--theme-primary-rgb), 0.2) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.15), rgba(var(--theme-glow-rgb), 0.15)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(var(--theme-glow-rgb), 0.1) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-nav-button:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.15) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.1), rgba(var(--theme-glow-rgb), 0.1)) !important;
+  color: #ffffff !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-character-btn {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-character-btn.border-pink-500\/40 {
+  border-color: rgba(var(--theme-primary-rgb), 0.4) !important;
+  background: linear-gradient(to right, rgba(var(--theme-primary-rgb), 0.15), rgba(var(--theme-glow-rgb), 0.15)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(var(--theme-glow-rgb), 0.15) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-character-btn:hover {
+  border-color: rgba(var(--theme-primary-rgb), 0.2) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: #ffffff !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-character-badge {
+  border-color: rgba(var(--theme-glow-rgb), 0.3) !important;
+  background-color: rgba(var(--theme-primary-rgb), 0.15) !important;
+  color: var(--theme-light) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .bg-gradient-themed {
+  background: linear-gradient(135deg, rgba(var(--theme-ambient-light), 0.2), rgba(var(--theme-primary-rgb), 0.1), rgba(var(--theme-glow-rgb), 0.2)) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-menu-container {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(var(--theme-primary-rgb), 0.08) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-content-panel {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(var(--theme-primary-rgb), 0.08) !important;
+}
+
+.saheli-app-wrapper:not(.theme-pink) .settings-child-panel {
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(var(--theme-primary-rgb), 0.08) !important;
+}
+
+/* Missing mapped hover styles and helper overrides */
+.saheli-app-wrapper:not(.theme-pink) .hover\:border-pink-300\/35:hover { border-color: rgba(var(--theme-glow-rgb), 0.35) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:bg-pink-500\/20:hover { background-color: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .hover\:bg-pink-500\/10:hover { background-color: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-400\/35 { border-color: rgba(var(--theme-glow-rgb), 0.35) !important; }
+.saheli-app-wrapper:not(.theme-pink) .border-pink-500\/5 { border-color: rgba(var(--theme-primary-rgb), 0.05) !important; }
+.saheli-app-wrapper:not(.theme-pink) .bg-pink-500\/5 { background-color: rgba(var(--theme-primary-rgb), 0.05) !important; }
+.saheli-app-wrapper:not(.theme-pink) .text-pink-200 { color: var(--theme-light) !important; }
+
+/* Smooth transitions for settings panel components */
+.saheli-app-wrapper:not(.theme-pink) .settings-menu-container,
+.saheli-app-wrapper:not(.theme-pink) .settings-content-panel,
+.saheli-app-wrapper:not(.theme-pink) .settings-child-panel,
+.saheli-app-wrapper:not(.theme-pink) .settings-nav-button,
+.saheli-app-wrapper:not(.theme-pink) .settings-character-btn,
+.saheli-app-wrapper:not(.theme-pink) .settings-character-badge,
+.saheli-app-wrapper:not(.theme-pink) .settings-toggle-track,
+.saheli-app-wrapper:not(.theme-pink) .settings-personality-card-active,
+.saheli-app-wrapper:not(.theme-pink) .settings-progress-fill,
+.saheli-app-wrapper:not(.theme-pink) .bg-gradient-themed {
+  transition: border-color 1.2s ease-in-out, box-shadow 1.2s ease-in-out, color 1.2s ease-in-out, background 1.2s ease-in-out, filter 1.2s ease-in-out !important;
+}
+
+

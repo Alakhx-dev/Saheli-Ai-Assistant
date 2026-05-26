@@ -50,7 +50,7 @@ export default function InteractiveBackground() {
         <Spline scene="https://prod.spline.design/HkCXeW8RCSFI52gC/scene.splinecode" />
       </div>
 
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-pink-500/10 to-blue-500/20 blur-3xl" />
+      <div className="bg-gradient-themed absolute inset-0 bg-gradient-to-br from-purple-600/20 via-pink-500/10 to-blue-500/20 blur-3xl" />
 
       <div className="particles absolute inset-0 pointer-events-none" />
     </div>

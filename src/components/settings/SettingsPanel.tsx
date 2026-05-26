@@ -66,7 +66,7 @@ function NavButton({ active, label, onClick }: { active: boolean; label: string;
       whileTap={{ scale: 0.96 }}
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${active ? "border-pink-400/20 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.1)]" : "border-pink-500/5 bg-gradient-to-r from-pink-500/5 to-purple-500/5 text-white/65 hover:border-pink-500/15 hover:from-pink-500/10 hover:to-purple-500/10 hover:text-white"}`}
+      className={`settings-nav-button flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${active ? "border-pink-400/20 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.1)]" : "border-pink-500/5 bg-gradient-to-r from-pink-500/5 to-purple-500/5 text-white/65 hover:border-pink-500/15 hover:from-pink-500/10 hover:to-purple-500/10 hover:text-white"}`}
     >
       <span>{label}</span>
       {active ? <Check className="h-4 w-4 text-pink-200" /> : null}
@@ -236,7 +236,7 @@ export default function SettingsPanel({
                 border: "0.5px solid rgba(255, 255, 255, 0.06)",
                 boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
               }}
-              className="relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
+              className="settings-menu-container relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
             >
             <div className="mb-2 px-2">
               <h2 className="text-xl font-semibold tracking-tight text-white">{t.settings.title}</h2>
@@ -276,7 +276,7 @@ export default function SettingsPanel({
               border: "0.5px solid rgba(255, 255, 255, 0.06)",
               boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
             }}
-            className={`relative pointer-events-auto ml-4 ${activeSection === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : activeSection === "personalization" ? "w-[320px]" : activeSection === "realtime" ? "w-[380px]" : "w-[360px]"}`}
+            className={`settings-content-panel relative pointer-events-auto ml-4 ${activeSection === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${activeSection === "character" ? "w-[280px]" : activeSection === "memory" ? "w-[300px]" : activeSection === "personalization" ? "w-[320px]" : activeSection === "realtime" ? "w-[380px]" : "w-[360px]"}`}
           >
             <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             <AnimatePresence mode="wait">
@@ -773,7 +773,7 @@ export default function SettingsPanel({
                 border: "0.5px solid rgba(255, 255, 255, 0.06)",
                 boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
               }}
-              className={`relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${(personalizationChild === "character" || personalizationChild === "color") ? "w-[280px]" : "w-[340px]"}`}
+              className={`settings-child-panel relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${(personalizationChild === "character" || personalizationChild === "color") ? "w-[280px]" : "w-[340px]"}`}
             >
               <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <AnimatePresence mode="wait">
@@ -788,11 +788,11 @@ export default function SettingsPanel({
                               key={card.id}
                               type="button"
                               onClick={() => onCharacterChange(card.id)}
-                              className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
+                              className={`settings-character-btn flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
                             >
                               <span className="font-medium">{card.label}</span>
                               {active ? (
-                                <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
+                                <span className="settings-character-badge inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
                                   <Check className="h-3 w-3 text-pink-300" />
                                   Active
                                 </span>
@@ -814,9 +814,12 @@ export default function SettingsPanel({
                         <div className="grid grid-cols-2 gap-2.5">
                           {[
                             { id: "pink", label: "Pink", gradient: "from-pink-500 to-rose-500" },
-                            { id: "yellow", label: "Yellow", gradient: "from-amber-400 to-yellow-500" },
-                            { id: "blue", label: "Blue", gradient: "from-blue-500 to-cyan-500" },
-                            { id: "orange", label: "Orange", gradient: "from-orange-500 to-amber-500" },
+                            { id: "yellow", label: "Light Yellow", gradient: "from-yellow-300 to-amber-300" },
+                            { id: "blue", label: "Sky Blue", gradient: "from-sky-300 to-sky-400" },
+                            { id: "peach", label: "Peach", gradient: "from-orange-400 to-red-400" },
+                            { id: "lavender", label: "Lavender", gradient: "from-purple-300 to-fuchsia-400" },
+                            { id: "orchid", label: "Orchid", gradient: "from-fuchsia-300 to-pink-400" },
+                            { id: "teal", label: "Teal", gradient: "from-teal-300 to-cyan-400" },
                           ].map((item) => {
                             const active = selectedColor === item.id;
                             return (
