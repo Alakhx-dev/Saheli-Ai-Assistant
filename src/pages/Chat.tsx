@@ -304,11 +304,8 @@ type SettingsSectionId = "personalization" | "character" | "memory" | "account" 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
-  aarohi: "/Aarohi 🌸.png",
-  elina: "/Elina 🖤.png",
-  kiara: "/Kiara 🎀.png",
-  meher: "/Meher ✨.png",
-  zoya: "/Zoya ❤️.png",
+  aarohi: "/Aarohi ✨.png",
+  vaidehi: "/Vaidehi 🌻.png",
 };
 
 function normalizeCharacterId(value: string | null | undefined) {
@@ -317,12 +314,23 @@ function normalizeCharacterId(value: string | null | undefined) {
   return CHARACTER_IMAGE_MAP[value] ? value : "swara";
 }
 
-function getStoredCharacterId() {
+function getStoredCharacterId(themeColor: string) {
   if (typeof window === "undefined") {
     return "swara";
   }
+  const saved = window.localStorage.getItem(`saheli_selected_character_${themeColor}`);
+  if (saved) {
+    return normalizeCharacterId(saved);
+  }
+  // Default characters per theme color
+  if (themeColor === "maroon") return "aarohi";
+  if (themeColor === "yellow") return "vaidehi";
+  return "swara";
+}
 
-  return normalizeCharacterId(window.localStorage.getItem(SELECTED_CHARACTER_STORAGE_KEY));
+function getStoredThemeColor() {
+  if (typeof window === "undefined") return "pink";
+  return window.localStorage.getItem("saheli_theme_color") || "pink";
 }
 
 interface ProfileImageMeta {
@@ -1050,7 +1058,7 @@ export default function Chat() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
   const [isIdle, setIsIdle] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId());
+  const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId(getStoredThemeColor()));
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
 
@@ -1078,6 +1086,10 @@ export default function Chat() {
       window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
     };
   }, [activeTheme, isThemeTransitioning]);
+
+  useEffect(() => {
+    setSelectedCharacter(getStoredCharacterId(activeTheme));
+  }, [activeTheme]);
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -2924,8 +2936,11 @@ export default function Chat() {
     setIsSidebarLightMode(nextValue);
   }, []);
   const handleCharacterChange = useCallback((character: string) => {
-    setSelectedCharacter(character);
-  }, []);
+    const nextChar = normalizeCharacterId(character);
+    setSelectedCharacter(nextChar);
+    window.localStorage.setItem(`saheli_selected_character_${activeTheme}`, nextChar);
+    window.localStorage.setItem(SELECTED_CHARACTER_STORAGE_KEY, nextChar);
+  }, [activeTheme]);
   const handleToggleWeatherPanel = useCallback(() => {
     setWeatherPanelOpen((previous) => !previous);
   }, []);
@@ -3453,7 +3468,7 @@ export default function Chat() {
                   background: 'rgba(0,0,0,0.5)',
                   backdropFilter: 'blur(15px)',
                   WebkitBackdropFilter: 'blur(15px)',
-                  boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px rgba(236,72,153,0.4)',
+                  boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px var(--theme-glow, rgba(236,72,153,0.4))',
                 }}
                 animate={{ 
                   scale: [1, 1.2, 1], 

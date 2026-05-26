@@ -2963,18 +2963,6 @@
   --theme-light: #b2f9ff;
 }
 
-.saheli-app-wrapper.theme-peach {
-  --theme-primary: #FF9E80;
-  --theme-primary-rgb: 255, 158, 128;
-  --theme-glow: rgba(255, 158, 128, 0.3);
-  --theme-glow-rgb: 255, 158, 128;
-  --theme-border: rgba(255, 158, 128, 0.15);
-  --theme-surface-tint: rgba(255, 158, 128, 0.03);
-  --theme-ambient-light: 255, 158, 128;
-  --theme-soft: rgba(255, 158, 128, 0.1);
-  --theme-light: #ffebe5;
-}
-
 .saheli-app-wrapper.theme-yellow {
   --theme-primary: #FFD700;
   --theme-primary-rgb: 255, 215, 0;
@@ -2985,18 +2973,6 @@
   --theme-ambient-light: 255, 215, 0;
   --theme-soft: rgba(255, 215, 0, 0.1);
   --theme-light: #fff9db;
-}
-
-.saheli-app-wrapper.theme-lavender {
-  --theme-primary: #B388FF;
-  --theme-primary-rgb: 179, 136, 255;
-  --theme-glow: rgba(179, 136, 255, 0.3);
-  --theme-glow-rgb: 179, 136, 255;
-  --theme-border: rgba(179, 136, 255, 0.15);
-  --theme-surface-tint: rgba(179, 136, 255, 0.03);
-  --theme-ambient-light: 179, 136, 255;
-  --theme-soft: rgba(179, 136, 255, 0.1);
-  --theme-light: #f2ebff;
 }
 
 .saheli-app-wrapper.theme-orchid {
@@ -3021,6 +2997,42 @@
   --theme-ambient-light: 29, 233, 182;
   --theme-soft: rgba(29, 233, 182, 0.1);
   --theme-light: #e6fffa;
+}
+
+.saheli-app-wrapper.theme-beige {
+  --theme-primary: #EADBC8;
+  --theme-primary-rgb: 234, 219, 200;
+  --theme-glow: rgba(253, 251, 247, 0.4);
+  --theme-glow-rgb: 253, 251, 247;
+  --theme-border: rgba(234, 219, 200, 0.15);
+  --theme-surface-tint: rgba(234, 219, 200, 0.03);
+  --theme-ambient-light: 234, 219, 200;
+  --theme-soft: rgba(234, 219, 200, 0.1);
+  --theme-light: #fdfcfb;
+}
+
+.saheli-app-wrapper.theme-maroon {
+  --theme-primary: #D01C3F;
+  --theme-primary-rgb: 208, 28, 63;
+  --theme-glow: rgba(208, 28, 63, 0.55);
+  --theme-glow-rgb: 208, 28, 63;
+  --theme-border: rgba(208, 28, 63, 0.35);
+  --theme-surface-tint: rgba(208, 28, 63, 0.08);
+  --theme-ambient-light: 120, 15, 30;
+  --theme-soft: rgba(208, 28, 63, 0.2);
+  --theme-light: #ffebed;
+}
+
+.saheli-app-wrapper.theme-mauve {
+  --theme-primary: #B58C97;
+  --theme-primary-rgb: 181, 140, 151;
+  --theme-glow: rgba(181, 140, 151, 0.3);
+  --theme-glow-rgb: 181, 140, 151;
+  --theme-border: rgba(181, 140, 151, 0.15);
+  --theme-surface-tint: rgba(181, 140, 151, 0.03);
+  --theme-ambient-light: 142, 105, 115;
+  --theme-soft: rgba(181, 140, 151, 0.1);
+  --theme-light: #f2e6e8;
 }
 
 /* 2. Scoped Component Accents & Glow Overrides - Only active on NOT theme-pink */

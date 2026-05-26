@@ -19,18 +19,6 @@ const THEME_BLOBS: Record<string, number[][]> = {
     [180, 80, 45], // cyan
     [230, 65, 45], // light blue-purple
   ],
-  peach: [
-    [12, 85, 60],  // coral peach
-    [25, 80, 55],  // soft orange
-    [355, 75, 55], // rose peach
-    [340, 60, 50], // light warm pink
-  ],
-  lavender: [
-    [265, 75, 60], // lavender
-    [250, 70, 55], // soft violet
-    [285, 65, 55], // orchid lavender
-    [220, 60, 50], // deep lavender blue
-  ],
   orchid: [
     [300, 85, 60], // orchid magenta
     [320, 80, 55], // cyber magenta
@@ -42,6 +30,24 @@ const THEME_BLOBS: Record<string, number[][]> = {
     [185, 85, 45], // minty cyan
     [150, 75, 45], // light jade green
     [200, 70, 45], // soft blue-teal
+  ],
+  beige: [
+    [34, 43, 85],  // warm cream beige
+    [40, 40, 95],  // highlight cream
+    [30, 35, 90],  // soft warm beige
+    [45, 30, 88],  // sandy cream
+  ],
+  maroon: [
+    [349, 95, 48],  // glow crimson
+    [347, 95, 38],  // ruby burgundy
+    [352, 95, 42],  // vibrant wine
+    [340, 85, 28],  // base maroon
+  ],
+  mauve: [
+    [343, 20, 63],  // glow mauve
+    [343, 15, 49],  // main mauve
+    [345, 18, 55],  // soft mauve
+    [335, 12, 42],  // dark mauve
   ],
 };
 

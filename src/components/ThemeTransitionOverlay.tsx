@@ -11,10 +11,11 @@ const THEME_RGBS: Record<string, string> = {
   pink: "255, 0, 120",
   yellow: "255, 215, 0",
   blue: "0, 229, 255",
-  peach: "255, 158, 128",
-  lavender: "179, 136, 255",
   orchid: "213, 0, 249",
   teal: "29, 233, 182",
+  beige: "234, 219, 200",
+  maroon: "208, 28, 63",
+  mauve: "181, 140, 151",
 };
 
 export default function ThemeTransitionOverlay({

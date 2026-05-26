@@ -53,11 +53,8 @@ interface SettingsPanelProps {
 
 const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
-  { id: "aarohi", label: "Aarohi 🌸", image: "/Aarohi 🌸.png", accent: "from-pink-500/20 to-rose-400/10" },
-  { id: "elina", label: "Elina 🖤", image: "/Elina 🖤.png", accent: "from-gray-400/20 to-zinc-400/10" },
-  { id: "kiara", label: "Kiara 🎀", image: "/Kiara 🎀.png", accent: "from-rose-400/20 to-pink-400/10" },
-  { id: "meher", label: "Meher ✨", image: "/Meher ✨.png", accent: "from-amber-400/20 to-yellow-400/10" },
-  { id: "zoya", label: "Zoya ❤️", image: "/Zoya ❤️.png", accent: "from-red-400/20 to-rose-400/10" },
+  { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-red-500/20 to-rose-400/10" },
+  { id: "vaidehi", label: "Vaidehi 🌻", image: "/Vaidehi 🌻.png", accent: "from-amber-400/20 to-yellow-400/10" },
 ];
 
 function NavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
@@ -773,7 +770,7 @@ export default function SettingsPanel({
                 border: "0.5px solid rgba(255, 255, 255, 0.06)",
                 boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
               }}
-              className={`settings-child-panel relative pointer-events-auto ml-4 mb-16 flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${(personalizationChild === "character" || personalizationChild === "color") ? "w-[280px]" : "w-[340px]"}`}
+              className={`settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] flex-col rounded-[28px] overflow-hidden transition-[width] duration-300 ${personalizationChild === "color" ? "w-[245px]" : personalizationChild === "character" ? "w-[280px]" : "w-[340px]"}`}
             >
               <div className="flex-1 overflow-y-auto px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 <AnimatePresence mode="wait">
@@ -811,15 +808,16 @@ export default function SettingsPanel({
                           <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Theme Color</h3>
                           <p className="text-[11.5px] text-white/50 leading-relaxed">Customize Saheli AI's visual accents.</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-2.5">
+                        <div className="grid grid-cols-2 gap-2">
                           {[
-                            { id: "pink", label: "Pink", gradient: "from-pink-500 to-rose-500" },
-                            { id: "yellow", label: "Light Yellow", gradient: "from-yellow-300 to-amber-300" },
-                            { id: "blue", label: "Sky Blue", gradient: "from-sky-300 to-sky-400" },
-                            { id: "peach", label: "Peach", gradient: "from-orange-400 to-red-400" },
-                            { id: "lavender", label: "Lavender", gradient: "from-purple-300 to-fuchsia-400" },
-                            { id: "orchid", label: "Orchid", gradient: "from-fuchsia-300 to-pink-400" },
-                            { id: "teal", label: "Teal", gradient: "from-teal-300 to-cyan-400" },
+                            { id: "pink", label: "Pink", gradientBg: "linear-gradient(135deg, #ff0078 0%, #ff69b4 100%)", flower: "🌸", glowColor: "rgba(255, 0, 120, 0.35)" },
+                            { id: "yellow", label: "Light Yellow", gradientBg: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)", flower: "🌼", glowColor: "rgba(255, 215, 0, 0.35)" },
+                            { id: "blue", label: "Sky Blue", gradientBg: "linear-gradient(135deg, #87CEEB 0%, #00E5FF 100%)", flower: "🪻", glowColor: "rgba(0, 229, 255, 0.35)" },
+                            { id: "orchid", label: "Orchid", gradientBg: "linear-gradient(135deg, #D500F9 0%, #FF66CC 100%)", flower: "🪷", glowColor: "rgba(213, 0, 249, 0.35)" },
+                            { id: "teal", label: "Teal", gradientBg: "linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)", flower: "🌿", glowColor: "rgba(29, 233, 182, 0.35)" },
+                            { id: "beige", label: "Cream Beige", gradientBg: "linear-gradient(135deg, #FDFBF7 0%, #EADBC8 100%)", flower: "🌾", glowColor: "rgba(234, 219, 200, 0.35)" },
+                            { id: "maroon", label: "Maroon", gradientBg: "linear-gradient(135deg, #D01C3F 0%, #6E0016 100%)", flower: "🌹", glowColor: "rgba(208, 28, 63, 0.35)" },
+                            { id: "mauve", label: "Mauve", gradientBg: "linear-gradient(135deg, #B58C97 0%, #6E4C56 100%)", flower: "🌺", glowColor: "rgba(181, 140, 151, 0.35)" },
                           ].map((item) => {
                             const active = selectedColor === item.id;
                             return (
@@ -828,16 +826,35 @@ export default function SettingsPanel({
                                 key={item.id}
                                 type="button"
                                 onClick={() => handleColorChange(item.id)}
-                                className={`relative flex flex-col items-center justify-center gap-2 rounded-[20px] border px-3 py-4 text-center text-sm transition-all duration-300 ${
+                                className={`relative flex flex-col items-center justify-center gap-2 rounded-[14px] border px-2 py-3 text-center text-sm transition-all duration-300 ${
                                   active 
-                                    ? "border-pink-500/40 bg-gradient-to-br from-white/[0.04] to-white/[0.01] text-white shadow-[0_12px_24px_rgba(0,0,0,0.4)]" 
+                                    ? "bg-white/[0.04] text-white shadow-[0_12px_24px_rgba(0,0,0,0.4)]" 
                                     : "border-white/5 bg-white/[0.02] text-white/70 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
                                 }`}
+                                style={
+                                  active 
+                                    ? { 
+                                        borderColor: item.glowColor.replace("0.35", "0.5"), 
+                                        boxShadow: `0 8px 20px rgba(0, 0, 0, 0.4), 0 0 12px ${item.glowColor}` 
+                                      } 
+                                    : {}
+                                }
                               >
-                                <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${item.gradient} flex items-center justify-center shadow-lg ${active ? "ring-2 ring-white/50 scale-105" : ""}`} />
-                                <span className={`font-semibold text-[11px] ${active ? "text-white" : "text-white/60"}`}>{item.label}</span>
+                                <div 
+                                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md text-sm select-none transition-transform duration-300 ${active ? "ring-2 ring-white/60 scale-110" : "hover:scale-105"}`}
+                                  style={{ background: item.gradientBg }}
+                                >
+                                  {item.flower}
+                                </div>
+                                <span className={`font-semibold text-[10px] tracking-wide ${active ? "text-white" : "text-white/60"}`}>{item.label}</span>
                                 {active ? (
-                                  <div className="absolute top-2 right-2 rounded-full bg-white/10 p-0.5 border border-white/20">
+                                  <div 
+                                    className="absolute top-1.5 right-1.5 rounded-full p-0.5 border"
+                                    style={{ 
+                                      backgroundColor: item.glowColor.replace("0.35", "0.2"),
+                                      borderColor: item.glowColor.replace("0.35", "0.5")
+                                    }}
+                                  >
                                     <Check className="h-2.5 w-2.5 text-white" />
                                   </div>
                                 ) : null}
