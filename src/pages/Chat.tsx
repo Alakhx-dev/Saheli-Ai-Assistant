@@ -1062,6 +1062,7 @@ export default function Chat() {
   });
   const [targetTheme, setTargetTheme] = useState<string | null>(null);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
+  const [isDefocusActive, setIsDefocusActive] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -1069,6 +1070,7 @@ export default function Chat() {
       if (color !== activeTheme && !isThemeTransitioning) {
         setTargetTheme(color);
         setIsThemeTransitioning(true);
+        setIsDefocusActive(true);
       }
     };
     window.addEventListener("saheli_theme_color_changed", handleThemeChange);
@@ -2957,7 +2959,7 @@ export default function Chat() {
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
   return (
-    <div className={`saheli-app-wrapper theme-${activeTheme} h-full w-full`}>
+    <div className={`saheli-app-wrapper theme-${activeTheme} ${isDefocusActive ? "theme-transitioning" : ""} h-full w-full`}>
       <div
         className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
         data-mood={mood}
@@ -3860,7 +3862,10 @@ export default function Chat() {
       </div>
       <ThemeTransitionOverlay
         targetTheme={targetTheme}
-        onThemeUpdate={(theme) => setActiveTheme(theme)}
+        onThemeUpdate={(theme) => {
+          setActiveTheme(theme);
+          setIsDefocusActive(false);
+        }}
         onTransitionComplete={() => {
           setTargetTheme(null);
           setIsThemeTransitioning(false);

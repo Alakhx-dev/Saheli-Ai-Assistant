@@ -73,20 +73,27 @@ export default function ThemeTransitionOverlay({
           {/* Blurred Glow Aura Layer: zIndex 10 (Behind sidebar/composer, above background) */}
           <motion.div
             id="saheli-transition-glow-layer"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: auraOpacity }}
+            initial={{ opacity: 0, scale: 0.1 }}
+            animate={{ 
+              opacity: auraOpacity,
+              scale: auraOpacity > 0 ? 2.2 : 0.5
+            }}
             exit={{ opacity: 0 }}
             transition={{
-              duration: 0.6,
-              ease: "easeInOut",
+              duration: auraOpacity > 0 ? 0.6 : 1.2,
+              ease: "easeOut",
             }}
             style={{
               position: "fixed",
-              inset: 0,
-              background: `radial-gradient(circle at center, rgba(${activeRgb}, 0.35) 0%, rgba(${activeRgb}, 0.05) 50%, transparent 80%)`,
-              filter: "blur(60px)",
+              left: "-50%",
+              top: "-50%",
+              width: "200%",
+              height: "200%",
+              background: `radial-gradient(circle at 50% 70%, rgba(${activeRgb}, 0.65) 0%, rgba(${activeRgb}, 0.25) 35%, rgba(${activeRgb}, 0.05) 60%, transparent 80%)`,
+              filter: "blur(80px)",
               zIndex: 10,
               pointerEvents: "none",
+              mixBlendMode: "screen",
             }}
           />
         </>
