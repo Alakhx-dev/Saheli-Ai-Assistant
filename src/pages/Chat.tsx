@@ -306,6 +306,7 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
   aarohi: "/Aarohi ✨.png",
   vaidehi: "/Vaidehi 🌻.png",
+  anvika: "/Anvika 🌸.png",
 };
 
 function normalizeCharacterId(value: string | null | undefined) {
@@ -2783,6 +2784,53 @@ export default function Chat() {
   const isClearNight = visualTheme === "night" && !isCloudy && !isRainy;
   const isHotWeather = awareness.weather?.hotColdState === "hot";
   const isSunset = awareness.datetime.hour24 >= 17 && awareness.datetime.hour24 < 19;
+  const isPinkTheme = activeTheme === "pink";
+  const isOrchidTheme = activeTheme === "orchid";
+  const isMaroonTheme = activeTheme === "maroon";
+
+  const THEME_STAGE_RGBS: Record<string, string> = {
+    pink: "255, 105, 180",
+    maroon: "208, 28, 63",
+    yellow: "255, 215, 0",
+    blue: "0, 229, 255",
+    orchid: "213, 0, 249",
+    teal: "29, 233, 182",
+    beige: "234, 219, 200",
+    mauve: "181, 140, 151",
+  };
+
+  const buildPremiumThemeStagePalette = (rgb: string) => ({
+    aura: `radial-gradient(circle, rgba(${rgb}, 0.2) 0%, rgba(${rgb}, 0.08) 45%, transparent 70%)`,
+    spotlight: `radial-gradient(ellipse at 50% 0%, rgba(${rgb}, 0.45) 0%, rgba(${rgb}, 0.2) 30%, rgba(${rgb}, 0.06) 55%, transparent 75%)`,
+    groundLight: `radial-gradient(ellipse at center, rgba(${rgb}, 0.35) 0%, rgba(${rgb}, 0.12) 40%, transparent 70%)`,
+    ambient: `radial-gradient(ellipse at center, rgba(${rgb}, 0.06) 0%, rgba(${rgb}, 0.02) 50%, transparent 80%)`,
+    feetShadow: `radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(${rgb}, 0.08) 35%, transparent 80%)`,
+    feetGlow: `rgba(${rgb}, 0.15)`,
+  });
+
+  const orchidStagePalette = {
+    aura: "radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(124, 58, 237, 0.08) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 225, 245, 0.35) 0%, rgba(213, 0, 249, 0.18) 30%, rgba(124, 58, 237, 0.05) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.35) 0%, rgba(124, 58, 237, 0.12) 40%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.06) 0%, rgba(124, 58, 237, 0.02) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(15, 3, 25, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(213, 0, 249, 0.15)",
+  };
+
+  const yellowStagePalette = {
+    aura: "radial-gradient(circle, rgba(255, 215, 0, 0.18) 0%, rgba(255, 150, 0, 0.08) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 255, 230, 0.35) 0%, rgba(255, 215, 0, 0.18) 30%, rgba(255, 150, 0, 0.05) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(255, 215, 0, 0.35) 0%, rgba(255, 150, 0, 0.12) 40%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(255, 215, 0, 0.06) 0%, rgba(255, 150, 0, 0.02) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(25, 15, 0, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(255, 215, 0, 0.15)",
+  };
+
+  const stagePalette = isOrchidTheme
+    ? orchidStagePalette
+    : activeTheme === "yellow"
+      ? yellowStagePalette
+      : buildPremiumThemeStagePalette(THEME_STAGE_RGBS[activeTheme] || THEME_STAGE_RGBS.maroon);
 
   const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
   const hourlyScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3365,7 +3413,7 @@ export default function Chat() {
         <div 
           className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-0 overflow-hidden"
           style={{ 
-            opacity: 0.3, 
+            opacity: 1, 
             transition: 'opacity 0.5s ease-in-out',
             transform: `translateY(calc(var(--scroll-y, 0px) * -0.03))`
           }}
@@ -3377,7 +3425,7 @@ export default function Chat() {
           <div className="relative z-[5] flex flex-col items-center justify-center w-full h-full">
             <CinematicAtmosphere layer="characterBack" />
             <div className="absolute inset-0 flex justify-center items-center pointer-events-none z-[-1]">
-              <div className="w-[60vw] h-[60vw] max-w-[800px] max-h-[800px] rounded-full" style={{ background: "radial-gradient(circle, rgba(255,105,180,0.18) 0%, rgba(200,80,250,0.08) 40%, transparent 70%)", filter: "blur(60px)", transform: "translateY(-5%)" }} />
+              <div className="rounded-full w-[45vw] h-[45vw] max-w-[600px] max-h-[600px]" style={{ background: stagePalette.aura, filter: "blur(50px)", transform: "translateY(-5%)" }} />
             </div>
             
             {/* Added wrapper to bump character & lights up slightly */}
@@ -3395,7 +3443,7 @@ export default function Chat() {
                   }}
                 >
                   <motion.div
-                    animate={{ y: [-8, 6, -8], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
+                    animate={{ y: [-12, 2, -12], scale: [1, 1.006, 1], rotateZ: [-0.5, 0.5, -0.5], x: parallaxOffset.x, marginTop: parallaxOffset.y }}
                     transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
                     className="w-full h-full"
                   >
@@ -3404,11 +3452,15 @@ export default function Chat() {
                         key={selectedCharacter}
                         src={CHARACTER_IMAGE_MAP[selectedCharacter] || "/butterfly.png"}
                         alt={`${selectedCharacter} Mascot`}
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                        initial={{ opacity: 0, scale: 0.95, y: 6 }}
+                        animate={{ opacity: 1, scale: 1, y: -4 }}
+                        exit={{ opacity: 0, scale: 0.95, y: 6 }}
                         transition={{ duration: 0.4, ease: "easeInOut" }}
-                        className="w-full h-full brightness-110 contrast-105 drop-shadow-[0_10px_30px_rgba(0,0,0,0.8)]"
+                        className={
+                          isPinkTheme
+                            ? "w-full h-full brightness-[84%] contrast-100 saturate-102 drop-shadow-[0_10px_16px_rgba(0,0,0,0.16)]"
+                            : "w-full h-full brightness-[86%] contrast-100 saturate-102 drop-shadow-[0_10px_16px_rgba(0,0,0,0.16)]"
+                        }
                         style={{
                           objectFit: "contain",
                           objectPosition: "bottom center",
@@ -3436,26 +3488,27 @@ export default function Chat() {
 
                 {/* 3. Soft realistic shadow under feet (Darker, more grounded) */}
                 <div className="girl-ground-shadow" style={{ 
-                  background: "radial-gradient(ellipse at center, rgba(0,0,0,1) 0%, rgba(5,0,15,0.8) 35%, rgba(15,5,25,0.4) 65%, transparent 85%)",
-                  width: "60%", height: "24px", filter: "blur(6px)", bottom: "0%"
+                  background: stagePalette.feetShadow,
+                  width: "55%", height: "16px", filter: "blur(5px)", bottom: "2%",
+                  opacity: 0.9,
                 }} />
 
                 {/* 2. Ground light — cinematic pink oval patch (softened) */}
                 <div className="girl-ground-light" style={{
-                  background: "radial-gradient(ellipse at center, rgba(255,20,147,0.55) 0%, rgba(168,85,247,0.35) 40%, rgba(20,5,25,0.15) 65%, transparent 85%)",
-                  width: "85%", height: "60px", filter: "blur(25px)", mixBlendMode: "screen", bottom: "-4%"
+                  background: stagePalette.groundLight,
+                  width: "70%", height: "48px", filter: "blur(14px)", mixBlendMode: "screen", bottom: "-4%"
                 }} />
 
                 {/* 1. Spotlight — bright top-center cinematic cone on girl (softened) */}
                 <div className="girl-spotlight" style={{
-                  background: "radial-gradient(ellipse at 50% 0%, rgba(255,50,150,0.45) 0%, rgba(255,20,147,0.25) 25%, rgba(138,43,226,0.1) 50%, transparent 75%)",
-                  width: "120%", height: "90%", filter: "blur(30px)", mixBlendMode: "screen", top: "-20%"
+                  background: stagePalette.spotlight,
+                  width: "110%", height: "90%", filter: "blur(24px)", mixBlendMode: "screen", top: "-20%"
                 }} />
 
                 {/* 4. Ambient glow — cinematic depth around character (softened) */}
                 <div className="girl-ambient-glow" style={{
-                  background: "radial-gradient(ellipse at center, rgba(255,0,128,0.15) 0%, rgba(148,0,211,0.08) 35%, rgba(75,0,130,0.04) 55%, transparent 70%)",
-                  filter: "blur(40px)", mixBlendMode: "screen", width: "80%", height: "80%"
+                  background: stagePalette.ambient,
+                  filter: "blur(30px)", mixBlendMode: "screen", width: "75%", height: "75%"
                 }} />
               </div>
 
@@ -3463,18 +3516,17 @@ export default function Chat() {
               <motion.div
                 className="relative z-[4] rounded-[50%] -mt-14"
                 style={{
-                  width: '350px',
-                  height: '35px',
-                  background: 'rgba(0,0,0,0.5)',
-                  backdropFilter: 'blur(15px)',
-                  WebkitBackdropFilter: 'blur(15px)',
-                  boxShadow: '0 0 50px rgba(0,0,0,0.7), 0 0 30px var(--theme-glow, rgba(236,72,153,0.4))',
+                  width: '360px',
+                  height: '36px',
+                  background: 'rgba(0,0,0,0.72)',
+                  filter: 'blur(9px)',
+                  boxShadow: `0 0 16px rgba(0,0,0,0.8), 0 0 24px ${stagePalette.feetGlow}`,
                 }}
                 animate={{ 
-                  scale: [1, 1.2, 1], 
-                  opacity: [0.6, 0.4, 0.6] 
+                  scale: [1.08, 0.95, 1.08], 
+                  opacity: [0.65, 0.85, 0.65] 
                 }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
               />
             </div>
           </div>

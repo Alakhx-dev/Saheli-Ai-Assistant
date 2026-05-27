@@ -55,6 +55,7 @@ const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
   { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-red-500/20 to-rose-400/10" },
   { id: "vaidehi", label: "Vaidehi 🌻", image: "/Vaidehi 🌻.png", accent: "from-amber-400/20 to-yellow-400/10" },
+  { id: "anvika", label: "Anvika 🌸", image: "/Anvika 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
 ];
 
 function NavButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
@@ -840,24 +841,12 @@ export default function SettingsPanel({
                                     : {}
                                 }
                               >
-                                <div 
-                                  className={`w-8 h-8 rounded-full flex items-center justify-center shadow-md text-sm select-none transition-transform duration-300 ${active ? "ring-2 ring-white/60 scale-110" : "hover:scale-105"}`}
-                                  style={{ background: item.gradientBg }}
+                                <span
+                                  className={`select-none text-[1.35rem] leading-none transition-transform duration-300 ${active ? "scale-110" : "hover:scale-105"}`}
                                 >
                                   {item.flower}
-                                </div>
+                                </span>
                                 <span className={`font-semibold text-[10px] tracking-wide ${active ? "text-white" : "text-white/60"}`}>{item.label}</span>
-                                {active ? (
-                                  <div 
-                                    className="absolute top-1.5 right-1.5 rounded-full p-0.5 border"
-                                    style={{ 
-                                      backgroundColor: item.glowColor.replace("0.35", "0.2"),
-                                      borderColor: item.glowColor.replace("0.35", "0.5")
-                                    }}
-                                  >
-                                    <Check className="h-2.5 w-2.5 text-white" />
-                                  </div>
-                                ) : null}
                               </motion.button>
                             );
                           })}
