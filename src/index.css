@@ -3534,3 +3534,14 @@
 .saheli-app-wrapper:not(.theme-pink) .from-pink-500\/30 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.3) !important; }
 .saheli-app-wrapper:not(.theme-pink) .to-pink-500\/30 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.3) !important; }
 .saheli-app-wrapper:not(.theme-pink) .via-purple-500\/30 { --tw-gradient-via: rgba(var(--theme-primary-rgb), 0.18) !important; }
+
+/* No Scrollbar Utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}

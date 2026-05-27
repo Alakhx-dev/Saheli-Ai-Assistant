@@ -299,7 +299,11 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
+type SettingsSectionId = 
+  | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
+  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
+  | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
+  | "incognito" | "api_keys";
 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
