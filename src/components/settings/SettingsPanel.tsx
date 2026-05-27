@@ -357,18 +357,21 @@ export default function SettingsPanel({
                     compact
                   >
                     <div className="flex flex-col gap-2">
-                      {personalizationSections.map((section) => (
-                        <motion.button
-                          whileTap={{ scale: 0.96 }}
-                          key={section.id}
-                          type="button"
-                          onClick={() => setPersonalizationChild(section.id)}
-                          className={`flex w-full items-center justify-between rounded-[16px] border border-white/5 bg-white/[0.02] px-4 py-3 text-left text-sm text-white/70 transition-all duration-300 hover:bg-white/[0.05] hover:text-white ${getThemeClasses(selectedColor, "hoverBorder")}`}
-                        >
-                          <span className="font-medium">{section.label}</span>
-                          {personalizationChild === section.id ? <Check className={`h-4 w-4 ${getThemeClasses(selectedColor, "textLight")}`} /> : null}
-                        </motion.button>
-                      ))}
+                      {personalizationSections.map((section) => {
+                        const active = personalizationChild === section.id;
+                        return (
+                          <motion.button
+                            whileTap={{ scale: 0.96 }}
+                            key={section.id}
+                            type="button"
+                            onClick={() => setPersonalizationChild(section.id)}
+                            className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? getThemeClasses(selectedColor, "active") : getThemeClasses(selectedColor, "inactive")}`}
+                          >
+                            <span className="font-medium">{section.label}</span>
+                            {active ? <Check className={`h-4 w-4 ${getThemeClasses(selectedColor, "textLight")}`} /> : null}
+                          </motion.button>
+                        );
+                      })}
                     </div>
                   </SectionShell>
                 </motion.div>
