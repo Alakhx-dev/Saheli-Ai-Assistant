@@ -25,17 +25,17 @@ const THEME_BLOBS: Record<string, number[][]> = {
     [280, 75, 55], // deep violet
     [340, 70, 50], // bright pinkish purple
   ],
-  teal: [
-    [165, 80, 50], // aqua teal
-    [185, 85, 45], // minty cyan
-    [150, 75, 45], // light jade green
-    [200, 70, 45], // soft blue-teal
+  peach: [
+    [18, 85, 60], // soft peach orange
+    [10, 80, 58], // light coral peach
+    [25, 75, 55], // light amber peach
+    [350, 80, 56], // warm pinkish peach
   ],
   beige: [
-    [34, 43, 85],  // warm cream beige
-    [40, 40, 95],  // highlight cream
-    [30, 35, 90],  // soft warm beige
-    [45, 30, 88],  // sandy cream
+    [34, 45, 75], // rich dark cream
+    [40, 42, 80], // warm gold cream
+    [30, 38, 70], // tan/beige accent
+    [45, 32, 68], // dusty cream/sand
   ],
   maroon: [
     [349, 95, 48],  // glow crimson
@@ -43,11 +43,11 @@ const THEME_BLOBS: Record<string, number[][]> = {
     [352, 95, 42],  // vibrant wine
     [340, 85, 28],  // base maroon
   ],
-  mauve: [
-    [343, 20, 63],  // glow mauve
-    [343, 15, 49],  // main mauve
-    [345, 18, 55],  // soft mauve
-    [335, 12, 42],  // dark mauve
+  gemini: [
+    [217, 100, 50], // Gemini Cosmic Blue
+    [280, 80, 45],  // Gemini Purple
+    [325, 90, 48],  // Gemini Magenta/Pink
+    [190, 95, 48],  // Gemini Light Azure
   ],
 };
 

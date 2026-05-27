@@ -2789,48 +2789,96 @@ export default function Chat() {
   const isMaroonTheme = activeTheme === "maroon";
 
   const THEME_STAGE_RGBS: Record<string, string> = {
-    pink: "255, 105, 180",
+    pink: "255, 0, 120",
     maroon: "208, 28, 63",
     yellow: "255, 215, 0",
     blue: "0, 229, 255",
     orchid: "213, 0, 249",
-    teal: "29, 233, 182",
-    beige: "234, 219, 200",
-    mauve: "181, 140, 151",
+    peach: "255, 158, 125",
+    beige: "212, 184, 149",
+    gemini: "74, 137, 255",
   };
 
-  const buildPremiumThemeStagePalette = (rgb: string) => ({
-    aura: `radial-gradient(circle, rgba(${rgb}, 0.2) 0%, rgba(${rgb}, 0.08) 45%, transparent 70%)`,
-    spotlight: `radial-gradient(ellipse at 50% 0%, rgba(${rgb}, 0.45) 0%, rgba(${rgb}, 0.2) 30%, rgba(${rgb}, 0.06) 55%, transparent 75%)`,
-    groundLight: `radial-gradient(ellipse at center, rgba(${rgb}, 0.35) 0%, rgba(${rgb}, 0.12) 40%, transparent 70%)`,
-    ambient: `radial-gradient(ellipse at center, rgba(${rgb}, 0.06) 0%, rgba(${rgb}, 0.02) 50%, transparent 80%)`,
-    feetShadow: `radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(${rgb}, 0.08) 35%, transparent 80%)`,
-    feetGlow: `rgba(${rgb}, 0.15)`,
-  });
-
-  const orchidStagePalette = {
-    aura: "radial-gradient(circle, rgba(168, 85, 247, 0.18) 0%, rgba(124, 58, 237, 0.08) 45%, transparent 70%)",
-    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 225, 245, 0.35) 0%, rgba(213, 0, 249, 0.18) 30%, rgba(124, 58, 237, 0.05) 55%, transparent 75%)",
-    groundLight: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.35) 0%, rgba(124, 58, 237, 0.12) 40%, transparent 70%)",
-    ambient: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.06) 0%, rgba(124, 58, 237, 0.02) 50%, transparent 80%)",
-    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(15, 3, 25, 0.08) 35%, transparent 80%)",
-    feetGlow: "rgba(213, 0, 249, 0.15)",
+  const pinkStagePalette = {
+    aura: "radial-gradient(circle, rgba(255, 0, 120, 0.15) 0%, rgba(255, 105, 180, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 235, 245, 0.28) 0%, rgba(255, 0, 120, 0.15) 25%, rgba(124, 58, 237, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(255, 0, 120, 0.3) 0%, rgba(168, 85, 247, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(255, 0, 120, 0.05) 0%, rgba(168, 85, 247, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(25, 0, 10, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(255, 0, 120, 0.15)",
   };
 
   const yellowStagePalette = {
-    aura: "radial-gradient(circle, rgba(255, 215, 0, 0.18) 0%, rgba(255, 150, 0, 0.08) 45%, transparent 70%)",
-    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 255, 230, 0.35) 0%, rgba(255, 215, 0, 0.18) 30%, rgba(255, 150, 0, 0.05) 55%, transparent 75%)",
-    groundLight: "radial-gradient(ellipse at center, rgba(255, 215, 0, 0.35) 0%, rgba(255, 150, 0, 0.12) 40%, transparent 70%)",
-    ambient: "radial-gradient(ellipse at center, rgba(255, 215, 0, 0.06) 0%, rgba(255, 150, 0, 0.02) 50%, transparent 80%)",
+    aura: "radial-gradient(circle, rgba(255, 200, 0, 0.15) 0%, rgba(255, 120, 0, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 255, 230, 0.28) 0%, rgba(255, 185, 0, 0.14) 25%, rgba(255, 90, 0, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(255, 185, 0, 0.3) 0%, rgba(255, 90, 0, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(255, 185, 0, 0.05) 0%, rgba(255, 90, 0, 0.015) 50%, transparent 80%)",
     feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(25, 15, 0, 0.08) 35%, transparent 80%)",
-    feetGlow: "rgba(255, 215, 0, 0.15)",
+    feetGlow: "rgba(255, 185, 0, 0.15)",
   };
 
-  const stagePalette = isOrchidTheme
-    ? orchidStagePalette
-    : activeTheme === "yellow"
-      ? yellowStagePalette
-      : buildPremiumThemeStagePalette(THEME_STAGE_RGBS[activeTheme] || THEME_STAGE_RGBS.maroon);
+  const blueStagePalette = {
+    aura: "radial-gradient(circle, rgba(0, 229, 255, 0.15) 0%, rgba(0, 150, 255, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(235, 250, 255, 0.28) 0%, rgba(0, 200, 255, 0.14) 25%, rgba(0, 80, 255, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(0, 229, 255, 0.3) 0%, rgba(0, 120, 255, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(0, 229, 255, 0.05) 0%, rgba(0, 120, 255, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(0, 15, 25, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(0, 229, 255, 0.15)",
+  };
+
+  const orchidStagePalette = {
+    aura: "radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(124, 58, 237, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 235, 255, 0.28) 0%, rgba(213, 0, 249, 0.15) 25%, rgba(124, 58, 237, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.3) 0%, rgba(124, 58, 237, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(213, 0, 249, 0.05) 0%, rgba(124, 58, 237, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(20, 0, 25, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(213, 0, 249, 0.15)",
+  };
+
+  const peachStagePalette = {
+    aura: "radial-gradient(circle, rgba(255, 158, 125, 0.15) 0%, rgba(255, 100, 80, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 245, 240, 0.28) 0%, rgba(255, 140, 110, 0.14) 25%, rgba(255, 70, 70, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(255, 158, 125, 0.3) 0%, rgba(255, 90, 80, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(255, 158, 125, 0.05) 0%, rgba(255, 90, 80, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(25, 10, 5, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(255, 158, 125, 0.15)",
+  };
+
+  const beigeStagePalette = {
+    aura: "radial-gradient(circle, rgba(212, 184, 149, 0.15) 0%, rgba(180, 140, 100, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 250, 240, 0.28) 0%, rgba(212, 184, 149, 0.14) 25%, rgba(170, 130, 90, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(212, 184, 149, 0.3) 0%, rgba(170, 130, 90, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(212, 184, 149, 0.05) 0%, rgba(170, 130, 90, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(20, 15, 10, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(212, 184, 149, 0.15)",
+  };
+
+  const maroonStagePalette = {
+    aura: "radial-gradient(circle, rgba(208, 28, 63, 0.15) 0%, rgba(120, 15, 30, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(255, 230, 235, 0.28) 0%, rgba(208, 28, 63, 0.14) 25%, rgba(120, 15, 30, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(208, 28, 63, 0.3) 0%, rgba(120, 15, 30, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(208, 28, 63, 0.05) 0%, rgba(120, 15, 30, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(25, 0, 5, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(208, 28, 63, 0.15)",
+  };
+
+  const geminiStagePalette = {
+    aura: "radial-gradient(circle, rgba(74, 137, 255, 0.15) 0%, rgba(124, 58, 237, 0.06) 45%, transparent 70%)",
+    spotlight: "radial-gradient(ellipse at 50% 0%, rgba(235, 245, 255, 0.28) 0%, rgba(74, 137, 255, 0.14) 25%, rgba(124, 58, 237, 0.02) 55%, transparent 75%)",
+    groundLight: "radial-gradient(ellipse at center, rgba(74, 137, 255, 0.3) 0%, rgba(124, 58, 237, 0.1) 45%, transparent 70%)",
+    ambient: "radial-gradient(ellipse at center, rgba(74, 137, 255, 0.05) 0%, rgba(124, 58, 237, 0.015) 50%, transparent 80%)",
+    feetShadow: "radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(5, 10, 25, 0.08) 35%, transparent 80%)",
+    feetGlow: "rgba(74, 137, 255, 0.15)",
+  };
+
+  const stagePalette = activeTheme === "pink" ? pinkStagePalette
+    : activeTheme === "yellow" ? yellowStagePalette
+    : activeTheme === "blue" ? blueStagePalette
+    : activeTheme === "orchid" ? orchidStagePalette
+    : activeTheme === "peach" ? peachStagePalette
+    : activeTheme === "beige" ? beigeStagePalette
+    : activeTheme === "maroon" ? maroonStagePalette
+    : geminiStagePalette;
 
   const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
   const hourlyScrollRef = useRef<HTMLDivElement | null>(null);
@@ -3502,7 +3550,7 @@ export default function Chat() {
                 {/* 1. Spotlight — bright top-center cinematic cone on girl (softened) */}
                 <div className="girl-spotlight" style={{
                   background: stagePalette.spotlight,
-                  width: "110%", height: "90%", filter: "blur(24px)", mixBlendMode: "screen", top: "-20%"
+                  width: "88%", height: "98%", filter: "blur(20px)", mixBlendMode: "screen", top: "-24%"
                 }} />
 
                 {/* 4. Ambient glow — cinematic depth around character (softened) */}
@@ -3767,9 +3815,17 @@ export default function Chat() {
                 type="submit"
                 aria-label={t.composer.sendMessage}
                 disabled={(!(input.trim() || selectedImage) || isLoading)}
-                className="saheli-composer-btn saheli-send-btn"
+                className="saheli-composer-btn saheli-send-btn group/send"
               >
-                <Send className="h-4 w-4 translate-x-[1px]" />
+                <svg className="w-5 h-5 transition-all duration-300 group-hover/send:scale-110 active:scale-95 group-hover/send:rotate-[6deg]" viewBox="0 0 24 24" fill="none">
+                  {/* Translucent Wings */}
+                  <path d="M12 12C9 7 5 7 5 10c0 4 4 6 7 2M12 12c3-5 7-5 7-2 0 4-4 6-7 2" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M12 12c-2 2-6 2-6-1 0-3 3-4 6 1M12 12c2 2 6 2 6-1 0-3-3-4-6 1" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* Solid Heart Core */}
+                  <path d="M12 17.5c-4-3.5-6-5.5-6-7.5 0-2.2 1.8-4 4-4 1.3 0 2.5.8 3 2 .5-1.2 1.7-2 3-2 2.2 0 4 1.8 4 4 0 2-2 4-6 7.5z" fill="currentColor" />
+                  {/* Sparkle Center */}
+                  <path d="M12 9.5l0.4 1.1 1.1 0.4-1.1 0.4-0.4 1.1-0.4-1.1-1.1-0.4 1.1-0.4z" fill="#ffffff" />
+                </svg>
               </button>
             </div>
           </form>

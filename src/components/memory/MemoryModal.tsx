@@ -21,6 +21,17 @@ interface MemoryModalProps {
 
 type MemoryTab = "chat" | "image";
 
+const THEME_GLOWS: Record<string, string> = {
+  pink: "rgba(255, 0, 120, 0.15)",
+  yellow: "rgba(255, 215, 0, 0.15)",
+  blue: "rgba(0, 229, 255, 0.15)",
+  orchid: "rgba(213, 0, 249, 0.15)",
+  peach: "rgba(255, 158, 125, 0.15)",
+  beige: "rgba(212, 184, 149, 0.08)",
+  maroon: "rgba(208, 28, 63, 0.15)",
+  gemini: "rgba(74, 137, 255, 0.15)",
+};
+
 export default function MemoryModal({
   open,
   onOpenChange,
@@ -34,6 +45,13 @@ export default function MemoryModal({
   onBack,
 }: MemoryModalProps) {
   const [activeTab, setActiveTab] = useState<MemoryTab>("chat");
+  const [activeTheme, setActiveTheme] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_theme_color");
+      if (saved) return saved;
+    }
+    return "pink";
+  });
 
   useEffect(() => {
     const handleTabSwitch = (event: Event) => {
@@ -43,8 +61,19 @@ export default function MemoryModal({
       }
     };
 
+    const handleThemeChange = () => {
+      if (typeof window !== "undefined") {
+        const saved = window.localStorage.getItem("saheli_theme_color");
+        if (saved) setActiveTheme(saved);
+      }
+    };
+
     window.addEventListener("saheli-memory-tab", handleTabSwitch);
-    return () => window.removeEventListener("saheli-memory-tab", handleTabSwitch);
+    window.addEventListener("saheli_theme_color_changed", handleThemeChange);
+    return () => {
+      window.removeEventListener("saheli-memory-tab", handleTabSwitch);
+      window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
+    };
   }, []);
 
   const profile = memory ?? useMemo(() => ({
@@ -58,12 +87,14 @@ export default function MemoryModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
-        className="z-[100] flex flex-col h-[min(40rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] overflow-hidden rounded-[32px] p-0 text-white !outline-none"
+        overlayClassName="bg-black/25 backdrop-blur-[6px]"
+        className="z-[100] flex flex-col h-[min(40rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] overflow-hidden p-0 text-white !outline-none"
         style={{
-          background: "rgba(15, 15, 15, 0.4)",
-          backdropFilter: "blur(25px)",
-          border: "0.5px solid rgba(255, 255, 255, 0.06)",
-          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+          background: "rgba(10, 10, 12, 0.45)",
+          backdropFilter: "blur(30px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${THEME_GLOWS[activeTheme] || THEME_GLOWS.pink}, inset 0 1px 0 rgba(255,255,255,0.1)`,
+          borderRadius: "32px"
         }}
       >
         <div className="flex shrink-0 items-center gap-4 border-b border-white/5 px-6 py-5 bg-white/[0.01]">

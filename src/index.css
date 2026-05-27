@@ -1191,34 +1191,41 @@
 /* Send Button Premium Style */
 .saheli-send-btn {
   background: linear-gradient(135deg, 
-    rgba(255, 72, 196, 0.16),
+    rgba(var(--theme-primary-rgb), 0.16),
     rgba(168, 85, 247, 0.12),
     rgba(255, 255, 255, 0.05)) !important;
-  border: 1px solid rgba(255, 159, 224, 0.18) !important;
-  color: #ffd4ef !important;
+  border: 1px solid rgba(var(--theme-primary-rgb), 0.18) !important;
+  color: var(--theme-light, #ffd4ef) !important;
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   font-weight: 600 !important;
   box-shadow: 
     0 8px 22px rgba(0, 0, 0, 0.26),
-    0 0 18px rgba(255, 72, 196, 0.08),
+    0 0 18px rgba(var(--theme-primary-rgb), 0.08),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset !important;
 }
 
-.saheli-send-btn:hover {
+.saheli-send-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, 
-    rgba(255, 72, 196, 0.24),
+    rgba(var(--theme-primary-rgb), 0.24),
     rgba(168, 85, 247, 0.18),
     rgba(255, 255, 255, 0.08)) !important;
-  border-color: rgba(255, 159, 224, 0.28) !important;
-  transform: translateY(-2px) scale(1.04) !important;
+  border-color: rgba(var(--theme-primary-rgb), 0.3) !important;
+  transform: translateY(-2px) scale(1.06) !important;
+  color: #ffffff !important;
   box-shadow: 
     0 12px 30px rgba(0, 0, 0, 0.34),
-    0 0 24px rgba(255, 72, 196, 0.16),
+    0 0 24px rgba(var(--theme-primary-rgb), 0.2),
     0 0 0 1px rgba(255, 255, 255, 0.12) inset !important;
 }
 
-.saheli-send-btn:active {
-  transform: translateY(0px) scale(0.98) !important;
+.saheli-send-btn:disabled {
+  opacity: 0.4 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.2) !important;
 }
 
 /* Image Preview Container */
@@ -1854,32 +1861,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* ===== PREMIUM SEND BUTTON ===== */
-.saheli-send-btn {
-  background: linear-gradient(135deg, #ec4899, #c026d3);
-  border-radius: 50%;
-  padding: 10px;
-  color: white;
-  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.saheli-send-btn:hover {
-  transform: scale(1.08);
-  box-shadow:
-    0 6px 24px rgba(236, 72, 153, 0.45),
-    0 0 12px rgba(168, 85, 247, 0.2);
-}
-
-.saheli-send-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
 
 /* ===== MICRO ANIMATIONS ===== */
 
@@ -2049,32 +2031,7 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* ===== PREMIUM SEND BUTTON ===== */
-.saheli-send-btn {
-  background: linear-gradient(135deg, #ec4899, #c026d3);
-  border-radius: 50%;
-  padding: 10px;
-  color: white;
-  box-shadow: 0 4px 16px rgba(236, 72, 153, 0.3);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
-.saheli-send-btn:hover {
-  transform: scale(1.08);
-  box-shadow:
-    0 6px 24px rgba(236, 72, 153, 0.45),
-    0 0 12px rgba(168, 85, 247, 0.2);
-}
-
-.saheli-send-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
-}
 
 /* ===== MICRO ANIMATIONS ===== */
 
@@ -2987,28 +2944,28 @@
   --theme-light: #fbe6ff;
 }
 
-.saheli-app-wrapper.theme-teal {
-  --theme-primary: #1DE9B6;
-  --theme-primary-rgb: 29, 233, 182;
-  --theme-glow: rgba(29, 233, 182, 0.3);
-  --theme-glow-rgb: 29, 233, 182;
-  --theme-border: rgba(29, 233, 182, 0.15);
-  --theme-surface-tint: rgba(29, 233, 182, 0.03);
-  --theme-ambient-light: 29, 233, 182;
-  --theme-soft: rgba(29, 233, 182, 0.1);
-  --theme-light: #e6fffa;
+.saheli-app-wrapper.theme-peach {
+  --theme-primary: #FF9E7D;
+  --theme-primary-rgb: 255, 158, 125;
+  --theme-glow: rgba(255, 158, 125, 0.35);
+  --theme-glow-rgb: 255, 158, 125;
+  --theme-border: rgba(255, 158, 125, 0.18);
+  --theme-surface-tint: rgba(255, 158, 125, 0.03);
+  --theme-ambient-light: 255, 158, 125;
+  --theme-soft: rgba(255, 158, 125, 0.1);
+  --theme-light: #FFEBE3;
 }
 
 .saheli-app-wrapper.theme-beige {
-  --theme-primary: #EADBC8;
-  --theme-primary-rgb: 234, 219, 200;
-  --theme-glow: rgba(253, 251, 247, 0.4);
-  --theme-glow-rgb: 253, 251, 247;
-  --theme-border: rgba(234, 219, 200, 0.15);
-  --theme-surface-tint: rgba(234, 219, 200, 0.03);
-  --theme-ambient-light: 234, 219, 200;
-  --theme-soft: rgba(234, 219, 200, 0.1);
-  --theme-light: #fdfcfb;
+  --theme-primary: #D4B895;
+  --theme-primary-rgb: 212, 184, 149;
+  --theme-glow: rgba(212, 184, 149, 0.4);
+  --theme-glow-rgb: 212, 184, 149;
+  --theme-border: rgba(212, 184, 149, 0.2);
+  --theme-surface-tint: rgba(212, 184, 149, 0.04);
+  --theme-ambient-light: 212, 184, 149;
+  --theme-soft: rgba(212, 184, 149, 0.12);
+  --theme-light: #F7F1E5;
 }
 
 .saheli-app-wrapper.theme-maroon {
@@ -3023,45 +2980,19 @@
   --theme-light: #ffebed;
 }
 
-.saheli-app-wrapper.theme-mauve {
-  --theme-primary: #B58C97;
-  --theme-primary-rgb: 181, 140, 151;
-  --theme-glow: rgba(181, 140, 151, 0.3);
-  --theme-glow-rgb: 181, 140, 151;
-  --theme-border: rgba(181, 140, 151, 0.15);
-  --theme-surface-tint: rgba(181, 140, 151, 0.03);
-  --theme-ambient-light: 142, 105, 115;
-  --theme-soft: rgba(181, 140, 151, 0.1);
-  --theme-light: #f2e6e8;
+.saheli-app-wrapper.theme-gemini {
+  --theme-primary: #4A89FF;
+  --theme-primary-rgb: 74, 137, 255;
+  --theme-glow: rgba(74, 137, 255, 0.35);
+  --theme-glow-rgb: 74, 137, 255;
+  --theme-border: rgba(74, 137, 255, 0.2);
+  --theme-surface-tint: rgba(74, 137, 255, 0.04);
+  --theme-ambient-light: 15, 25, 55;
+  --theme-soft: rgba(74, 137, 255, 0.12);
+  --theme-light: #D6E4FF;
 }
 
 /* 2. Scoped Component Accents & Glow Overrides - Only active on NOT theme-pink */
-.saheli-app-wrapper:not(.theme-pink) .girl-spotlight {
-  background: radial-gradient(ellipse at 50% 0%,
-    rgba(var(--theme-primary-rgb), 0.28) 0%,
-    rgba(var(--theme-primary-rgb), 0.16) 20%,
-    rgba(var(--theme-primary-rgb), 0.08) 40%,
-    transparent 65%
-  ) !important;
-}
-
-.saheli-app-wrapper:not(.theme-pink) .girl-ground-light {
-  background: radial-gradient(ellipse at center,
-    rgba(var(--theme-glow-rgb), 0.45) 0%,
-    rgba(var(--theme-ambient-light), 0.22) 40%,
-    rgba(20, 5, 25, 0.1) 65%,
-    transparent 85%
-  ) !important;
-}
-
-.saheli-app-wrapper:not(.theme-pink) .girl-ambient-glow {
-  background: radial-gradient(ellipse at center,
-    rgba(var(--theme-primary-rgb), 0.06) 0%,
-    rgba(var(--theme-ambient-light), 0.04) 35%,
-    rgba(var(--theme-ambient-light), 0.02) 55%,
-    transparent 70%
-  ) !important;
-}
 
 .saheli-app-wrapper:not(.theme-pink) .saheli-composer-shell {
   box-shadow: 
@@ -3363,16 +3294,7 @@
   border: 1px solid rgba(var(--theme-primary-rgb), 0.4) !important;
   box-shadow: 0 0 20px rgba(var(--theme-primary-rgb), 0.3) !important;
 }
-.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn {
-  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.2), rgba(168, 85, 247, 0.2)) !important;
-  color: rgba(var(--theme-primary-rgb), 0.9) !important;
-  border: 1px solid rgba(var(--theme-primary-rgb), 0.3) !important;
-}
-.saheli-app-wrapper:not(.theme-pink) .saheli-send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.8), rgba(168, 85, 247, 0.8)) !important;
-  color: white !important;
-  box-shadow: 0 0 25px rgba(var(--theme-primary-rgb), 0.6) !important;
-}
+
 
 /* Toggle Switch themed overrides */
 .saheli-app-wrapper:not(.theme-pink) .saheli-theme-toggle[data-state="checked"] {
@@ -3595,4 +3517,20 @@
   transition: border-color 1.2s ease-in-out, box-shadow 1.2s ease-in-out, color 1.2s ease-in-out, background 1.2s ease-in-out, filter 1.2s ease-in-out !important;
 }
 
-
+/* Dynamic typing indicator and gradient overrides for not(.theme-pink) */
+.saheli-app-wrapper:not(.theme-pink) .saheli-typing-dot {
+  background: linear-gradient(135deg, rgba(var(--theme-primary-rgb), 0.85), rgba(var(--theme-glow-rgb), 0.65)) !important;
+  box-shadow: 0 0 10px rgba(var(--theme-primary-rgb), 0.45) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .saheli-typing-container {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 10px rgba(var(--theme-primary-rgb), 0.04), inset 0 1px 1px rgba(255, 255, 255, 0.04) !important;
+}
+.saheli-app-wrapper:not(.theme-pink) .to-purple-500\/30 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-purple-500\/25 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.25) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-purple-500\/20 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.2) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-purple-500\/10 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.1) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-purple-400\/15 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.15) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-fuchsia-500 { --tw-gradient-to: var(--theme-glow) !important; }
+.saheli-app-wrapper:not(.theme-pink) .from-pink-500\/30 { --tw-gradient-from: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .to-pink-500\/30 { --tw-gradient-to: rgba(var(--theme-primary-rgb), 0.3) !important; }
+.saheli-app-wrapper:not(.theme-pink) .via-purple-500\/30 { --tw-gradient-via: rgba(var(--theme-primary-rgb), 0.18) !important; }

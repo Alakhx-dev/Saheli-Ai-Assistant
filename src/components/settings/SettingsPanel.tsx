@@ -8,6 +8,76 @@ import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
 type SettingsSectionId = "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
+const getThemeClasses = (color: string, type: "active" | "inactive" | "text" | "badge" | "hoverBorder" | "textLight" | "switchActive") => {
+  switch (color) {
+    case "yellow":
+      if (type === "active") return "border-yellow-500/40 bg-gradient-to-r from-yellow-500/15 to-amber-500/15 text-white shadow-[0_0_20px_rgba(255,215,0,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-yellow-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-yellow-300";
+      if (type === "hoverBorder") return "hover:border-yellow-500/20";
+      if (type === "textLight") return "text-yellow-300";
+      if (type === "switchActive") return "border-yellow-400/35 bg-yellow-500/15 text-yellow-100";
+      return "border-yellow-300/30 bg-yellow-500/15 text-yellow-100";
+    case "blue":
+      if (type === "active") return "border-cyan-500/40 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 text-white shadow-[0_0_20px_rgba(0,229,255,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-cyan-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-cyan-300";
+      if (type === "hoverBorder") return "hover:border-cyan-500/20";
+      if (type === "textLight") return "text-cyan-300";
+      if (type === "switchActive") return "border-cyan-400/35 bg-cyan-500/15 text-cyan-100";
+      return "border-cyan-300/30 bg-cyan-500/15 text-cyan-100";
+    case "orchid":
+      if (type === "active") return "border-purple-500/40 bg-gradient-to-r from-purple-500/15 to-pink-500/15 text-white shadow-[0_0_20px_rgba(213,0,249,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-purple-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-purple-300";
+      if (type === "hoverBorder") return "hover:border-purple-500/20";
+      if (type === "textLight") return "text-purple-300";
+      if (type === "switchActive") return "border-purple-400/35 bg-purple-500/15 text-purple-100";
+      return "border-purple-300/30 bg-purple-500/15 text-purple-100";
+    case "peach":
+      if (type === "active") return "border-orange-500/40 bg-gradient-to-r from-orange-500/15 to-red-500/15 text-white shadow-[0_0_20px_rgba(255,158,125,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-orange-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-orange-300";
+      if (type === "hoverBorder") return "hover:border-orange-500/20";
+      if (type === "textLight") return "text-orange-300";
+      if (type === "switchActive") return "border-orange-400/35 bg-orange-500/15 text-orange-100";
+      return "border-orange-300/30 bg-orange-500/15 text-orange-100";
+    case "beige":
+      if (type === "active") return "border-amber-500/30 bg-gradient-to-r from-amber-600/10 to-amber-900/10 text-white shadow-[0_0_20px_rgba(212,184,149,0.1)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-amber-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-amber-200";
+      if (type === "hoverBorder") return "hover:border-amber-500/20";
+      if (type === "textLight") return "text-amber-200";
+      if (type === "switchActive") return "border-amber-500/20 bg-amber-500/10 text-amber-200";
+      return "border-amber-300/20 bg-amber-500/15 text-amber-200";
+    case "maroon":
+      if (type === "active") return "border-red-500/40 bg-gradient-to-r from-red-800/15 to-red-950/15 text-white shadow-[0_0_20px_rgba(208,28,63,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-red-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-red-300";
+      if (type === "hoverBorder") return "hover:border-red-500/20";
+      if (type === "textLight") return "text-red-300";
+      if (type === "switchActive") return "border-red-400/35 bg-red-500/15 text-red-100";
+      return "border-red-300/30 bg-red-500/15 text-red-100";
+    case "gemini":
+      if (type === "active") return "border-blue-500/40 bg-gradient-to-r from-blue-500/15 to-indigo-950/25 text-white shadow-[0_0_20px_rgba(74,137,255,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-blue-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-blue-300";
+      if (type === "hoverBorder") return "hover:border-blue-500/20";
+      if (type === "textLight") return "text-blue-300";
+      if (type === "switchActive") return "border-blue-400/35 bg-blue-500/15 text-blue-100";
+      return "border-blue-300/30 bg-blue-500/15 text-blue-100";
+    case "pink":
+    default:
+      if (type === "active") return "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]";
+      if (type === "inactive") return "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white";
+      if (type === "text") return "text-pink-300";
+      if (type === "hoverBorder") return "hover:border-pink-500/20";
+      if (type === "textLight") return "text-pink-300";
+      if (type === "switchActive") return "border-pink-400/35 bg-pink-500/15 text-pink-100";
+      return "border-pink-300/30 bg-pink-500/15 text-pink-100";
+  }
+};
+
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -293,10 +363,10 @@ export default function SettingsPanel({
                           key={section.id}
                           type="button"
                           onClick={() => setPersonalizationChild(section.id)}
-                          className="flex w-full items-center justify-between rounded-[16px] border border-white/5 bg-white/[0.02] px-4 py-3 text-left text-sm text-white/70 transition-all duration-300 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"
+                          className={`flex w-full items-center justify-between rounded-[16px] border border-white/5 bg-white/[0.02] px-4 py-3 text-left text-sm text-white/70 transition-all duration-300 hover:bg-white/[0.05] hover:text-white ${getThemeClasses(selectedColor, "hoverBorder")}`}
                         >
                           <span className="font-medium">{section.label}</span>
-                          {personalizationChild === section.id ? <Check className="h-4 w-4 text-pink-300" /> : null}
+                          {personalizationChild === section.id ? <Check className={`h-4 w-4 ${getThemeClasses(selectedColor, "textLight")}`} /> : null}
                         </motion.button>
                       ))}
                     </div>
@@ -315,12 +385,12 @@ export default function SettingsPanel({
                             key={card.id}
                             type="button"
                             onClick={() => onCharacterChange(card.id)}
-                            className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
+                            className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? getThemeClasses(selectedColor, "active") : getThemeClasses(selectedColor, "inactive")}`}
                           >
                             <span className="font-medium">{card.label}</span>
                             {active ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
-                                <Check className="h-3 w-3 text-pink-300" />
+                              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getThemeClasses(selectedColor, "badge")}`}>
+                                <Check className={`h-3 w-3 ${getThemeClasses(selectedColor, "textLight")}`} />
                                 Active
                               </span>
                             ) : null}
@@ -561,14 +631,14 @@ export default function SettingsPanel({
                           <button
                             type="button"
                             onClick={() => onAwarenessTimeFormatChange("12h")}
-                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? getThemeClasses(selectedColor, "switchActive") : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                           >
                             12-hour
                           </button>
                           <button
                             type="button"
                             onClick={() => onAwarenessTimeFormatChange("24h")}
-                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                            className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? getThemeClasses(selectedColor, "switchActive") : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                           >
                             24-hour
                           </button>
@@ -786,12 +856,12 @@ export default function SettingsPanel({
                               key={card.id}
                               type="button"
                               onClick={() => onCharacterChange(card.id)}
-                              className={`settings-character-btn flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? "border-pink-500/40 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.15)]" : "border-white/5 bg-white/[0.02] text-white/70 hover:border-pink-500/20 hover:bg-white/[0.05] hover:text-white"}`}
+                              className={`settings-character-btn flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${active ? getThemeClasses(selectedColor, "active") : getThemeClasses(selectedColor, "inactive")}`}
                             >
                               <span className="font-medium">{card.label}</span>
                               {active ? (
-                                <span className="settings-character-badge inline-flex items-center gap-1.5 rounded-full border border-pink-300/30 bg-pink-500/15 px-2 py-0.5 text-[10px] font-semibold text-pink-100">
-                                  <Check className="h-3 w-3 text-pink-300" />
+                                <span className={`settings-character-badge inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getThemeClasses(selectedColor, "badge")}`}>
+                                  <Check className={`h-3 w-3 ${getThemeClasses(selectedColor, "textLight")}`} />
                                   Active
                                 </span>
                               ) : null}
@@ -815,10 +885,10 @@ export default function SettingsPanel({
                             { id: "yellow", label: "Light Yellow", gradientBg: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)", flower: "🌼", glowColor: "rgba(255, 215, 0, 0.35)" },
                             { id: "blue", label: "Sky Blue", gradientBg: "linear-gradient(135deg, #87CEEB 0%, #00E5FF 100%)", flower: "🪻", glowColor: "rgba(0, 229, 255, 0.35)" },
                             { id: "orchid", label: "Orchid", gradientBg: "linear-gradient(135deg, #D500F9 0%, #FF66CC 100%)", flower: "🪷", glowColor: "rgba(213, 0, 249, 0.35)" },
-                            { id: "teal", label: "Teal", gradientBg: "linear-gradient(135deg, #1DE9B6 0%, #00BFA5 100%)", flower: "🌿", glowColor: "rgba(29, 233, 182, 0.35)" },
-                            { id: "beige", label: "Cream Beige", gradientBg: "linear-gradient(135deg, #FDFBF7 0%, #EADBC8 100%)", flower: "🌾", glowColor: "rgba(234, 219, 200, 0.35)" },
+                            { id: "peach", label: "Sweet Peach", gradientBg: "linear-gradient(135deg, #FF9E7D 0%, #FF6B6B 100%)", flower: "🏵️", glowColor: "rgba(255, 158, 125, 0.35)" },
+                            { id: "beige", label: "Dark Cream", gradientBg: "linear-gradient(135deg, #EADBC8 0%, #8D7B68 100%)", flower: "🌾", glowColor: "rgba(212, 184, 149, 0.35)" },
                             { id: "maroon", label: "Maroon", gradientBg: "linear-gradient(135deg, #D01C3F 0%, #6E0016 100%)", flower: "🌹", glowColor: "rgba(208, 28, 63, 0.35)" },
-                            { id: "mauve", label: "Mauve", gradientBg: "linear-gradient(135deg, #B58C97 0%, #6E4C56 100%)", flower: "🌺", glowColor: "rgba(181, 140, 151, 0.35)" },
+                            { id: "gemini", label: "Gemini Blue", gradientBg: "linear-gradient(135deg, #4A89FF 0%, #1A365D 100%)", flower: "💙", glowColor: "rgba(74, 137, 255, 0.35)" },
                           ].map((item) => {
                             const active = selectedColor === item.id;
                             return (
@@ -841,11 +911,18 @@ export default function SettingsPanel({
                                     : {}
                                 }
                               >
-                                <span
-                                  className={`select-none text-[1.35rem] leading-none transition-transform duration-300 ${active ? "scale-110" : "hover:scale-105"}`}
+                                <div 
+                                  className="w-8 h-8 rounded-full flex items-center justify-center shadow-md relative overflow-hidden transition-transform duration-300"
+                                  style={{ 
+                                    background: item.gradientBg, 
+                                    border: active ? "1.5px solid rgba(255,255,255,0.45)" : "1.5px solid rgba(255,255,255,0.15)"
+                                  }}
                                 >
-                                  {item.flower}
-                                </span>
+                                  <span className={`select-none text-[1.1rem] leading-none z-10 transition-transform duration-300 ${active ? "scale-110" : "hover:scale-105"}`}>
+                                    {item.flower}
+                                  </span>
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/10 pointer-events-none" />
+                                </div>
                                 <span className={`font-semibold text-[10px] tracking-wide ${active ? "text-white" : "text-white/60"}`}>{item.label}</span>
                               </motion.button>
                             );
@@ -880,14 +957,14 @@ export default function SettingsPanel({
                               <button
                                 type="button"
                                 onClick={() => onAwarenessTimeFormatChange("12h")}
-                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "12h" ? getThemeClasses(selectedColor, "switchActive") : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                               >
                                 12-hour
                               </button>
                               <button
                                 type="button"
                                 onClick={() => onAwarenessTimeFormatChange("24h")}
-                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? "border-pink-400/35 bg-pink-500/15 text-pink-100" : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
+                                className={`rounded-full border px-2.5 py-0.5 text-[10px] font-medium leading-5 transition ${awarenessTimeFormat === "24h" ? getThemeClasses(selectedColor, "switchActive") : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20 hover:text-white"}`}
                               >
                                 24-hour
                               </button>
