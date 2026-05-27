@@ -3142,7 +3142,7 @@ export default function Chat() {
         onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
         onLogout={() => void handleLogout()}
-        className={`${isIdle ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
+        className={`${(isSidebarOpen && isIdle) ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
       />
 
       <div 

@@ -190,7 +190,6 @@
               filter 0.3s ease;
   
   /* Float Animation */
-  animation: sidebarFloat 6s ease-in-out infinite;
   will-change: transform;
 }
 
@@ -264,13 +263,14 @@
 .sidebar-open {
   opacity: 1;
   transform: translateY(-50%) translateX(0);
-  animation: slideInLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: slideInLeft 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards, sidebarFloat 6s ease-in-out infinite 0.5s;
 }
 
 .sidebar-closed {
   opacity: 0;
   transform: translateY(-50%) translateX(-100%);
   pointer-events: none;
+  animation: none !important;
 }
 
 @media (max-width: 768px) {
