@@ -99,7 +99,6 @@ export interface VisionParseResult {
 
 const AI_PIPELINE_CONFIG = {
   bestie: [
-    { provider: "gemini", modelId: "gemini-3.5-flash" },
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
@@ -108,14 +107,12 @@ const AI_PIPELINE_CONFIG = {
   ],
   mentor: [
     { provider: "gemini", modelId: "gemini-2.5-pro" },
-    { provider: "gemini", modelId: "gemini-3.5-flash" },
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
     { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
     { provider: "groq", modelId: "llama-3.2-3b-preview" },
   ],
   vision: [
-    { provider: "gemini", modelId: "gemini-3.5-flash" },
     { provider: "gemini", modelId: "gemini-2.5-pro" },
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "groq", modelId: "llama-3.2-11b-vision-preview" },
@@ -247,10 +244,10 @@ WHEN YOU SEE IMAGES:
 
 MUSIC SYSTEM CAPABILITY & DYNAMIC AWARENESS:
 - You have absolute control over an integrated Music Player. You can search, start, stop, or change songs on behalf of the user.
-- Confirm naturally to the user that you have music player access and can play any song they request.
-- If the user asks you to play music (e.g. "gaana bajao", "play some lofi", "arijit singh lagana"), you must confirm naturally once in your chat response and append a hidden tag: [MUSIC_PLAY: search query] at the very end of your response. Keep the search query simple and relevant (e.g. "lofi chill beats", "arijit singh mashup").
+- IMPORTANT: NEVER play or suggest music proactively without the user's explicit approval. If you feel a song matches the mood, POLITELY ASK the user if they want you to play something. Only play it after they agree.
+- DEFAULT TO HINDI SONGS: By default, ONLY play Hindi songs. Do not play instrumental or other languages unless the user explicitly requests them. Always add "hindi" to your search queries if the language isn't specified.
+- If the user explicitly asks you to play music or agrees to your suggestion (e.g. "gaana bajao", "haan bajao"), confirm naturally and append a hidden tag: [MUSIC_PLAY: search query] at the very end of your response. Keep the search query simple and relevant (e.g. "lofi chill hindi", "arijit singh mashup").
 - If the user asks you to pause, stop, or turn off the music, confirm naturally and append a hidden tag: [MUSIC_STOP] at the very end.
-- Proactively suggest or start playing music when it naturally fits the emotional vibe (e.g. when they feel sad, lazy, late-night coding, or studying to focus), making the companion feel more caring and interactive.
 - If a song is currently playing, you can see its metadata in the system context. React to it naturally (e.g. humming along, complimenting the artist, or sharing the vibe).
 
 CAMERA/VISION CAPABILITY:
@@ -461,9 +458,11 @@ function buildMusicContext(currentSong: any, isPlaying: boolean): string {
   if (!currentSong) {
     return `\n\nCURRENT MUSIC SYSTEM STATUS:
 - You have full control over a built-in Music Player.
-- If the user asks you to play music (e.g. "lofi chalana", "koi gaana lagao", "play arijit singh"), you should confirm naturally in your reply and append the hidden play tag: [MUSIC_PLAY: search query] at the very end of your response. Example: "Haan, bilkul! Ye lo... [MUSIC_PLAY: arijit singh sad songs]".
+- IMPORTANT: NEVER play or suggest music proactively without the user's explicit approval. If you feel a song matches the mood, POLITELY ASK the user if they want you to play something. Only play it after they agree.
+- DEFAULT TO HINDI SONGS: By default, ONLY play Hindi songs. Do not play instrumental or other languages unless the user explicitly requests them. Always add "hindi" to your search queries if the language isn't specified.
+- If the user explicitly asks you to play music or agrees to your suggestion (e.g. "lofi chalana", "koi gaana lagao", "play arijit singh", "haan bajao"), you should confirm naturally in your reply and append the hidden play tag: [MUSIC_PLAY: search query] at the very end of your response. Example: "Haan, bilkul! Ye lo... [MUSIC_PLAY: arijit singh sad hindi songs]".
 - If the user asks you to stop or pause the music, confirm naturally and append the tag: [MUSIC_STOP] at the very end.
-- Currently, no song is playing. You can suggest playing music if the vibe is right (late night, study focus, sad mood), but never force it.`;
+- Currently, no song is playing.`;
   }
 
   return `\n\nCURRENT MUSIC SYSTEM STATUS:
@@ -471,7 +470,8 @@ function buildMusicContext(currentSong: any, isPlaying: boolean): string {
 - Playback Status: ${isPlaying ? "Playing" : "Paused"}
 - Since you can see what the user is listening to, you can occasionally mention or react to this song naturally in your chat (e.g. "this vibe fits perfectly", "don't skip this part 😭", "is gaane ki lyrics are so beautiful"), but keep it subtle.
 - If they ask to pause or stop, confirm and append: [MUSIC_STOP].
-- If they want to play a different song, confirm and append: [MUSIC_PLAY: song name].`;
+- If they want to play a different song, confirm and append: [MUSIC_PLAY: song name hindi].
+- Remember to ask for permission before playing music proactively, and default to Hindi songs unless specified otherwise.`;
 }
 
 function buildStyleContext(isDetailed: boolean): string {
