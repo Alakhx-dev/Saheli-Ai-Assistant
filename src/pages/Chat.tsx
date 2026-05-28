@@ -938,6 +938,8 @@ function isFirestoreConnectivityError(error: unknown) {
   );
 }
 
+const resolvedUrlCache = new Map<string, string>();
+
 export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
@@ -1001,14 +1003,20 @@ export default function Chat() {
 
     let playableUrl = song.encryptedMediaUrl;
     if (!song.id.startsWith("demo-")) {
-      try {
-        const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
-        const data = await response.json();
-        if (data.streamUrl) {
-          playableUrl = data.streamUrl;
+      const cached = resolvedUrlCache.get(song.id);
+      if (cached) {
+        playableUrl = cached;
+      } else {
+        try {
+          const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
+          const data = await response.json();
+          if (data.streamUrl) {
+            playableUrl = data.streamUrl;
+            resolvedUrlCache.set(song.id, data.streamUrl);
+          }
+        } catch (err) {
+          console.error("Error resolving queue song url:", err);
         }
-      } catch (err) {
-        console.error("Error resolving queue song url:", err);
       }
     }
 
@@ -1027,22 +1035,33 @@ export default function Chat() {
   };
 
   const handlePlaySong = async (song: JioSaavnSong, addToQueue = true) => {
+    if (currentSongRef.current?.id === song.id) {
+      handlePlayPause();
+      return;
+    }
+
     let playableUrl = song.encryptedMediaUrl;
     if (!song.id.startsWith("demo-")) {
-      try {
-        const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
-        const data = await response.json();
-        if (data.streamUrl) {
-          playableUrl = data.streamUrl;
-        } else {
-          throw new Error("No streamUrl returned from getsong api");
+      const cached = resolvedUrlCache.get(song.id);
+      if (cached) {
+        playableUrl = cached;
+      } else {
+        try {
+          const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
+          const data = await response.json();
+          if (data.streamUrl) {
+            playableUrl = data.streamUrl;
+            resolvedUrlCache.set(song.id, data.streamUrl);
+          } else {
+            throw new Error("No streamUrl returned from getsong api");
+          }
+        } catch (err) {
+          console.error("Error resolving song:", err);
+          toast.error("Failed to play live stream. Playing demo fallback.");
+          const fallback = DEMO_TRACKS[Math.floor(Math.random() * DEMO_TRACKS.length)];
+          void handlePlaySong(fallback, addToQueue);
+          return;
         }
-      } catch (err) {
-        console.error("Error resolving song:", err);
-        toast.error("Failed to play live stream. Playing demo fallback.");
-        const fallback = DEMO_TRACKS[Math.floor(Math.random() * DEMO_TRACKS.length)];
-        void handlePlaySong(fallback, addToQueue);
-        return;
       }
     }
 
@@ -1147,6 +1166,7 @@ export default function Chat() {
 
   useEffect(() => {
     const audio = new Audio();
+    audio.preload = "auto";
     audioRef.current = audio;
     audio.volume = musicVolume;
 
@@ -1192,6 +1212,29 @@ export default function Chat() {
       audioRef.current = null;
     };
   }, []);
+
+  // Pre-resolve next song in queue in background to minimize network latency
+  useEffect(() => {
+    if (!currentMusicSong || musicQueue.length <= 1) return;
+    
+    const nextIndex = (currentQueueIndex + 1) % musicQueue.length;
+    const nextSong = musicQueue[nextIndex];
+    if (nextSong && !nextSong.id.startsWith("demo-") && !resolvedUrlCache.has(nextSong.id)) {
+      const timer = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(nextSong.encryptedMediaUrl)}`);
+          const data = await response.json();
+          if (data.streamUrl) {
+            resolvedUrlCache.set(nextSong.id, data.streamUrl);
+          }
+        } catch (e) {
+          console.error("Background pre-resolve failed:", e);
+        }
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentMusicSong, musicQueue, currentQueueIndex]);
   const t = getLang(language);
   const [profileName, setProfileName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(() => user?.photoURL || (isGuest ? readGuestProfilePhoto() : ""));
