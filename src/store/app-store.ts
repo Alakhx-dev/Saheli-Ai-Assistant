@@ -59,7 +59,7 @@ export const useAppStore = create<AppState>((set) => ({
           : chat,
       ),
     })),
-  updateStreamingMessage: (chatId, content) =>
+  updateStreamingMessage: (chatId, newText) =>
     set((state) => ({
       chats: state.chats.map((chat) => {
         if (chat.id !== chatId) {
@@ -68,15 +68,15 @@ export const useAppStore = create<AppState>((set) => ({
 
         const nextMessages = [...(chat.messages ?? [])];
         if (!nextMessages.length) {
-          return { ...chat, messages: [{ role: "model", content, streaming: true }] };
+          return { ...chat, messages: [{ role: "model", content: newText, streaming: true }] };
         }
 
         const lastIndex = nextMessages.length - 1;
         const lastMessage = nextMessages[lastIndex];
         if (lastMessage?.role === "model") {
-          nextMessages[lastIndex] = { ...lastMessage, content, streaming: true };
+          nextMessages[lastIndex] = { ...lastMessage, content: (lastMessage.content || "") + newText, streaming: true };
         } else {
-          nextMessages.push({ role: "model", content, streaming: true });
+          nextMessages.push({ role: "model", content: newText, streaming: true });
         }
 
         return { ...chat, messages: nextMessages };

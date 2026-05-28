@@ -1955,6 +1955,12 @@ export default function Chat() {
           return;
         }
 
+        const hasLocalModelMessage = messagesRef.current.length > 0 && messagesRef.current[messagesRef.current.length - 1].role === "model";
+        const hasRealtimeModelMessage = realtimeMessages.length > 0 && realtimeMessages[realtimeMessages.length - 1].role === "model";
+        if (hasLocalModelMessage && !hasRealtimeModelMessage) {
+          return;
+        }
+
         setMessages(realtimeMessages);
         messagesRef.current = realtimeMessages;
         setStoreChats(
@@ -2784,17 +2790,20 @@ export default function Chat() {
     }
   }, [storeAddMessage, user]);
 
-  const updateStreamingMessage = useCallback((chatId: string, content: string) => {
+  const updateStreamingMessage = useCallback((chatId: string, newText: string) => {
     setMessages((prev) => {
-      const next = [...prev];
-      if (!next.length || next[next.length - 1].role !== "model") {
-        next.push({ role: "model", content });
+      let next: ChatMessage[];
+      if (!prev.length || prev[prev.length - 1].role !== "model") {
+        next = [...prev, { role: "model", content: newText }];
       } else {
-        next[next.length - 1] = { ...next[next.length - 1], content };
+        const lastMessage = prev[prev.length - 1];
+        const updatedMessage = { ...lastMessage, content: (lastMessage.content || "") + newText };
+        next = [...prev.slice(0, -1), updatedMessage];
       }
+      messagesRef.current = next;
       return next;
     });
-    storeUpdateStreamingMessage(chatId, content);
+    storeUpdateStreamingMessage(chatId, newText);
   }, [storeUpdateStreamingMessage]);
 
   const saveFinalMessage = useCallback((chatId: string, content: string) => {
@@ -2805,6 +2814,7 @@ export default function Chat() {
       } else {
         next[next.length - 1] = { ...next[next.length - 1], content };
       }
+      messagesRef.current = next;
       return next;
     });
     setLatestSaheliMessage(content);
@@ -2823,6 +2833,7 @@ export default function Chat() {
     onPartialText?: (partialText: string) => void,
   ) => {
     let didTriggerEarlyTts = false;
+    let lastLength = 0;
 
     const handleChunk = (partialText: string) => {
       // On first chunk arrival, hide the typing animation so streaming text appears instantly
@@ -2838,7 +2849,12 @@ export default function Chat() {
         cleanPartial = partialText.substring(0, tagIndex).trim();
       }
 
-      updateStreamingMessage(chatId, cleanPartial);
+      const newText = cleanPartial.slice(lastLength);
+      lastLength = cleanPartial.length;
+
+      if (newText) {
+        updateStreamingMessage(chatId, newText);
+      }
 
       if (!didTriggerEarlyTts) {
         const preview = getStreamingTtsPreview(cleanPartial);

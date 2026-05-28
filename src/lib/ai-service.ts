@@ -50,7 +50,7 @@ export interface RealtimeAwarenessContext {
 
 export type AppLanguage = "english" | "hindi" | "hinglish";
 export type MemoryMode = "enabled" | "disabled";
-export type AIProvider = "Groq";
+export type AIProvider = "Gemini" | "Groq";
 
 // Legacy exports kept for backward compatibility with settings panel
 export const GROQ_MODEL = {
@@ -76,7 +76,7 @@ const PROVIDER_TIMEOUT_MS = 15000;
 // Section 2: New types & Configuration
 // ----------------------------------------------------
 
-type ProviderName = "groq";
+type ProviderName = "groq" | "gemini";
 
 interface PipelineTier {
   provider: ProviderName;
@@ -99,18 +99,32 @@ export interface VisionParseResult {
 
 const AI_PIPELINE_CONFIG = {
   bestie: [
+    { provider: "gemini", modelId: "gemini-3.5-flash" },
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
     { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
     { provider: "groq", modelId: "qwen-qwq-32b" },
   ],
   mentor: [
+    { provider: "gemini", modelId: "gemini-2.5-pro" },
+    { provider: "gemini", modelId: "gemini-3.5-flash" },
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
     { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
     { provider: "groq", modelId: "llama-3.2-3b-preview" },
   ],
   vision: [
+    { provider: "gemini", modelId: "gemini-3.5-flash" },
+    { provider: "gemini", modelId: "gemini-2.5-pro" },
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "groq", modelId: "llama-3.2-11b-vision-preview" },
     { provider: "groq", modelId: "llava-v1.5-7b-4096-preview" },
+  ],
+  title: [
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
   ],
 } as const;
 
@@ -507,6 +521,9 @@ type ProviderResponseData = {
 
 function getProviderApiKey(provider: ProviderName) {
   const env = import.meta.env as Record<string, string | undefined>;
+  if (provider === "gemini") {
+    return (env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || "").trim();
+  }
   return (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
 }
 
@@ -572,12 +589,109 @@ function extractProviderError(data: ProviderResponseData, response: Response, pr
   );
 }
 
+function buildGeminiNativeMessages(messages: ChatMessage[], imageBase64?: string) {
+  const formatted = messages.map((message) => ({
+    role: message.role === "model" ? "model" : "user",
+    parts: [{ text: message.content }] as any[],
+  }));
+
+  if (imageBase64 && imageBase64.trim()) {
+    const lastUserIndex = [...formatted].reverse().findIndex((m) => m.role === "user");
+    if (lastUserIndex !== -1) {
+      const targetIndex = formatted.length - 1 - lastUserIndex;
+      
+      let base64Data = imageBase64;
+      let mimeType = "image/jpeg";
+
+      const base64Match = base64Data.match(/^data:([^;]+);base64,(.*)$/);
+      if (base64Match) {
+        mimeType = base64Match[1];
+        base64Data = base64Match[2];
+      }
+
+      formatted[targetIndex].parts.push({
+        inlineData: {
+          mimeType,
+          data: base64Data,
+        },
+      });
+    }
+  }
+
+  return formatted;
+}
+
+async function callGeminiNativeAPI(
+  modelId: string,
+  payload: ProviderRequestPayload,
+  apiKey: string,
+): Promise<string> {
+  const cleanModelId = modelId.replace(/^(models\/|gemini\/)/, "");
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModelId}:generateContent?key=${apiKey}`;
+
+  const body: any = {
+    contents: buildGeminiNativeMessages(payload.messages, payload.imageBase64),
+    generationConfig: {
+      temperature: payload.temperature,
+      maxOutputTokens: payload.maxTokens,
+      topP: 0.9,
+    },
+  };
+
+  if (payload.systemPrompt) {
+    body.systemInstruction = {
+      parts: [{ text: payload.systemPrompt }],
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+      body: JSON.stringify(body),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
+    }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      throw new Error("Gemini se empty response aaya");
+    }
+
+    return text;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Gemini request timeout ho gaya");
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
 async function callProviderAPI(
   tier: PipelineTier,
   payload: ProviderRequestPayload,
 ): Promise<string> {
   const provider = tier.provider;
   const apiKey = getProviderApiKey(provider);
+
+  if (provider === "gemini") {
+    if (!apiKey) {
+      throw new Error("Missing VITE_GEMINI_API_KEY in environment");
+    }
+    return callGeminiNativeAPI(tier.modelId, payload, apiKey);
+  }
+
   if (!apiKey) {
     throw new Error("Missing VITE_GROQ_API_KEY in environment");
   }
@@ -696,8 +810,23 @@ async function executeVisionPipeline(
     temperature: 0.2,
   };
 
+  const latestUserMessage = [...payload.messages].reverse().find((m) => m.role === "user")?.content || "";
+  const isMentorMode = personalityTiers === AI_PIPELINE_CONFIG.mentor;
+  const studyKeywords = /\b(study|book|diagram|note|notes|text|page|document|pdf|dense|solve|equation|question|math|physics|chemistry|biology|homework|assignment|code|coding)\b/i;
+  const isStudyOrText = isMentorMode || studyKeywords.test(latestUserMessage);
+
+  let visionTiers = [...AI_PIPELINE_CONFIG.vision];
+  if (isStudyOrText) {
+    const proIndex = visionTiers.findIndex((t) => t.modelId === "gemini-2.5-pro");
+    if (proIndex > 0) {
+      const [proTier] = visionTiers.splice(proIndex, 1);
+      visionTiers.unshift(proTier);
+      debugLog("Vision Pipeline: Study/Text context detected. Prioritizing gemini-2.5-pro for deep understanding.");
+    }
+  }
+
   debugLog("Vision Pipeline: Launching Stage 1 Vision Parser...");
-  const visionResult = await executeWithFallback(AI_PIPELINE_CONFIG.vision, visionPayload);
+  const visionResult = await executeWithFallback(visionTiers, visionPayload);
   const visionContext = visionResult.text;
   debugLog("Vision Pipeline: Stage 1 successful. Parsed context length:", visionContext.length);
 
@@ -1032,17 +1161,17 @@ Remember:
     temperature: 0.7,
   };
 
-  const tier: PipelineTier = { provider: "groq", modelId: "llama-3.3-70b-versatile" };
-
   try {
-    const title = await callProviderAPI(tier, payload);
+    const result = await executeWithFallback(AI_PIPELINE_CONFIG.title, payload);
+    const title = result.text;
+    const selectedTier = result.tier;
     const cleaned = normalizeChatTitleText(title);
     const formatted = toHeadingStyle(cleaned);
     if (isValidTitle(formatted) && !looksLikeRawChatFragment(formatted)) {
       return formatted;
     }
 
-    const refined = await refineGeneratedTitleFormatting(tier, cleaned);
+    const refined = await refineGeneratedTitleFormatting(selectedTier, cleaned);
     const refinedFormatted = toHeadingStyle(refined);
     if (isValidTitle(refinedFormatted) && !looksLikeRawChatFragment(refinedFormatted)) {
       return refinedFormatted;
