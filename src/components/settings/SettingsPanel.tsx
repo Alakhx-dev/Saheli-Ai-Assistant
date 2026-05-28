@@ -133,8 +133,14 @@ interface SettingsPanelProps {
 const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
   { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-red-500/20 to-rose-400/10" },
-  { id: "vaidehi", label: "Vaidehi 🌻", image: "/Vaidehi 🌻.png", accent: "from-amber-400/20 to-yellow-400/10" },
-  { id: "anvika", label: "Anvika 🌸", image: "/Anvika 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
+  { id: "aaradhya", label: "Aaradhya 🤍", image: "/Aaradhya 🤍.png", accent: "from-slate-400/20 to-zinc-400/10" },
+  { id: "aarunya", label: "Aarunya 🌸", image: "/Aarunya 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
+  { id: "anvitha", label: "Anvitha 🤎", image: "/Anvitha 🤎.png", accent: "from-amber-600/20 to-amber-700/10" },
+  { id: "kiyara", label: "Kiyara 🌼", image: "/Kiyara 🌼.png", accent: "from-yellow-400/20 to-amber-400/10" },
+  { id: "lavanya", label: "Lavanya 💜", image: "/Lavanya 💜.png", accent: "from-purple-500/20 to-indigo-500/10" },
+  { id: "meher", label: "Meher 🤎", image: "/Meher 🤎.png", accent: "from-amber-600/20 to-stone-500/10" },
+  { id: "nyra", label: "Nyra 💙", image: "/Nyra 💙.png", accent: "from-blue-400/20 to-cyan-400/10" },
+  { id: "suryanshi", label: "Suryanshi 🌻", image: "/Suryanshi 🌻.png", accent: "from-yellow-500/20 to-amber-500/10" },
 ];
 
 export interface ConfigItem {
@@ -723,7 +729,7 @@ export default function SettingsPanel({
 
   const renderCustomizationView = () => {
     return (
-      <motion.div key="personalization-customization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+      <motion.div key="personalization-customization" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
         <div className="space-y-4">
           <div className="flex flex-col gap-1">
             <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Menu Customizer</h3>
@@ -1105,9 +1111,9 @@ export default function SettingsPanel({
     switch (itemId) {
       case "character":
         return (
-          <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <SectionShell label="Personalization" title="Character Selection" description="Select your AI companion." compact={isCompact}>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 max-h-[230px] overflow-y-auto pr-1 custom-scrollbar">
                 {characterCards.map((card) => {
                   const active = selectedCharacter === card.id;
                   return (
@@ -1129,13 +1135,23 @@ export default function SettingsPanel({
                   );
                 })}
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("saheli_open_live_character_selector"));
+                  onOpenChange(false);
+                }}
+                className={`mt-3.5 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
+              >
+                Show in Chat Page
+              </button>
             </SectionShell>
           </motion.div>
         );
 
       case "color":
         return (
-          <motion.div key="personalization-color" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="personalization-color" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <div className="space-y-4">
               <div className="flex flex-col gap-1">
                 <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Theme Color</h3>
@@ -1143,14 +1159,14 @@ export default function SettingsPanel({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: "pink", label: "Pink", gradientBg: "linear-gradient(135deg, #ff0078 0%, #ff69b4 100%)", flower: "🌸", glowColor: "rgba(255, 0, 120, 0.35)" },
-                  { id: "yellow", label: "Light Yellow", gradientBg: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)", flower: "🌼", glowColor: "rgba(255, 215, 0, 0.35)" },
-                  { id: "blue", label: "Sky Blue", gradientBg: "linear-gradient(135deg, #87CEEB 0%, #00E5FF 100%)", flower: "🪻", glowColor: "rgba(0, 229, 255, 0.35)" },
-                  { id: "orchid", label: "Orchid", gradientBg: "linear-gradient(135deg, #D500F9 0%, #FF66CC 100%)", flower: "🪷", glowColor: "rgba(213, 0, 249, 0.35)" },
-                  { id: "peach", label: "Sweet Peach", gradientBg: "linear-gradient(135deg, #FF9E7D 0%, #FF6B6B 100%)", flower: "🏵️", glowColor: "rgba(255, 158, 125, 0.35)" },
-                  { id: "beige", label: "Dark Cream", gradientBg: "linear-gradient(135deg, #EADBC8 0%, #8D7B68 100%)", flower: "🌾", glowColor: "rgba(212, 184, 149, 0.35)" },
-                  { id: "maroon", label: "Maroon", gradientBg: "linear-gradient(135deg, #D01C3F 0%, #6E0016 100%)", flower: "🌹", glowColor: "rgba(208, 28, 63, 0.35)" },
-                  { id: "gemini", label: "Gemini Blue", gradientBg: "linear-gradient(135deg, #4A89FF 0%, #1A365D 100%)", flower: "💙", glowColor: "rgba(74, 137, 255, 0.35)" },
+                  { id: "pink", label: "Blush Sakura", gradientBg: "linear-gradient(135deg, #ff0078 0%, #ff69b4 100%)", flower: "🌸", glowColor: "rgba(255, 0, 120, 0.35)" },
+                  { id: "yellow", label: "Sunlit Daisy", gradientBg: "linear-gradient(135deg, #FFD700 0%, #FFA500 100%)", flower: "🌼", glowColor: "rgba(255, 215, 0, 0.35)" },
+                  { id: "blue", label: "Ocean Breeze", gradientBg: "linear-gradient(135deg, #87CEEB 0%, #00E5FF 100%)", flower: "🪻", glowColor: "rgba(0, 229, 255, 0.35)" },
+                  { id: "orchid", label: "Lilac Fantasy", gradientBg: "linear-gradient(135deg, #D500F9 0%, #FF66CC 100%)", flower: "🪷", glowColor: "rgba(213, 0, 249, 0.35)" },
+                  { id: "peach", label: "Peach Sorbet", gradientBg: "linear-gradient(135deg, #FF9E7D 0%, #FF6B6B 100%)", flower: "🏵️", glowColor: "rgba(255, 158, 125, 0.35)" },
+                  { id: "beige", label: "Vanilla Latte", gradientBg: "linear-gradient(135deg, #EADBC8 0%, #8D7B68 100%)", flower: "🌾", glowColor: "rgba(212, 184, 149, 0.35)" },
+                  { id: "maroon", label: "Midnight Rose", gradientBg: "linear-gradient(135deg, #D01C3F 0%, #6E0016 100%)", flower: "🌹", glowColor: "rgba(208, 28, 63, 0.35)" },
+                  { id: "gemini", label: "Cosmic Aurora", gradientBg: "linear-gradient(135deg, #4A89FF 0%, #1A365D 100%)", flower: "💙", glowColor: "rgba(74, 137, 255, 0.35)" },
                 ].map((item) => {
                   const active = selectedColor === item.id;
                   return (
@@ -1196,7 +1212,7 @@ export default function SettingsPanel({
 
       case "realtime":
         return (
-          <motion.div key="personalization-realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="personalization-realtime" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <section className="space-y-2">
               <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Date, Time & Weather</h3>
               <div className="space-y-2">
@@ -1289,7 +1305,7 @@ export default function SettingsPanel({
 
       case "profile":
         return (
-          <motion.div key="account-profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="account-profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <input
               ref={accountFileRef}
               type="file"
@@ -1423,7 +1439,7 @@ export default function SettingsPanel({
 
       case "bestie_mentor":
         return (
-          <motion.div key="appearance-bestie-mentor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="appearance-bestie-mentor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <SectionShell
               label="Personality"
               title="Interaction Style"
@@ -1463,7 +1479,7 @@ export default function SettingsPanel({
 
       case "api_keys":
         return (
-          <motion.div key="about-api-keys" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="about-api-keys" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Custom API Keys (Optional)</p>
@@ -1486,7 +1502,7 @@ export default function SettingsPanel({
 
       case "memory_toggle":
         return (
-          <motion.div key="memory-toggle-direct" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="memory-toggle-direct" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <div className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-white">Memory Auto-Save</p>
@@ -1507,7 +1523,7 @@ export default function SettingsPanel({
 
       case "incognito":
         return (
-          <motion.div key="about-incognito-direct" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="about-incognito-direct" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Incognito Mode</p>
@@ -1582,7 +1598,7 @@ export default function SettingsPanel({
 
       case "music":
         return (
-          <motion.div key="personalization-music" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+          <motion.div key="personalization-music" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <div className="space-y-4">
               <div className="flex flex-col gap-1">
                 <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Music System</h3>
@@ -1724,7 +1740,7 @@ export default function SettingsPanel({
                 initial={{ opacity: 0, x: -20, scale: 0.95 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
+                transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                   background: "rgba(15, 15, 15, 0.4)",
                   backdropFilter: "blur(25px)",
@@ -1778,21 +1794,21 @@ export default function SettingsPanel({
                     initial={{ opacity: 0, x: -20, scale: 0.95 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                    transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
+                    transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     style={{
                       background: "rgba(15, 15, 15, 0.4)",
                       backdropFilter: "blur(25px)",
                       border: "0.5px solid rgba(255, 255, 255, 0.06)",
                       boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
                     }}
-                    className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-300 ${
+                    className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 ${
                       activeItem?.id === "character" ? "w-[280px]" : activeItem?.id === "memory" ? "w-[300px]" : activeItem?.id === "personalization" ? "w-[320px]" : activeItem?.id === "realtime" ? "w-[380px]" : activeItem?.id === "color" ? "w-[245px]" : activeItem?.id === "customization" ? "w-[350px]" : "w-[360px]"
                     }`}
                   >
                     <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar">
                       <AnimatePresence mode="wait">
                         {isTab ? (
-                          <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+                          <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
                             <SectionShell
                               label="Settings"
                               title={activeItem?.label || ""}
@@ -1923,14 +1939,14 @@ export default function SettingsPanel({
                     initial={{ opacity: 0, x: -20, scale: 0.95 }}
                     animate={{ opacity: 1, x: 0, scale: 1 }}
                     exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                    transition={{ type: "spring", damping: 20, stiffness: 500, mass: 0.3 }}
+                    transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     style={{
                       background: "rgba(15, 15, 15, 0.4)",
                       backdropFilter: "blur(25px)",
                       border: "0.5px solid rgba(255, 255, 255, 0.06)",
                       boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
                     }}
-                    className={`settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] flex-col rounded-[28px] overflow-hidden transition-[width] duration-300 ${
+                    className={`settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] flex-col rounded-[28px] overflow-hidden transition-[width] duration-150 ${
                       personalizationChild === "color" 
                         ? "w-[245px]" 
                         : personalizationChild === "character" 

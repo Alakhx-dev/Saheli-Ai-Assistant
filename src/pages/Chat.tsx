@@ -9,6 +9,8 @@ import {
   Plus,
   Upload,
   
+  ChevronLeft,
+  ChevronRight,
   PanelLeft,
   Volume2,
   VolumeX,
@@ -312,8 +314,101 @@ type SettingsSectionId =
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
   aarohi: "/Aarohi ✨.png",
-  vaidehi: "/Vaidehi 🌻.png",
-  anvika: "/Anvika 🌸.png",
+  aaradhya: "/Aaradhya 🤍.png",
+  aarunya: "/Aarunya 🌸.png",
+  anvitha: "/Anvitha 🤎.png",
+  kiyara: "/Kiyara 🌼.png",
+  lavanya: "/Lavanya 💜.png",
+  meher: "/Meher 🤎.png",
+  nyra: "/Nyra 💙.png",
+  suryanshi: "/Suryanshi 🌻.png",
+};
+
+const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi"];
+
+const CHARACTER_LABELS: Record<string, string> = {
+  swara: "Swara 🦋",
+  aarohi: "Aarohi ✨",
+  aaradhya: "Aaradhya 🤍",
+  aarunya: "Aarunya 🌸",
+  anvitha: "Anvitha 🤎",
+  kiyara: "Kiyara 🌼",
+  lavanya: "Lavanya 💜",
+  meher: "Meher 🤎",
+  nyra: "Nyra 💙",
+  suryanshi: "Suryanshi 🌻",
+};
+
+const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number }> = {
+  swara: { scale: 0.9, yOffset: 12 },
+  aarohi: { scale: 1.0, yOffset: 0 },
+  aaradhya: { scale: 0.98, yOffset: 8 },
+  aarunya: { scale: 0.98, yOffset: 6 },
+  anvitha: { scale: 1.0, yOffset: 4 },
+  kiyara: { scale: 1.02, yOffset: 0 },
+  lavanya: { scale: 0.96, yOffset: 10 },
+  meher: { scale: 0.97, yOffset: 8 },
+  nyra: { scale: 0.98, yOffset: 6 },
+  suryanshi: { scale: 1.0, yOffset: 0 },
+};
+
+const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; text: string; buttonBg: string; buttonText: string }> = {
+  pink: {
+    border: "border-pink-500/30",
+    glow: "rgba(255, 105, 180, 0.2)",
+    text: "text-pink-200",
+    buttonBg: "bg-pink-600 hover:bg-pink-700 hover:shadow-[0_0_15px_rgba(255,105,180,0.4)]",
+    buttonText: "text-white"
+  },
+  yellow: {
+    border: "border-yellow-400/35",
+    glow: "rgba(255, 215, 0, 0.2)",
+    text: "text-yellow-200",
+    buttonBg: "bg-yellow-500 hover:bg-yellow-600 hover:shadow-[0_0_15px_rgba(255,215,0,0.4)]",
+    buttonText: "text-black"
+  },
+  blue: {
+    border: "border-cyan-400/35",
+    glow: "rgba(0, 229, 255, 0.2)",
+    text: "text-cyan-200",
+    buttonBg: "bg-cyan-500 hover:bg-cyan-600 hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]",
+    buttonText: "text-black"
+  },
+  orchid: {
+    border: "border-purple-500/35",
+    glow: "rgba(213, 0, 249, 0.2)",
+    text: "text-purple-200",
+    buttonBg: "bg-purple-600 hover:bg-purple-700 hover:shadow-[0_0_15px_rgba(213,0,249,0.4)]",
+    buttonText: "text-white"
+  },
+  peach: {
+    border: "border-orange-400/35",
+    glow: "rgba(255, 158, 125, 0.2)",
+    text: "text-orange-200",
+    buttonBg: "bg-orange-500 hover:bg-orange-600 hover:shadow-[0_0_15px_rgba(255,158,125,0.4)]",
+    buttonText: "text-white"
+  },
+  beige: {
+    border: "border-amber-400/30",
+    glow: "rgba(212, 184, 149, 0.15)",
+    text: "text-amber-200",
+    buttonBg: "bg-amber-600 hover:bg-amber-700 hover:shadow-[0_0_15px_rgba(212,184,149,0.3)]",
+    buttonText: "text-white"
+  },
+  maroon: {
+    border: "border-red-500/35",
+    glow: "rgba(208, 28, 63, 0.2)",
+    text: "text-red-200",
+    buttonBg: "bg-red-600 hover:bg-red-700 hover:shadow-[0_0_15px_rgba(208,28,63,0.4)]",
+    buttonText: "text-white"
+  },
+  gemini: {
+    border: "border-blue-500/35",
+    glow: "rgba(74, 137, 255, 0.2)",
+    text: "text-blue-200",
+    buttonBg: "bg-blue-600 hover:bg-blue-700 hover:shadow-[0_0_15px_rgba(74,137,255,0.4)]",
+    buttonText: "text-white"
+  }
 };
 
 const DEMO_TRACKS: JioSaavnSong[] = [
@@ -358,8 +453,13 @@ function getStoredCharacterId(themeColor: string) {
     return normalizeCharacterId(saved);
   }
   // Default characters per theme color
+  if (themeColor === "yellow") return "kiyara";
+  if (themeColor === "peach") return "anvitha";
+  if (themeColor === "pink") return "aarunya";
+  if (themeColor === "orchid") return "lavanya";
+  if (themeColor === "gemini") return "nyra";
+  if (themeColor === "beige") return "aaradhya";
   if (themeColor === "maroon") return "aarohi";
-  if (themeColor === "yellow") return "vaidehi";
   return "swara";
 }
 
@@ -1387,6 +1487,8 @@ export default function Chat() {
   const selectedImageRef = useRef<string | null>(null);
   const [isIdle, setIsIdle] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId(getStoredThemeColor()));
+  const [isLiveSelectorActive, setIsLiveSelectorActive] = useState(false);
+  const [livePreviewCharacter, setLivePreviewCharacter] = useState<string>("");
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
 
@@ -1418,6 +1520,49 @@ export default function Chat() {
   useEffect(() => {
     setSelectedCharacter(getStoredCharacterId(activeTheme));
   }, [activeTheme]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const migrationKey = "saheli_character_defaults_migrated_v3";
+      if (!window.localStorage.getItem(migrationKey)) {
+        const themes = ["pink", "yellow", "blue", "orchid", "peach", "beige", "maroon", "gemini"];
+        themes.forEach((t) => {
+          window.localStorage.removeItem(`saheli_selected_character_${t}`);
+        });
+        window.localStorage.removeItem("saheli_selected_character");
+        window.localStorage.setItem(migrationKey, "true");
+        // Force refresh selected character to trigger default lookup
+        setSelectedCharacter(getStoredCharacterId(activeTheme));
+      }
+    }
+  }, [activeTheme]);
+
+  useEffect(() => {
+    const handleOpenLiveSelector = () => {
+      setLivePreviewCharacter(selectedCharacter);
+      setIsLiveSelectorActive(true);
+    };
+
+    window.addEventListener("saheli_open_live_character_selector", handleOpenLiveSelector);
+    return () => {
+      window.removeEventListener("saheli_open_live_character_selector", handleOpenLiveSelector);
+    };
+  }, [selectedCharacter]);
+
+  const handleSlideCharacter = useCallback((direction: "next" | "prev") => {
+    setLivePreviewCharacter((prev) => {
+      const currentIndex = CHARACTER_KEYS.indexOf(prev);
+      if (currentIndex === -1) return "swara";
+      
+      let nextIndex;
+      if (direction === "next") {
+        nextIndex = (currentIndex + 1) % CHARACTER_KEYS.length;
+      } else {
+        nextIndex = (currentIndex - 1 + CHARACTER_KEYS.length) % CHARACTER_KEYS.length;
+      }
+      return CHARACTER_KEYS[nextIndex];
+    });
+  }, []);
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -3875,24 +4020,30 @@ export default function Chat() {
                     className="w-full h-full"
                   >
                     <AnimatePresence mode="wait">
-                      <motion.img
-                        key={selectedCharacter}
-                        src={CHARACTER_IMAGE_MAP[selectedCharacter] || "/butterfly.png"}
-                        alt={`${selectedCharacter} Mascot`}
-                        initial={{ opacity: 0, scale: 0.95, y: 6 }}
-                        animate={{ opacity: 1, scale: 1, y: -4 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 6 }}
-                        transition={{ duration: 0.4, ease: "easeInOut" }}
-                        className={
-                          isPinkTheme
-                            ? "w-full h-full brightness-[84%] contrast-100 saturate-102 drop-shadow-[0_10px_16px_rgba(0,0,0,0.16)]"
-                            : "w-full h-full brightness-[86%] contrast-100 saturate-102 drop-shadow-[0_10px_16px_rgba(0,0,0,0.16)]"
-                        }
-                        style={{
-                          objectFit: "contain",
-                          objectPosition: "bottom center",
-                        }}
-                      />
+                      {(() => {
+                        const activeMascotKey = isLiveSelectorActive ? livePreviewCharacter : selectedCharacter;
+                        const mascotOverride = CHARACTER_STYLE_OVERRIDES[activeMascotKey] || { scale: 1.0, yOffset: 0 };
+                        return (
+                          <motion.img
+                            key={activeMascotKey}
+                            src={CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png"}
+                            alt={`${activeMascotKey} Mascot`}
+                            initial={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
+                            animate={{ opacity: 1, scale: mascotOverride.scale, y: -4 + mascotOverride.yOffset }}
+                            exit={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
+                            transition={{ duration: 0.4, ease: "easeInOut" }}
+                            className={
+                              isPinkTheme
+                                ? "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
+                                : "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
+                            }
+                            style={{
+                              objectFit: "contain",
+                              objectPosition: "bottom center",
+                            }}
+                          />
+                        );
+                      })()}
                     </AnimatePresence>
 
                     {/* Perched Butterflies on Hair and Dress */}
@@ -4409,6 +4560,100 @@ export default function Chat() {
             </motion.div>
           ) : null}
         </AnimatePresence>
+
+        {isLiveSelectorActive && (
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-40 overflow-hidden">
+            <div className="relative flex items-center justify-center w-full max-w-[520px] h-[520px]" style={{ transform: "translateY(-25px)" }}>
+              {(() => {
+                const themeStyles = THEME_SLIDER_CARD_CLASSES[activeTheme] || THEME_SLIDER_CARD_CLASSES.pink;
+                const hoverBgMap: Record<string, string> = {
+                  pink: "hover:bg-pink-500/20 hover:border-pink-500/30",
+                  yellow: "hover:bg-yellow-500/20 hover:border-yellow-500/35",
+                  blue: "hover:bg-cyan-500/20 hover:border-cyan-400/35",
+                  orchid: "hover:bg-purple-500/20 hover:border-purple-500/35",
+                  peach: "hover:bg-orange-500/20 hover:border-orange-400/35",
+                  beige: "hover:bg-amber-500/20 hover:border-amber-400/30",
+                  maroon: "hover:bg-red-500/20 hover:border-red-500/35",
+                  gemini: "hover:bg-blue-500/20 hover:border-blue-500/35",
+                };
+                const arrowHover = hoverBgMap[activeTheme] || hoverBgMap.pink;
+
+                return (
+                  <>
+                    {/* Left Slide Arrow */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSlideCharacter("prev");
+                      }}
+                      className={`absolute left-[-20px] md:left-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer ${arrowHover}`}
+                      style={{
+                        boxShadow: `0 12px 28px rgba(0,0,0,0.4), 0 0 15px ${themeStyles.glow}`
+                      }}
+                      aria-label="Previous character"
+                    >
+                      <ChevronLeft className={`h-6 w-6 ${themeStyles.text}`} />
+                    </button>
+
+                    {/* Right Slide Arrow */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSlideCharacter("next");
+                      }}
+                      className={`absolute right-[-20px] md:right-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer ${arrowHover}`}
+                      style={{
+                        boxShadow: `0 12px 28px rgba(0,0,0,0.4), 0 0 15px ${themeStyles.glow}`
+                      }}
+                      aria-label="Next character"
+                    >
+                      <ChevronRight className={`h-6 w-6 ${themeStyles.text}`} />
+                    </button>
+
+                    {/* Done/Exit control panel */}
+                    <div 
+                      className={`absolute bottom-[-75px] z-[50] flex items-center gap-3.5 px-5 py-3 rounded-2xl border ${themeStyles.border} bg-[#0c0616]/75 backdrop-blur-[35px] saturate-[180%] pointer-events-auto animate-fade-in`}
+                      style={{
+                        fontFamily: "'Outfit', 'Inter', sans-serif",
+                        boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 30px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
+                      }}
+                    >
+                      <div className="flex flex-col min-w-[125px] select-none text-left">
+                        <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Previewing</span>
+                        <span className={`text-sm font-bold transition-colors duration-300 ${themeStyles.text}`}>
+                          {CHARACTER_LABELS[livePreviewCharacter] || livePreviewCharacter}
+                        </span>
+                      </div>
+                      <div className="h-7 w-[1px] bg-white/10" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleCharacterChange(livePreviewCharacter);
+                          setIsLiveSelectorActive(false);
+                          toast.success(`Character updated to ${CHARACTER_LABELS[livePreviewCharacter] || livePreviewCharacter}!`);
+                        }}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
+                      >
+                        Done
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsLiveSelectorActive(false);
+                        }}
+                        className="px-4 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer"
+                      >
+                        Exit
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
       </div>
       <ThemeTransitionOverlay
         targetTheme={targetTheme}
