@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Minimize2, Disc, Music, Heart } from "lucide-react";
 import type { JioSaavnSong } from "../../../lib/musicService";
@@ -20,6 +20,124 @@ interface FullscreenPlayerProps {
   currentQueueIndex: number;
 }
 
+const getFullscreenThemeClasses = (color: string) => {
+  switch (color) {
+    case "yellow":
+      return {
+        text: "text-yellow-400",
+        textLight: "text-yellow-300",
+        border: "border-yellow-500/25",
+        bgActive: "bg-yellow-500/10",
+        accentBg: "bg-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.3)]",
+        accentText: "text-yellow-950",
+        sliderAccent: "accent-yellow-500",
+        moodBlob: "rgba(234, 179, 8, 0.4)",
+        conicGradient: "from-amber-400 via-yellow-300 to-amber-400",
+        waveGradient: "from-yellow-500 to-amber-400",
+        glowColor: "rgba(234, 179, 8, 0.25)"
+      };
+    case "blue":
+      return {
+        text: "text-cyan-400",
+        textLight: "text-cyan-300",
+        border: "border-cyan-500/25",
+        bgActive: "bg-cyan-500/10",
+        accentBg: "bg-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.3)]",
+        accentText: "text-cyan-950",
+        sliderAccent: "accent-cyan-500",
+        moodBlob: "rgba(6, 182, 212, 0.4)",
+        conicGradient: "from-blue-400 via-cyan-300 to-blue-400",
+        waveGradient: "from-cyan-500 to-blue-400",
+        glowColor: "rgba(6, 182, 212, 0.25)"
+      };
+    case "orchid":
+      return {
+        text: "text-purple-400",
+        textLight: "text-purple-300",
+        border: "border-purple-500/25",
+        bgActive: "bg-purple-500/10",
+        accentBg: "bg-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.3)]",
+        accentText: "text-purple-950",
+        sliderAccent: "accent-purple-500",
+        moodBlob: "rgba(168, 85, 247, 0.4)",
+        conicGradient: "from-pink-500 via-purple-400 to-pink-500",
+        waveGradient: "from-purple-500 to-pink-400",
+        glowColor: "rgba(168, 85, 247, 0.25)"
+      };
+    case "peach":
+      return {
+        text: "text-orange-400",
+        textLight: "text-orange-300",
+        border: "border-orange-500/25",
+        bgActive: "bg-orange-500/10",
+        accentBg: "bg-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.3)]",
+        accentText: "text-orange-950",
+        sliderAccent: "accent-orange-500",
+        moodBlob: "rgba(249, 115, 22, 0.4)",
+        conicGradient: "from-red-400 via-orange-300 to-red-400",
+        waveGradient: "from-orange-500 to-red-400",
+        glowColor: "rgba(249, 115, 22, 0.25)"
+      };
+    case "beige":
+      return {
+        text: "text-amber-300",
+        textLight: "text-amber-200",
+        border: "border-amber-500/20",
+        bgActive: "bg-amber-500/5",
+        accentBg: "bg-amber-600 shadow-[0_0_30px_rgba(212,184,149,0.2)]",
+        accentText: "text-amber-50",
+        sliderAccent: "accent-amber-500",
+        moodBlob: "rgba(212, 184, 149, 0.3)",
+        conicGradient: "from-amber-700 via-amber-400 to-amber-700",
+        waveGradient: "from-amber-500 to-amber-300",
+        glowColor: "rgba(212, 184, 149, 0.15)"
+      };
+    case "maroon":
+      return {
+        text: "text-red-400",
+        textLight: "text-red-300",
+        border: "border-red-500/25",
+        bgActive: "bg-red-500/10",
+        accentBg: "bg-red-600 shadow-[0_0_30px_rgba(220,38,38,0.3)]",
+        accentText: "text-red-950",
+        sliderAccent: "accent-red-600",
+        moodBlob: "rgba(220, 38, 38, 0.4)",
+        conicGradient: "from-red-800 via-red-500 to-red-800",
+        waveGradient: "from-red-600 to-red-400",
+        glowColor: "rgba(220, 38, 38, 0.25)"
+      };
+    case "gemini":
+      return {
+        text: "text-blue-400",
+        textLight: "text-blue-300",
+        border: "border-blue-500/25",
+        bgActive: "bg-blue-500/10",
+        accentBg: "bg-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]",
+        accentText: "text-blue-950",
+        sliderAccent: "accent-blue-500",
+        moodBlob: "rgba(59, 130, 246, 0.4)",
+        conicGradient: "from-indigo-500 via-blue-400 to-indigo-500",
+        waveGradient: "from-blue-500 to-indigo-400",
+        glowColor: "rgba(59, 130, 246, 0.25)"
+      };
+    case "pink":
+    default:
+      return {
+        text: "text-pink-400",
+        textLight: "text-pink-300",
+        border: "border-pink-500/25",
+        bgActive: "bg-pink-500/10",
+        accentBg: "bg-pink-500 shadow-[0_0_30px_rgba(244,63,94,0.3)]",
+        accentText: "text-pink-950",
+        sliderAccent: "accent-pink-500",
+        moodBlob: "rgba(244, 63, 94, 0.4)",
+        conicGradient: "from-purple-500 via-pink-400 to-purple-500",
+        waveGradient: "from-pink-500 to-purple-400",
+        glowColor: "rgba(244, 63, 94, 0.25)"
+      };
+  }
+};
+
 export default function FullscreenPlayer({
   isOpen,
   onClose,
@@ -36,8 +154,28 @@ export default function FullscreenPlayer({
   musicQueue,
   currentQueueIndex,
 }: FullscreenPlayerProps) {
-  
-  if (!isOpen || !currentSong) return null;
+  const [selectedColor, setSelectedColor] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_theme_color") || "pink";
+    }
+    return "pink";
+  });
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      if (typeof window !== "undefined") {
+        setSelectedColor(window.localStorage.getItem("saheli_theme_color") || "pink");
+      }
+    };
+    window.addEventListener("saheli_theme_color_changed", handleThemeChange);
+    return () => {
+      window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
+    };
+  }, []);
+
+  const theme = getFullscreenThemeClasses(selectedColor);
+
+  if (!currentSong) return null;
 
   // Format time (seconds -> mm:ss)
   const formatTime = (secs: number) => {
@@ -47,40 +185,72 @@ export default function FullscreenPlayer({
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
+  const conicColors = selectedColor === "yellow"
+    ? "#eab308, #d97706, #eab308"
+    : selectedColor === "blue"
+    ? "#06b6d4, #2563eb, #06b6d4"
+    : selectedColor === "orchid"
+    ? "#a855f7, #db2777, #a855f7"
+    : selectedColor === "peach"
+    ? "#f97316, #dc2626, #f97316"
+    : selectedColor === "beige"
+    ? "#d97706, #78350f, #d97706"
+    : selectedColor === "maroon"
+    ? "#dc2626, #7f1d1d, #dc2626"
+    : selectedColor === "gemini"
+    ? "#3b82f6, #4f46e5, #3b82f6"
+    : "#ec4899, #8b5cf6, #ec4899";
+
+  const gradientFrom = selectedColor === "beige" 
+    ? "from-amber-950/80" 
+    : selectedColor === "yellow" 
+    ? "from-yellow-950/80" 
+    : selectedColor === "blue" 
+    ? "from-cyan-950/80" 
+    : selectedColor === "orchid" 
+    ? "from-purple-950/80" 
+    : selectedColor === "peach" 
+    ? "from-orange-950/80" 
+    : selectedColor === "maroon" 
+    ? "from-red-950/80" 
+    : selectedColor === "gemini" 
+    ? "from-blue-950/80" 
+    : "from-pink-950/80";
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0, scale: 1.05 }}
+          initial={{ opacity: 0, scale: 1.03 }}
           animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 1.05 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="fixed inset-0 z-[10100] flex flex-col justify-between bg-[#040108] p-6 md:p-12 text-white select-none overflow-hidden"
+          exit={{ opacity: 0, scale: 1.03 }}
+          transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+          className="fixed inset-0 z-[10100] flex flex-col justify-between bg-zinc-950/70 backdrop-blur-[24px] p-6 md:p-12 text-white select-none overflow-hidden"
         >
           {/* Ambient blurred backdrop using Album Art */}
           <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none scale-110">
             {currentSong.image && (
               <div 
-                className="absolute inset-0 bg-cover bg-center filter blur-[100px] opacity-25 scale-105"
+                className="absolute inset-0 bg-cover bg-center filter blur-[120px] opacity-30 scale-105"
                 style={{ backgroundImage: `url(${currentSong.image})` }}
               />
             )}
             {/* Soft gradient lighting layer */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[#040108] via-[#040108]/75 to-transparent" />
-            <div className="absolute inset-0 bg-radial-gradient(circle at center, transparent 30%, #040108 90%)" />
+            <div className={`absolute inset-0 bg-gradient-to-t ${gradientFrom} via-zinc-950/60 to-transparent`} />
+            <div className="absolute inset-0 bg-radial-gradient(circle at center, transparent 20%, #0c0a0f/80 90%)" />
           </div>
 
           {/* Glowing Aura Orb */}
           <div 
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 w-[500px] h-[500px] rounded-full filter blur-[120px] opacity-15 pointer-events-none transition-all duration-1000 animate-pulse"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-0 w-[550px] h-[550px] rounded-full filter blur-[130px] opacity-25 pointer-events-none transition-all duration-1000 animate-pulse"
             style={{
-              background: "radial-gradient(circle, var(--mood-blob-1, rgba(236, 72, 153, 0.4)) 0%, transparent 70%)",
+              background: `radial-gradient(circle, ${theme.moodBlob} 0%, transparent 70%)`,
               animationDuration: "8s"
             }}
           />
 
           {/* Floating Subtle Ambient Dust Particles */}
-          <div className="absolute inset-0 z-0 pointer-events-none opacity-20">
+          <div className="absolute inset-0 z-0 pointer-events-none opacity-25">
             {Array.from({ length: 15 }).map((_, i) => (
               <div
                 key={i}
@@ -100,14 +270,14 @@ export default function FullscreenPlayer({
           {/* Header */}
           <header className="relative z-10 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
-              <span className="p-1 rounded-lg bg-pink-500/10 border border-pink-500/25">
-                <Heart className="h-4 w-4 text-pink-300 fill-current animate-pulse" />
+              <span className={`p-1 rounded-lg bg-white/5 border border-white/10 ${theme.text}`}>
+                <Heart className={`h-4 w-4 ${theme.text} fill-current animate-pulse`} />
               </span>
-              <span className="text-xs font-bold uppercase tracking-[0.25em] text-pink-300">Saheli Immersive Vibe</span>
+              <span className={`text-xs font-bold uppercase tracking-[0.25em] ${theme.textLight}`}>Saheli Immersive Vibe</span>
             </div>
             <button
               onClick={onClose}
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 hover:text-white hover:scale-105 active:scale-95 transition-all duration-200"
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 hover:${theme.text} hover:scale-105 active:scale-95 transition-all duration-200`}
             >
               <Minimize2 className="h-4 w-4" />
               <span>Back to Chat</span>
@@ -123,7 +293,7 @@ export default function FullscreenPlayer({
               <div 
                 className={`absolute w-[240px] h-[240px] md:w-[380px] md:h-[380px] rounded-full filter blur-[35px] opacity-40 transition-transform duration-1000 ${isPlaying ? "scale-105" : "scale-95"}`}
                 style={{
-                  background: "conic-gradient(from 0deg, #ff4fd8, #9954ef, #ff4fd8)",
+                  background: `conic-gradient(from 0deg, ${conicColors})`,
                   animation: isPlaying ? "border-rotate 8s linear infinite" : "none"
                 }}
               />
@@ -138,7 +308,7 @@ export default function FullscreenPlayer({
                     style={{ 
                       borderRadius: "50%",
                       animation: isPlaying ? "spin 25s linear infinite" : "none",
-                      transitionDuration: "4000ms"
+                      transitionDuration: "25000ms"
                     }}
                   />
                 ) : (
@@ -148,7 +318,7 @@ export default function FullscreenPlayer({
                 )}
                 
                 {/* Vinyl Record Center Hole style */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 md:w-10 md:h-10 rounded-full bg-[#040108] border-[3px] border-white/20 shadow-inner" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 md:w-10 md:h-10 rounded-full bg-zinc-950 border-[3px] border-white/20 shadow-inner" />
               </div>
             </div>
 
@@ -156,10 +326,10 @@ export default function FullscreenPlayer({
             <div className="flex flex-col items-center md:items-start text-center md:text-left max-w-md w-full">
               <div className="space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Now Playing</span>
-                <h1 className="text-xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-pink-200 bg-clip-text text-transparent">
+                <h1 className="text-xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-white to-zinc-100 bg-clip-text text-transparent">
                   {currentSong.title}
                 </h1>
-                <h2 className="text-sm md:text-lg font-medium text-pink-300/80 tracking-wide mt-1">
+                <h2 className={`text-sm md:text-lg font-semibold ${theme.text} tracking-wide mt-1`}>
                   {currentSong.artist}
                 </h2>
                 <p className="text-xs text-white/45 italic">{currentSong.album}</p>
@@ -172,7 +342,7 @@ export default function FullscreenPlayer({
                   return (
                     <span 
                       key={i} 
-                      className="w-0.5 rounded-full bg-gradient-to-t from-pink-500 to-purple-400"
+                      className={`w-0.5 rounded-full bg-gradient-to-t ${theme.waveGradient}`}
                       style={{
                         height: isPlaying ? "8px" : "3px",
                         animation: isPlaying ? `premium-wave ${bounceDuration}s ease-in-out infinite alternate` : "none",
@@ -196,7 +366,7 @@ export default function FullscreenPlayer({
                   max={duration || 100}
                   value={currentTime}
                   onChange={(e) => onSeek(parseFloat(e.target.value))}
-                  className="timeline-slider w-full h-1.5 bg-white/10 hover:bg-white/15 rounded-lg appearance-none cursor-pointer outline-none transition-colors accent-pink-500"
+                  className={`timeline-slider w-full h-1.5 bg-white/10 hover:bg-white/15 rounded-lg appearance-none cursor-pointer outline-none transition-colors ${theme.sliderAccent}`}
                 />
               </div>
               <div className="flex items-center justify-between text-[11px] text-white/45 font-medium tracking-wide">
@@ -223,12 +393,12 @@ export default function FullscreenPlayer({
                 </button>
                 <button
                   onClick={onPlayPause}
-                  className="p-5 rounded-full bg-white text-black hover:scale-105 active:scale-95 shadow-[0_0_30px_rgba(255,255,255,0.2)] transition"
+                  className={`p-5 rounded-full text-white hover:scale-105 active:scale-95 transition-all duration-300 border ${theme.accentBg} ${theme.accentText} hover:brightness-110`}
                 >
                   {isPlaying ? (
-                    <Pause className="h-6 w-6 fill-black" />
+                    <Pause className="h-6 w-6 fill-current" />
                   ) : (
-                    <Play className="h-6 w-6 fill-black translate-x-0.5" />
+                    <Play className="h-6 w-6 fill-current translate-x-0.5" />
                   )}
                 </button>
                 <button
@@ -252,7 +422,7 @@ export default function FullscreenPlayer({
                   step={0.01}
                   value={volume}
                   onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-                  className="volume-slider flex-1 h-1 bg-white/10 hover:bg-white/15 rounded-lg appearance-none cursor-pointer outline-none accent-pink-500"
+                  className={`volume-slider flex-1 h-1 bg-white/10 hover:bg-white/15 rounded-lg appearance-none cursor-pointer outline-none ${theme.sliderAccent}`}
                 />
               </div>
             </div>

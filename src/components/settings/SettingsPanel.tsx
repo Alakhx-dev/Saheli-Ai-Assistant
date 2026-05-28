@@ -170,6 +170,22 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "api_keys", label: "Custom API Keys", type: "item", parentId: "about" },
 ];
 
+const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
+  let cleaned = loadedLayout.filter(
+    item => item.id !== "voice" && 
+            item.id !== "bond_progress" && 
+            item.id !== "reset_memory" && 
+            item.parentId !== "voice"
+  );
+  const musicItem = cleaned.find(item => item.id === "music");
+  if (!musicItem) {
+    cleaned.push({ id: "music", label: "Music System", type: "item", parentId: null });
+  } else if (musicItem.parentId === "personalization") {
+    musicItem.parentId = null;
+  }
+  return cleaned;
+};
+
 function NavButton({
   active,
   label,
@@ -178,7 +194,9 @@ function NavButton({
   onDragStart,
   onDragOver,
   onDrop,
-  dragOverActive
+  dragOverActive,
+  id,
+  themeColor
 }: {
   active: boolean;
   label: string;
@@ -188,7 +206,22 @@ function NavButton({
   onDragOver?: (e: React.DragEvent) => void;
   onDrop?: (e: React.DragEvent) => void;
   dragOverActive?: boolean;
+  id?: string;
+  themeColor: string;
 }) {
+  const isMusic = id === "music";
+  const activeClasses = getThemeClasses(themeColor, "active");
+  const inactiveClasses = getThemeClasses(themeColor, "inactive");
+
+  let checkColorClass = "text-pink-200";
+  if (themeColor === "yellow") checkColorClass = "text-yellow-200";
+  else if (themeColor === "blue") checkColorClass = "text-cyan-200";
+  else if (themeColor === "orchid") checkColorClass = "text-purple-200";
+  else if (themeColor === "peach") checkColorClass = "text-orange-200";
+  else if (themeColor === "beige") checkColorClass = "text-amber-200";
+  else if (themeColor === "maroon") checkColorClass = "text-red-200";
+  else if (themeColor === "gemini") checkColorClass = "text-blue-200";
+
   return (
     <motion.button
       whileTap={{ scale: 0.96 }}
@@ -198,16 +231,16 @@ function NavButton({
       onDragOver={onDragOver as any}
       onDrop={onDrop as any}
       onClick={onClick}
-      className={`settings-nav-button flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${
+      className={`settings-nav-button flex w-full items-center justify-between border text-left transition duration-300 backdrop-blur-md px-4 py-3 text-sm rounded-[18px] ${
         dragOverActive
           ? "border-pink-500/55 bg-pink-500/10 shadow-[0_0_15px_rgba(255,105,180,0.2)] text-white"
           : active 
-            ? "border-pink-400/20 bg-gradient-to-r from-pink-500/15 to-purple-500/15 text-white shadow-[0_0_20px_rgba(255,105,180,0.1)]" 
-            : "border-pink-500/5 bg-gradient-to-r from-pink-500/5 to-purple-500/5 text-white/65 hover:border-pink-500/15 hover:from-pink-500/10 hover:to-purple-500/10 hover:text-white"
+            ? activeClasses 
+            : inactiveClasses
       }`}
     >
       <span>{label}</span>
-      {active && !dragOverActive ? <Check className="h-4 w-4 text-pink-200" /> : null}
+      {active && !dragOverActive ? <Check className={`h-4 w-4 ${checkColorClass}`} /> : null}
     </motion.button>
   );
 }
@@ -318,7 +351,7 @@ export default function SettingsPanel({
       const saved = window.localStorage.getItem("saheli_settings_layout");
       if (saved) {
         try {
-          return JSON.parse(saved);
+          return sanitizeAndMigrateLayout(JSON.parse(saved));
         } catch (e) {
           console.error(e);
         }
@@ -326,22 +359,6 @@ export default function SettingsPanel({
     }
     return DEFAULT_LAYOUT;
   });
-
-  const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
-    let cleaned = loadedLayout.filter(
-      item => item.id !== "voice" && 
-              item.id !== "bond_progress" && 
-              item.id !== "reset_memory" && 
-              item.parentId !== "voice"
-    );
-    const musicItem = cleaned.find(item => item.id === "music");
-    if (!musicItem) {
-      cleaned.push({ id: "music", label: "Music System", type: "item", parentId: null });
-    } else if (musicItem.parentId === "personalization") {
-      musicItem.parentId = null;
-    }
-    return cleaned;
-  };
 
   // Sync layout from Firestore on open
   useEffect(() => {
@@ -1588,11 +1605,21 @@ export default function SettingsPanel({
                 whileHover={{ scale: 1.02, y: -2 }}
                 whileTap={{ scale: 0.97 }}
                 animate={{
-                  boxShadow: [
-                    "0 0 15px rgba(244,63,94,0.35)",
-                    "0 0 25px rgba(168,85,247,0.55)",
-                    "0 0 15px rgba(244,63,94,0.35)"
-                  ]
+                  boxShadow: selectedColor === "yellow"
+                    ? ["0 0 12px rgba(234,179,8,0.15)", "0 0 22px rgba(245,158,11,0.35)", "0 0 12px rgba(234,179,8,0.15)"]
+                    : selectedColor === "blue"
+                    ? ["0 0 12px rgba(6,182,212,0.15)", "0 0 22px rgba(59,130,246,0.35)", "0 0 12px rgba(6,182,212,0.15)"]
+                    : selectedColor === "orchid"
+                    ? ["0 0 12px rgba(168,85,247,0.15)", "0 0 22px rgba(236,72,153,0.35)", "0 0 12px rgba(168,85,247,0.15)"]
+                    : selectedColor === "peach"
+                    ? ["0 0 12px rgba(249,115,22,0.15)", "0 0 22px rgba(239,68,68,0.35)", "0 0 12px rgba(249,115,22,0.15)"]
+                    : selectedColor === "beige"
+                    ? ["0 0 12px rgba(245,158,11,0.1)", "0 0 22px rgba(180,83,9,0.25)", "0 0 12px rgba(245,158,11,0.15)"]
+                    : selectedColor === "maroon"
+                    ? ["0 0 12px rgba(220,38,38,0.15)", "0 0 22px rgba(127,29,29,0.35)", "0 0 12px rgba(220,38,38,0.15)"]
+                    : selectedColor === "gemini"
+                    ? ["0 0 12px rgba(59,130,246,0.15)", "0 0 22px rgba(79,70,229,0.35)", "0 0 12px rgba(59,130,246,0.15)"]
+                    : ["0 0 12px rgba(244,63,94,0.25)", "0 0 22px rgba(168,85,247,0.45)", "0 0 12px rgba(244,63,94,0.25)"]
                 }}
                 transition={{
                   boxShadow: {
@@ -1608,14 +1635,30 @@ export default function SettingsPanel({
                   }
                   onOpenChange(false); // Close Settings Panel
                 }}
-                className="relative overflow-hidden group flex w-full items-center justify-center gap-2.5 rounded-[16px] bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 px-5 py-3.5 text-sm font-extrabold text-white transition-all duration-300 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)]"
+                className={`relative overflow-hidden group flex w-full items-center justify-center gap-2.5 rounded-[18px] border px-5 py-3 text-xs font-bold transition-all duration-300 backdrop-blur-xl bg-white/[0.02] hover:bg-white/[0.07] ${
+                  selectedColor === "yellow"
+                    ? "border-yellow-500/25 text-yellow-300 hover:border-yellow-500/40"
+                    : selectedColor === "blue"
+                    ? "border-cyan-500/25 text-cyan-300 hover:border-cyan-500/40"
+                    : selectedColor === "orchid"
+                    ? "border-purple-500/25 text-purple-300 hover:border-purple-500/40"
+                    : selectedColor === "peach"
+                    ? "border-orange-500/25 text-orange-300 hover:border-orange-500/40"
+                    : selectedColor === "beige"
+                    ? "border-amber-500/15 text-amber-200 hover:border-amber-500/30"
+                    : selectedColor === "maroon"
+                    ? "border-red-500/25 text-red-300 hover:border-red-500/40"
+                    : selectedColor === "gemini"
+                    ? "border-blue-500/25 text-blue-300 hover:border-blue-500/40"
+                    : "border-pink-500/25 text-pink-300 hover:border-pink-500/40"
+                }`}
               >
-                {/* Background sliding glow gradient on hover */}
-                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-purple-600 via-rose-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
+                {/* Diagonal sweep light shimmer on hover */}
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out" />
                 
-                <span className="relative z-10 flex items-center gap-2.5 tracking-wide">
-                  <Music className="h-4.5 w-4.5 animate-pulse" />
-                  <span>Launch Music Player 🎵</span>
+                <span className="relative z-10 flex items-center gap-2 tracking-wider">
+                  <Music className="h-4 w-4 animate-pulse" />
+                  <span>LAUNCH MUSIC PLAYER</span>
                 </span>
               </motion.button>
             </div>
@@ -1703,6 +1746,8 @@ export default function SettingsPanel({
                       return (
                         <NavButton
                           key={item.id}
+                          id={item.id}
+                          themeColor={selectedColor}
                           active={active}
                           label={item.label}
                           draggable
