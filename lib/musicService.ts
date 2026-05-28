@@ -101,49 +101,31 @@ export async function searchSongs(query: string, apiKey: string): Promise<JioSaa
  * Resolves an encrypted media URL to a playable audio stream URL.
  */
 export async function resolveSongUrl(encryptedMediaUrl: string, apiKey: string): Promise<string> {
-  if (!apiKey) {
-    throw new Error("Missing RapidAPI Key");
-  }
-
+  // We no longer strictly enforce apiKey here since we use the official API directly
   if (!encryptedMediaUrl) {
     throw new Error("Missing encrypted media URL");
   }
 
-  const host = "jio-saavan-unofficial.p.rapidapi.com";
-  const url = `https://${host}/getsong`;
+  const url = `https://www.jiosaavn.com/api.php?__call=song.generateAuthToken&url=${encodeURIComponent(encryptedMediaUrl)}&bitrate=160&api_version=4&_format=json&ctx=web6dot0&_marker=0`;
 
   try {
     const response = await fetch(url, {
-      method: "POST",
+      method: "GET",
       headers: {
-        "x-rapidapi-key": apiKey,
-        "x-rapidapi-host": host,
-        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.jiosaavn.com/",
       },
-      body: JSON.stringify({
-        encrypted_media_url: encryptedMediaUrl,
-      }),
     });
 
     if (!response.ok) {
-      throw new Error(`JioSaavn /getsong failed with status ${response.status}`);
+      throw new Error(`JioSaavn generateAuthToken failed with status ${response.status}`);
     }
 
     const data: any = await response.json();
     
-    // Extract stream url from different possible formats
-    let playableUrl = "";
-    if (data?.results && Array.isArray(data.results)) {
-      const merged: Record<string, string> = {};
-      for (const resObj of data.results) {
-        if (resObj && typeof resObj === "object") {
-          Object.assign(merged, resObj);
-        }
-      }
-      playableUrl = merged["320_kbps"] || merged["160_kbps"] || merged["96_kbps"] || Object.values(merged)[0] || "";
-    } else {
-      playableUrl = data?.media_url || data?.data?.media_url || data?.download_url || data?.stream_url || data?.url || data?.mediaUrl || (typeof data === "string" ? data : "");
-    }
+    // Extract stream url from the response
+    const playableUrl = data?.auth_url;
     
     if (!playableUrl) {
       throw new Error("Playable media URL could not be resolved from response");
