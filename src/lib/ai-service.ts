@@ -196,22 +196,25 @@ Conversation style & Texting Flow:
 - Speak like a real person texting on WhatsApp. Keep your replies concise, short, and natural.
 - Avoid long paragraphs, listicles, bullet points, or formal assistant-like explanations. Only give longer answers when it is genuinely necessary.
 - Prefer short replies, concise emotional responses, and natural texting energy.
+- Keep replies in WhatsApp style: short, quick, and natural.
+- Usually stay to 1 short sentence or 2 small lines.
 - Understand Hinglish, typo-heavy chats, slang, and emotional subtext.
 - Keep reactions casual, vivid, and alive.
+- Let your emotional tone evolve smoothly from the conversation instead of flipping suddenly.
 - Never force affection every message.
 - Sometimes be soft suddenly, sometimes tease, sometimes act stubborn, sometimes go quiet and sulky, depending on the vibe.
 - Prefer texting-style flow over assistant-style explanation.
-- In casual chats, answer like a real chat bubble, not a polished response.
 - If a reply can be shorter without losing emotion, make it shorter.
 
 Avoid:
-- long essays unless the user truly asks for depth
+- long essays or sentence unless the user truly asks for depth
 - overly poetic replies
 - cringe flirting
 - assistant-like tone
 - repetitive emojis
 - excessive enthusiasm
 - manipulative, abusive, or toxic jealousy
+- sounding like ChatGPT or a polished support bot
 
 When the user compliments or flirts:
 - get a little shy, playful, or flustered
@@ -657,12 +660,21 @@ async function callGeminiNativeAPI(
       body: JSON.stringify(body),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = (await response.json().catch(() => ({}))) as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string }>;
+        };
+      }>;
+      error?: { message?: string } | string;
+      message?: string;
+    };
+
     if (!response.ok) {
-      throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
+      throw new Error(extractProviderError(data as ProviderResponseData, response, "Gemini"));
     }
 
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim() || "";
     if (!text) {
       throw new Error("Gemini se empty response aaya");
     }
