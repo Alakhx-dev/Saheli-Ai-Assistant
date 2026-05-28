@@ -2950,6 +2950,7 @@ export default function Chat() {
           audioRef.current.pause();
         }
         setIsMusicPlaying(false);
+        setIsMusicPanelOpen(false);
       }
 
       saveFinalMessage(request.chatId, cleanResponseText);
@@ -3252,6 +3253,7 @@ export default function Chat() {
           audioRef.current.pause();
         }
         setIsMusicPlaying(false);
+        setIsMusicPanelOpen(false);
       }
 
       // Note: Image was already saved immediately after capture, no need to save again
