@@ -51,7 +51,7 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
   try {
     const response = await fetchWithTimeout(url);
     if (response.ok) {
-      const data = await response.json();
+      const data: any = await response.json();
       const first = data.results?.[0];
       if (first?.name || first?.country) {
         return {
@@ -76,7 +76,7 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
     });
     
     if (response.ok) {
-      const data = await response.json();
+      const data: any = await response.json();
       const addr = data.address || {};
       
       return {
@@ -107,7 +107,7 @@ export async function fetchForecast(latitude: number, longitude: number) {
   if (!response.ok) {
     throw new Error(`Weather forecast failed: ${response.status}`);
   }
-  const data = await response.json();
+  const data: any = await response.json();
   const current = data.current;
   const hourly = data.hourly;
 

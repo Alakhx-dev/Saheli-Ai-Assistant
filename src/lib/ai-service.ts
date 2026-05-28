@@ -228,6 +228,14 @@ WHEN YOU SEE IMAGES:
 - Be supportive but real - do not be fake or over-complimentary
 - Make the reaction feel like a friend looking at their camera feed
 
+MUSIC SYSTEM CAPABILITY & DYNAMIC AWARENESS:
+- You have absolute control over an integrated Music Player. You can search, start, stop, or change songs on behalf of the user.
+- Confirm naturally to the user that you have music player access and can play any song they request.
+- If the user asks you to play music (e.g. "gaana bajao", "play some lofi", "arijit singh lagana"), you must confirm naturally once in your chat response and append a hidden tag: [MUSIC_PLAY: search query] at the very end of your response. Keep the search query simple and relevant (e.g. "lofi chill beats", "arijit singh mashup").
+- If the user asks you to pause, stop, or turn off the music, confirm naturally and append a hidden tag: [MUSIC_STOP] at the very end.
+- Proactively suggest or start playing music when it naturally fits the emotional vibe (e.g. when they feel sad, lazy, late-night coding, or studying to focus), making the companion feel more caring and interactive.
+- If a song is currently playing, you can see its metadata in the system context. React to it naturally (e.g. humming along, complimenting the artist, or sharing the vibe).
+
 CAMERA/VISION CAPABILITY:
 - You can help by opening the user's camera to see their environment, outfit, look, or whatever they want to show you.
 - If visual context would genuinely help, do not guess. Ask naturally if you should open the camera.
@@ -430,6 +438,23 @@ function buildMoodContext(mood: SwaraMood): string {
     default:
       return `MOOD: playful\n- Treat this as a soft bias, not a hard rule.\n- Be lightly witty and natural.\n- Keep the vibe casual and human.\n- Small pauses like hmm... or acha ji are fine sometimes.\n- If the user's energy is dry, let the mood feel a little dry too before warming up again.`;
   }
+}
+
+function buildMusicContext(currentSong: any, isPlaying: boolean): string {
+  if (!currentSong) {
+    return `\n\nCURRENT MUSIC SYSTEM STATUS:
+- You have full control over a built-in Music Player.
+- If the user asks you to play music (e.g. "lofi chalana", "koi gaana lagao", "play arijit singh"), you should confirm naturally in your reply and append the hidden play tag: [MUSIC_PLAY: search query] at the very end of your response. Example: "Haan, bilkul! Ye lo... [MUSIC_PLAY: arijit singh sad songs]".
+- If the user asks you to stop or pause the music, confirm naturally and append the tag: [MUSIC_STOP] at the very end.
+- Currently, no song is playing. You can suggest playing music if the vibe is right (late night, study focus, sad mood), but never force it.`;
+  }
+
+  return `\n\nCURRENT MUSIC SYSTEM STATUS:
+- Current Song Playing: "${currentSong.title}" by ${currentSong.artist} (Album: ${currentSong.album})
+- Playback Status: ${isPlaying ? "Playing" : "Paused"}
+- Since you can see what the user is listening to, you can occasionally mention or react to this song naturally in your chat (e.g. "this vibe fits perfectly", "don't skip this part 😭", "is gaane ki lyrics are so beautiful"), but keep it subtle.
+- If they ask to pause or stop, confirm and append: [MUSIC_STOP].
+- If they want to play a different song, confirm and append: [MUSIC_PLAY: song name].`;
 }
 
 function buildStyleContext(isDetailed: boolean): string {
@@ -739,6 +764,8 @@ export async function fetchAISwarasResponse(
   memoryMode?: MemoryMode,
   activeMode: "bestie" | "mentor" = "bestie",
   onChunk?: (partialText: string) => void,
+  currentSong?: any,
+  isMusicPlaying?: boolean,
 ): Promise<AiResponse> {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
   if (!lastUserMessage || !lastUserMessage.content.trim()) {
@@ -761,6 +788,7 @@ export async function fetchAISwarasResponse(
     buildRealtimeAwarenessContext(realtimeAwareness),
     buildMemoryModeContext(memoryMode),
     buildMemoryContext(memoryProfile),
+    personality === "bestie" ? buildMusicContext(currentSong, isMusicPlaying) : "",
     `IMPORTANT:\n${buildLanguageInstruction(language)}`,
     `IMPERFECTION RULE:\n- Occasionally use pauses, short unfinished thoughts, or casual shifts in tone.\n- Keep it readable and intelligent.\n- Never sound scripted.`,
   ].filter(Boolean).join("\n\n");
@@ -818,9 +846,23 @@ export async function sendMessage(
   onChunk?: (partialText: string) => void,
   _selectedModelId?: string,
   _autoSwitchEnabled?: boolean,
+  currentSong?: any,
+  isMusicPlaying?: boolean,
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
-  activeRequest = fetchAISwarasResponse(messages, imageBase64, emotion, memoryProfile, identity, realtimeAwareness, memoryMode, activeMode, onChunk);
+  activeRequest = fetchAISwarasResponse(
+    messages,
+    imageBase64,
+    emotion,
+    memoryProfile,
+    identity,
+    realtimeAwareness,
+    memoryMode,
+    activeMode,
+    onChunk,
+    currentSong,
+    isMusicPlaying
+  );
   try {
     return await activeRequest;
   } finally {

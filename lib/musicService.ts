@@ -1,0 +1,157 @@
+export interface JioSaavnSong {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  image: string;
+  encryptedMediaUrl: string;
+}
+
+/**
+ * Searches songs on JioSaavn via RapidAPI.
+ * Attempts specific song search first, then global search.
+ */
+export async function searchSongs(query: string, apiKey: string): Promise<JioSaavnSong[]> {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [];
+
+  // We fetch directly from the public JioSaavn API to avoid 404 search errors on JioSaavn unofficial RapidAPI
+  const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&q=${encodeURIComponent(cleanQuery)}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://www.jiosaavn.com/",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`JioSaavn Search failed with status ${response.status}`);
+    }
+
+    const resData: any = await response.json();
+    
+    // Parse the results from different possible response formats
+    const rawSongs = resData?.results || resData?.data?.results || resData?.data || (Array.isArray(resData) ? resData : []);
+    
+    return rawSongs.map((song: any): JioSaavnSong => {
+      // Parse artist names
+      let artistName = "Unknown Artist";
+      if (song.primary_artists) {
+        artistName = song.primary_artists;
+      } else if (song.primaryArtists) {
+        artistName = song.primaryArtists;
+      } else if (song.artists?.primary && Array.isArray(song.artists.primary) && song.artists.primary.length > 0) {
+        artistName = song.artists.primary.map((a: any) => a.name).join(", ");
+      } else if (song.singers) {
+        artistName = song.singers;
+      } else if (song.artist) {
+        artistName = typeof song.artist === "string" ? song.artist : (song.artist.name || "Unknown Artist");
+      }
+
+      // Parse album names
+      let albumName = "Single";
+      if (song.album && typeof song.album === "object") {
+        albumName = song.album.name || "Unknown Album";
+      } else if (song.album) {
+        albumName = song.album;
+      } else if (song.albumName) {
+        albumName = song.albumName;
+      }
+
+      // Parse image URL (usually high-quality is the last link in array or direct link)
+      let imageUrl = "";
+      if (Array.isArray(song.image) && song.image.length > 0) {
+        // Look for 500x500 or just take the last element (highest quality)
+        const highQuality = song.image.find((img: any) => img.quality === "500x500") || song.image[song.image.length - 1];
+        imageUrl = highQuality?.link || highQuality?.url || song.image[0];
+      } else if (song.image) {
+        imageUrl = song.image;
+      } else if (song.albumArt) {
+        imageUrl = song.albumArt;
+      }
+
+      // Improve image quality to 500x500 if it's a string URL
+      if (typeof imageUrl === "string" && imageUrl) {
+        imageUrl = imageUrl.replace("150x150", "500x500").replace("50x50", "500x500");
+      }
+
+      // Parse encrypted media URL
+      const encryptedMediaUrl = song.encrypted_media_url || song.encryptedMediaUrl || "";
+
+      return {
+        id: String(song.id || Math.random().toString(36).substring(2, 9)),
+        title: String(song.song || song.name || song.title || "Unknown Song"),
+        artist: artistName,
+        album: albumName,
+        image: imageUrl || "/placeholder-album.png",
+        encryptedMediaUrl,
+      };
+    }).filter((song: JioSaavnSong) => song.encryptedMediaUrl); // only return songs that have play url
+  } catch (error) {
+    console.error("Error searching songs in JioSaavn:", error);
+    throw error;
+  }
+}
+
+/**
+ * Resolves an encrypted media URL to a playable audio stream URL.
+ */
+export async function resolveSongUrl(encryptedMediaUrl: string, apiKey: string): Promise<string> {
+  if (!apiKey) {
+    throw new Error("Missing RapidAPI Key");
+  }
+
+  if (!encryptedMediaUrl) {
+    throw new Error("Missing encrypted media URL");
+  }
+
+  const host = "jio-saavan-unofficial.p.rapidapi.com";
+  const url = `https://${host}/getsong`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-rapidapi-key": apiKey,
+        "x-rapidapi-host": host,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        encrypted_media_url: encryptedMediaUrl,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`JioSaavn /getsong failed with status ${response.status}`);
+    }
+
+    const data: any = await response.json();
+    
+    // Extract stream url from different possible formats
+    let playableUrl = "";
+    if (data?.results && Array.isArray(data.results)) {
+      const merged: Record<string, string> = {};
+      for (const resObj of data.results) {
+        if (resObj && typeof resObj === "object") {
+          Object.assign(merged, resObj);
+        }
+      }
+      playableUrl = merged["320_kbps"] || merged["160_kbps"] || merged["96_kbps"] || Object.values(merged)[0] || "";
+    } else {
+      playableUrl = data?.media_url || data?.data?.media_url || data?.download_url || data?.stream_url || data?.url || data?.mediaUrl || (typeof data === "string" ? data : "");
+    }
+    
+    if (!playableUrl) {
+      throw new Error("Playable media URL could not be resolved from response");
+    }
+
+    return playableUrl;
+  } catch (error) {
+    console.error("Error resolving JioSaavn song URL:", error);
+    throw error;
+  }
+}

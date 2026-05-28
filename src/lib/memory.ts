@@ -12,8 +12,8 @@ import {
   setDoc,
   updateDoc,
   type DocumentReference,
-  type User,
 } from "firebase/firestore";
+import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import { shouldSaveToMemory } from "@/lib/shouldSaveToMemory";
 

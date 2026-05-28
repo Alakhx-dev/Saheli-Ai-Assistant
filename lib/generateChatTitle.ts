@@ -51,7 +51,7 @@ export async function generateChatTitle(firstMessage: string): Promise<string> {
       return message.slice(0, 30);
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     const title = data?.choices?.[0]?.message?.content?.trim();
     return title || message.slice(0, 30);
   } catch (error) {

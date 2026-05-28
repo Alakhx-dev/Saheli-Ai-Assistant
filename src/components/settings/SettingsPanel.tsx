@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -13,7 +13,7 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys";
+  | "incognito" | "api_keys" | "music";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 const getThemeClasses = (color: string, type: "active" | "inactive" | "text" | "badge" | "hoverBorder" | "textLight" | "switchActive") => {
@@ -127,6 +127,7 @@ interface SettingsPanelProps {
   onAwarenessTimeFormatChange: (mode: "12h" | "24h") => void;
   onAwarenessToggleDayDateVisibility: () => void;
   onAwarenessRefresh: () => void;
+  onOpenMusicSystem?: () => void;
 }
 
 const characterCards = [
@@ -149,6 +150,7 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "personalization" },
   { id: "color", label: "Theme Color", type: "item", parentId: "personalization" },
   { id: "customization", label: "Customization", type: "item", parentId: "personalization" },
+  { id: "music", label: "Music System", type: "item", parentId: null },
 
   { id: "memory", label: "Memory", type: "tab", parentId: null },
   { id: "chat_memory", label: "Chat Memory", type: "item", parentId: "memory" },
@@ -162,10 +164,6 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
 
   { id: "appearance", label: "Personality", type: "tab", parentId: null },
   { id: "bestie_mentor", label: "Interaction Style", type: "item", parentId: "appearance" },
-
-  { id: "voice", label: "Bond Level", type: "tab", parentId: null },
-  { id: "bond_progress", label: "Bond Progress", type: "item", parentId: "voice" },
-  { id: "reset_memory", label: "Reset Core Memory", type: "item", parentId: "voice" },
 
   { id: "about", label: "Privacy", type: "tab", parentId: null },
   { id: "incognito", label: "Incognito Mode", type: "item", parentId: "about" },
@@ -196,9 +194,9 @@ function NavButton({
       whileTap={{ scale: 0.96 }}
       type="button"
       draggable={draggable}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      onDragStart={onDragStart as any}
+      onDragOver={onDragOver as any}
+      onDrop={onDrop as any}
       onClick={onClick}
       className={`settings-nav-button flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition duration-300 backdrop-blur-md ${
         dragOverActive
@@ -278,17 +276,14 @@ export default function SettingsPanel({
   onAwarenessTimeFormatChange,
   onAwarenessToggleDayDateVisibility,
   onAwarenessRefresh,
+  onOpenMusicSystem,
 }: SettingsPanelProps) {
   const t = getLang();
   const accountFileRef = useRef<HTMLInputElement>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [localName, setLocalName] = useState(profileDraftName);
   const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
-  const [activeInnerTab, setActiveInnerTab] = useState<"personality" | "bond" | "privacy">(() => {
-    if (activeSection === "voice") {
-      return "bond";
-    }
-
+  const [activeInnerTab, setActiveInnerTab] = useState<"personality" | "privacy">(() => {
     if (activeSection === "about") {
       return "privacy";
     }
@@ -332,6 +327,22 @@ export default function SettingsPanel({
     return DEFAULT_LAYOUT;
   });
 
+  const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
+    let cleaned = loadedLayout.filter(
+      item => item.id !== "voice" && 
+              item.id !== "bond_progress" && 
+              item.id !== "reset_memory" && 
+              item.parentId !== "voice"
+    );
+    const musicItem = cleaned.find(item => item.id === "music");
+    if (!musicItem) {
+      cleaned.push({ id: "music", label: "Music System", type: "item", parentId: null });
+    } else if (musicItem.parentId === "personalization") {
+      musicItem.parentId = null;
+    }
+    return cleaned;
+  };
+
   // Sync layout from Firestore on open
   useEffect(() => {
     if (!open) return;
@@ -346,27 +357,28 @@ export default function SettingsPanel({
           if (userDoc.exists()) {
             const data = userDoc.data();
             if (data && data.settingsLayout) {
-              setLayout(data.settingsLayout);
+              const migrated = sanitizeAndMigrateLayout(data.settingsLayout as ConfigItem[]);
+              setLayout(migrated);
+              await setDoc(userDocRef, { settingsLayout: migrated }, { merge: true });
             } else {
-              // Doc exists but no layout, sync local if available
               const savedLocal = window.localStorage.getItem("saheli_settings_layout");
+              let initialLayout = DEFAULT_LAYOUT;
               if (savedLocal) {
                 try {
-                  const parsed = JSON.parse(savedLocal);
-                  setLayout(parsed);
-                  await setDoc(userDocRef, { settingsLayout: parsed }, { merge: true });
+                  initialLayout = sanitizeAndMigrateLayout(JSON.parse(savedLocal) as ConfigItem[]);
                 } catch (e) {
                   console.error(e);
                 }
               }
+              setLayout(initialLayout);
+              await setDoc(userDocRef, { settingsLayout: initialLayout }, { merge: true });
             }
           } else {
-            // New user, save default/local layout to DB
             const savedLocal = window.localStorage.getItem("saheli_settings_layout");
             let initialLayout = DEFAULT_LAYOUT;
             if (savedLocal) {
               try {
-                initialLayout = JSON.parse(savedLocal);
+                initialLayout = sanitizeAndMigrateLayout(JSON.parse(savedLocal) as ConfigItem[]);
               } catch (e) {
                 console.error(e);
               }
@@ -380,13 +392,15 @@ export default function SettingsPanel({
           setIsLayoutLoading(false);
         }
       } else {
-        // Guest user, load from localStorage
         const saved = window.localStorage.getItem("saheli_settings_layout");
         if (saved) {
           try {
-            setLayout(JSON.parse(saved));
+            const migrated = sanitizeAndMigrateLayout(JSON.parse(saved) as ConfigItem[]);
+            window.localStorage.setItem("saheli_settings_layout", JSON.stringify(migrated));
+            setLayout(migrated);
           } catch (e) {
             console.error(e);
+            setLayout(DEFAULT_LAYOUT);
           }
         } else {
           setLayout(DEFAULT_LAYOUT);
@@ -414,13 +428,12 @@ export default function SettingsPanel({
   };
 
   const [draggedId, setDraggedId] = useState<SettingsSectionId | null>(null);
-  const [dragOverId, setDragOverId] = useState<SettingsSectionId | null>(null);
+  const [dragOverId, setDragOverId] = useState<SettingsSectionId | "sidebar-column" | null>(null);
   const [expandedTabs, setExpandedTabs] = useState<Record<string, boolean>>({
     personalization: false,
     memory: false,
     account: false,
     appearance: false,
-    voice: false,
     about: false,
   });
 
@@ -656,7 +669,6 @@ export default function SettingsPanel({
       memory: true,
       account: true,
       appearance: true,
-      voice: true,
       about: true,
     });
   };
@@ -667,7 +679,6 @@ export default function SettingsPanel({
       memory: false,
       account: false,
       appearance: false,
-      voice: false,
       about: false,
     });
   };
@@ -1433,28 +1444,6 @@ export default function SettingsPanel({
           </motion.div>
         );
 
-      case "bond_progress":
-        return (
-          <motion.div key="voice-bond-progress" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
-            <SectionShell
-              label="Bond Level"
-              title="Relationship Progress"
-              description="A soft, playful progress view for the companion bond."
-              compact={isCompact}
-            >
-              <div className="space-y-2.5">
-                <div>
-                  <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Level 4: Best Friends Forever</p>
-                  <div className="settings-progress-track mt-2">
-                    <div className="settings-progress-fill settings-progress-fill-animated" style={{ width: "84%" }} />
-                  </div>
-                  <p className="mt-2 text-[12px] text-white/50">840 / 1000 XP to next level</p>
-                </div>
-              </div>
-            </SectionShell>
-          </motion.div>
-        );
-
       case "api_keys":
         return (
           <motion.div key="about-api-keys" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
@@ -1574,15 +1563,63 @@ export default function SettingsPanel({
           </motion.button>
         );
 
-      case "reset_memory":
+      case "music":
         return (
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            type="button"
-            className="settings-glass-button settings-danger-button py-2.5 text-[13px] w-full"
-          >
-            Reset Core Memory
-          </motion.button>
+          <motion.div key="personalization-music" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2, ease: "easeOut" }}>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Music System</h3>
+                <p className="text-[11.5px] text-white/50 leading-relaxed">
+                  Immersive JioSaavn music player integration with dynamic AI companion awareness.
+                </p>
+              </div>
+
+              <div className="settings-glass-card space-y-2 !p-3.5 text-xs text-white/70 leading-relaxed">
+                <p className="font-semibold text-white/95">Features & Interaction:</p>
+                <ul className="list-disc pl-4 space-y-1 mt-1.5">
+                  <li>Search and stream millions of songs directly inside the app.</li>
+                  <li>Unlock beautiful Fullscreen & Mini-player visual modes.</li>
+                  <li>Saheli knows what you are listening to and reacts naturally.</li>
+                  <li>Ask her to play music or vibe with you in chat!</li>
+                </ul>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.97 }}
+                animate={{
+                  boxShadow: [
+                    "0 0 15px rgba(244,63,94,0.35)",
+                    "0 0 25px rgba(168,85,247,0.55)",
+                    "0 0 15px rgba(244,63,94,0.35)"
+                  ]
+                }}
+                transition={{
+                  boxShadow: {
+                    repeat: Infinity,
+                    duration: 3.5,
+                    ease: "easeInOut"
+                  }
+                }}
+                type="button"
+                onClick={() => {
+                  if (onOpenMusicSystem) {
+                    onOpenMusicSystem();
+                  }
+                  onOpenChange(false); // Close Settings Panel
+                }}
+                className="relative overflow-hidden group flex w-full items-center justify-center gap-2.5 rounded-[16px] bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 px-5 py-3.5 text-sm font-extrabold text-white transition-all duration-300 hover:shadow-[0_0_30px_rgba(236,72,153,0.5)]"
+              >
+                {/* Background sliding glow gradient on hover */}
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-purple-600 via-rose-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out" />
+                
+                <span className="relative z-10 flex items-center gap-2.5 tracking-wide">
+                  <Music className="h-4.5 w-4.5 animate-pulse" />
+                  <span>Launch Music Player 🎵</span>
+                </span>
+              </motion.button>
+            </div>
+          </motion.div>
         );
 
       default:
@@ -1596,7 +1633,6 @@ export default function SettingsPanel({
     { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
     { id: "appearance" as const, label: "Personality" },
-    { id: "voice" as const, label: "Bond Level" },
     { id: "about" as const, label: "Privacy" },
   ]), []);
   const personalizationSections = useMemo(() => ([
@@ -1610,11 +1646,9 @@ export default function SettingsPanel({
   const isTab = activeItem?.type === "tab";
   const activeSettingsView = activeSection === "appearance"
     ? "personality"
-    : activeSection === "voice"
-      ? "bond"
-      : activeSection === "about"
-        ? "privacy"
-        : null;
+    : activeSection === "about"
+      ? "privacy"
+      : null;
 
   useEffect(() => {
     if (activeSettingsView) {
@@ -1801,9 +1835,9 @@ export default function SettingsPanel({
                                         key={child.id}
                                         type="button"
                                         draggable
-                                        onDragStart={(e) => handleDragStart(e, child.id)}
-                                        onDragOver={(e) => handleDragOver(e, child.id)}
-                                        onDrop={(e) => handleDrop(e, child.id)}
+                                        onDragStart={(e: any) => handleDragStart(e, child.id)}
+                                        onDragOver={(e: any) => handleDragOver(e, child.id)}
+                                        onDrop={(e: any) => handleDrop(e, child.id)}
                                         onClick={() => {
                                           if (isAction) {
                                             handleItemAction(child.id);

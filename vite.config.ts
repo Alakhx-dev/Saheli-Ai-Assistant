@@ -3,10 +3,12 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import dns from "node:dns";
+import https from "node:https";
 import { componentTagger } from "lovable-tagger";
 import { generateChatTitle } from "./lib/generateChatTitle";
 import { synthesizePollyAudioBase64 } from "./lib/pollyTts";
 import { handleWeatherRequest } from "./lib/weatherService";
+import { searchSongs, resolveSongUrl } from "./lib/musicService";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -191,6 +193,181 @@ export default defineConfig(({ mode }) => {
     },
   };
 
+  const devMusicMiddleware = {
+    name: "dev-music-middleware",
+    configureServer(server: any) {
+      server.middlewares.use("/api/music", (req: any, res: any, next: any) => {
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Headers", "authorization, x-client-info, apikey, content-type");
+          res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+          res.end("ok");
+          return;
+        }
+
+        const apiKey = (env.VITE_RAPIDAPI_KEY || env.RAPIDAPI_KEY || "").trim();
+        if (!apiKey) {
+          res.statusCode = 400;
+          res.setHeader("Content-Type", "application/json");
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.end(JSON.stringify({
+            error: "RapidAPI Key is not configured in .env. Please configure VITE_RAPIDAPI_KEY.",
+            code: "NO_API_KEY",
+          }));
+          return;
+        }
+
+        const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+
+        if (req.method === "POST") {
+          let rawBody = "";
+          req.on("data", (chunk: Buffer) => {
+            rawBody += chunk.toString();
+          });
+          req.on("end", async () => {
+            try {
+              const body = rawBody ? JSON.parse(rawBody) : {};
+              const action = body.action || parsedUrl.searchParams.get("action");
+              const encryptedMediaUrl = body.encryptedMediaUrl || body.encrypted_media_url || parsedUrl.searchParams.get("encryptedMediaUrl");
+
+              if (action === "getsong" || encryptedMediaUrl) {
+                if (!encryptedMediaUrl) {
+                  res.statusCode = 400;
+                  res.setHeader("Access-Control-Allow-Origin", "*");
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify({ error: "Missing encryptedMediaUrl" }));
+                  return;
+                }
+                const playableUrl = await resolveSongUrl(encryptedMediaUrl, apiKey);
+                const proxiedUrl = `/api/music?action=stream&url=${encodeURIComponent(playableUrl)}`;
+                res.statusCode = 200;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ streamUrl: proxiedUrl }));
+                return;
+              }
+
+              res.statusCode = 400;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Unsupported action in POST" }));
+            } catch (error: any) {
+              res.statusCode = 500;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Dev /api/music POST middleware failed", details: String(error?.message || error) }));
+            }
+          });
+          return;
+        }
+
+        if (req.method === "GET") {
+          const action = parsedUrl.searchParams.get("action") || "search";
+          const query = parsedUrl.searchParams.get("query") || parsedUrl.searchParams.get("q") || "";
+
+          if (action === "search") {
+            if (!query.trim()) {
+              res.statusCode = 200;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ songs: [] }));
+              return;
+            }
+            searchSongs(query, apiKey)
+              .then((songs) => {
+                res.statusCode = 200;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ songs }));
+              })
+              .catch((error) => {
+                res.statusCode = 500;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ error: "Search failed", details: error?.message || error }));
+              });
+            return;
+          }
+
+          if (action === "getsong") {
+            const encryptedMediaUrl = parsedUrl.searchParams.get("encryptedMediaUrl") || parsedUrl.searchParams.get("url") || "";
+            if (!encryptedMediaUrl) {
+              res.statusCode = 400;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Missing encryptedMediaUrl" }));
+              return;
+            }
+            resolveSongUrl(encryptedMediaUrl, apiKey)
+              .then((playableUrl) => {
+                const proxiedUrl = `/api/music?action=stream&url=${encodeURIComponent(playableUrl)}`;
+                res.statusCode = 200;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ streamUrl: proxiedUrl }));
+              })
+              .catch((error) => {
+                res.statusCode = 500;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ error: "Resolve failed", details: error?.message || error }));
+              });
+            return;
+          }
+
+          if (action === "stream") {
+            const streamUrl = parsedUrl.searchParams.get("url");
+            if (!streamUrl) {
+              res.statusCode = 400;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.end("Missing stream URL");
+              return;
+            }
+
+            const cdnUrl = new URL(streamUrl);
+            const requestOptions = {
+              hostname: cdnUrl.hostname,
+              path: cdnUrl.pathname + cdnUrl.search,
+              method: "GET",
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.jiosaavn.com/",
+              }
+            };
+
+            const cdnReq = https.request(requestOptions, (cdnRes) => {
+              res.statusCode = cdnRes.statusCode || 200;
+              if (cdnRes.headers["content-type"]) res.setHeader("Content-Type", cdnRes.headers["content-type"]);
+              if (cdnRes.headers["content-length"]) res.setHeader("Content-Length", cdnRes.headers["content-length"]);
+              if (cdnRes.headers["accept-ranges"]) res.setHeader("Accept-Ranges", cdnRes.headers["accept-ranges"]);
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              cdnRes.pipe(res);
+            });
+
+            cdnReq.on("error", (err) => {
+              res.statusCode = 500;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.end("Proxy streaming failed: " + err.message);
+            });
+
+            cdnReq.end();
+            return;
+          }
+
+          res.statusCode = 400;
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: `Unsupported action: ${action}` }));
+          return;
+        }
+
+        res.statusCode = 405;
+        res.end("Method not allowed");
+      });
+    },
+  };
+
   return {
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
     server: {
@@ -201,7 +378,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), mode === "development" && componentTagger(), mode === "development" && devPollyTtsMiddleware, mode === "development" && devTitleMiddleware, mode === "development" && devWeatherMiddleware].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger(), mode === "development" && devPollyTtsMiddleware, mode === "development" && devTitleMiddleware, mode === "development" && devWeatherMiddleware, mode === "development" && devMusicMiddleware].filter(Boolean),
     optimizeDeps: {},
     resolve: {
       alias: {

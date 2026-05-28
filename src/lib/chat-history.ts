@@ -10,8 +10,8 @@ import {
   setDoc,
   updateDoc,
   where,
-  type User,
 } from "firebase/firestore";
+import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import type { ChatMessage } from "@/lib/ai-service";
 

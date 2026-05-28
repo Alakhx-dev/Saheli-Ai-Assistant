@@ -84,6 +84,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const SettingsPanel = lazy(() => import("../components/settings/SettingsPanel"));
+import MusicPlayerPanel from "../components/music/MusicPlayerPanel";
+import FullscreenPlayer from "../components/music/FullscreenPlayer";
+import type { JioSaavnSong } from "../../lib/musicService";
 
 // Intent-based vision trigger — matches natural Hindi/English phrases asking to be looked at.
 const isVisionIntent = (text: string, lastModelMessage?: string) => {
@@ -303,7 +306,7 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys";
+  | "incognito" | "api_keys" | "music";
 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
@@ -312,6 +315,33 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   vaidehi: "/Vaidehi 🌻.png",
   anvika: "/Anvika 🌸.png",
 };
+
+const DEMO_TRACKS: JioSaavnSong[] = [
+  {
+    id: "demo-1",
+    title: "Chill Ambient Journey",
+    artist: "SoundHelix",
+    album: "Demo Collection",
+    image: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=150&auto=format&fit=crop&q=60",
+    encryptedMediaUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
+  },
+  {
+    id: "demo-2",
+    title: "Focus Study Beats",
+    artist: "SoundHelix",
+    album: "Demo Collection",
+    image: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=150&auto=format&fit=crop&q=60",
+    encryptedMediaUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3"
+  },
+  {
+    id: "demo-3",
+    title: "Deep Chillout Session",
+    artist: "SoundHelix",
+    album: "Demo Collection",
+    image: "https://images.unsplash.com/photo-1494232410401-ad00d5433cfa?w=150&auto=format&fit=crop&q=60",
+    encryptedMediaUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3"
+  }
+];
 
 function normalizeCharacterId(value: string | null | undefined) {
   if (!value) return "swara";
@@ -912,6 +942,256 @@ export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
   const [language, setLanguage] = useState<LanguageOption>(() => getStoredLanguage());
+
+  // Music System State
+  const [isMusicPanelOpen, setIsMusicPanelOpen] = useState(false);
+  const [isFullscreenPlayerOpen, setIsFullscreenPlayerOpen] = useState(false);
+  const [isMusicMinimized, setIsMusicMinimized] = useState(false);
+  const [currentMusicSong, setCurrentMusicSong] = useState<JioSaavnSong | null>(null);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicCurrentTime, setMusicCurrentTime] = useState(0);
+  const [musicDuration, setMusicDuration] = useState(0);
+  const [musicVolume, setMusicVolume] = useState(0.8);
+  const [musicQueue, setMusicQueue] = useState<JioSaavnSong[]>([]);
+  const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
+
+  const wasSidebarOpenRef = useRef(false);
+
+  // Automatically hide sidebar when fullscreen music player is open
+  useEffect(() => {
+    if (isFullscreenPlayerOpen) {
+      wasSidebarOpenRef.current = isSidebarOpen;
+      setIsSidebarOpen(false);
+    } else {
+      if (wasSidebarOpenRef.current) {
+        setIsSidebarOpen(true);
+      }
+    }
+  }, [isFullscreenPlayerOpen]);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentSongRef = useRef<JioSaavnSong | null>(null);
+  const isPlayingRef = useRef<boolean>(false);
+  const queueRef = useRef<JioSaavnSong[]>([]);
+  const queueIndexRef = useRef<number>(0);
+
+  // Sync refs to prevent stale closure inside audio event handlers
+  useEffect(() => {
+    currentSongRef.current = currentMusicSong;
+  }, [currentMusicSong]);
+
+  useEffect(() => {
+    isPlayingRef.current = isMusicPlaying;
+  }, [isMusicPlaying]);
+
+  useEffect(() => {
+    queueRef.current = musicQueue;
+  }, [musicQueue]);
+
+  useEffect(() => {
+    queueIndexRef.current = currentQueueIndex;
+  }, [currentQueueIndex]);
+
+  // Audio Playback Handlers & Initializer
+  const playSongAtIndex = async (index: number) => {
+    const queue = queueRef.current;
+    const song = queue[index];
+    if (!song) return;
+    setCurrentQueueIndex(index);
+
+    let playableUrl = song.encryptedMediaUrl;
+    if (!song.id.startsWith("demo-")) {
+      try {
+        const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
+        const data = await response.json();
+        if (data.streamUrl) {
+          playableUrl = data.streamUrl;
+        }
+      } catch (err) {
+        console.error("Error resolving queue song url:", err);
+      }
+    }
+
+    if (audioRef.current) {
+      audioRef.current.src = playableUrl;
+      audioRef.current.load();
+      audioRef.current.play()
+        .then(() => {
+          setIsMusicPlaying(true);
+        })
+        .catch((err) => {
+          console.error("Playback failed for queue track:", err);
+        });
+    }
+    setCurrentMusicSong(song);
+  };
+
+  const handlePlaySong = async (song: JioSaavnSong, addToQueue = true) => {
+    let playableUrl = song.encryptedMediaUrl;
+    if (!song.id.startsWith("demo-")) {
+      try {
+        const response = await fetch(`/api/music?action=getsong&encryptedMediaUrl=${encodeURIComponent(song.encryptedMediaUrl)}`);
+        const data = await response.json();
+        if (data.streamUrl) {
+          playableUrl = data.streamUrl;
+        } else {
+          throw new Error("No streamUrl returned from getsong api");
+        }
+      } catch (err) {
+        console.error("Error resolving song:", err);
+        toast.error("Failed to play live stream. Playing demo fallback.");
+        const fallback = DEMO_TRACKS[Math.floor(Math.random() * DEMO_TRACKS.length)];
+        void handlePlaySong(fallback, addToQueue);
+        return;
+      }
+    }
+
+    if (audioRef.current) {
+      audioRef.current.src = playableUrl;
+      audioRef.current.load();
+      audioRef.current.play()
+        .then(() => {
+          setIsMusicPlaying(true);
+        })
+        .catch((err) => {
+          console.error("Playback failed:", err);
+        });
+    }
+    setCurrentMusicSong(song);
+
+    if (addToQueue) {
+      const existingIdx = queueRef.current.findIndex((s) => s.id === song.id);
+      if (existingIdx !== -1) {
+        setCurrentQueueIndex(existingIdx);
+      } else {
+        const newQueue = [...queueRef.current, song];
+        setMusicQueue(newQueue);
+        setCurrentQueueIndex(newQueue.length - 1);
+      }
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (!audioRef.current || !currentMusicSong) return;
+    if (isMusicPlaying) {
+      audioRef.current.pause();
+      setIsMusicPlaying(false);
+    } else {
+      audioRef.current.play()
+        .then(() => {
+          setIsMusicPlaying(true);
+        })
+        .catch((err) => {
+          console.error("Playback play failed:", err);
+        });
+    }
+  };
+
+  const handleSeek = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setMusicCurrentTime(time);
+    }
+  };
+
+  const handleVolumeChange = (vol: number) => {
+    setMusicVolume(vol);
+    if (audioRef.current) {
+      audioRef.current.volume = vol;
+    }
+  };
+
+  const handleNextTrack = () => {
+    const queue = queueRef.current;
+    if (queue.length <= 1) return;
+    const nextIndex = (queueIndexRef.current + 1) % queue.length;
+    void playSongAtIndex(nextIndex);
+  };
+
+  const handlePrevTrack = () => {
+    const queue = queueRef.current;
+    if (queue.length <= 1) return;
+    const prevIndex = (queueIndexRef.current - 1 + queue.length) % queue.length;
+    void playSongAtIndex(prevIndex);
+  };
+
+  const triggerAiMusicPlay = async (query: string) => {
+    try {
+      const response = await fetch(`/api/music?action=search&query=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      let songToPlay: JioSaavnSong | null = null;
+      if (data.songs && data.songs.length > 0) {
+        songToPlay = data.songs[0];
+      } else {
+        const demoMatch = DEMO_TRACKS.find(t => 
+          t.title.toLowerCase().includes(query.toLowerCase()) || 
+          t.artist.toLowerCase().includes(query.toLowerCase())
+        );
+        if (demoMatch) {
+          songToPlay = demoMatch;
+        }
+      }
+      
+      if (songToPlay) {
+        void handlePlaySong(songToPlay, true);
+        setIsMusicPanelOpen(true);
+        setIsMusicMinimized(true);
+      } else {
+        console.warn("Could not find any song for query:", query);
+      }
+    } catch (err) {
+      console.error("AI music play search failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    const audio = new Audio();
+    audioRef.current = audio;
+    audio.volume = musicVolume;
+
+    const handleTimeUpdate = () => {
+      setMusicCurrentTime(audio.currentTime);
+    };
+
+    const handleDurationChange = () => {
+      setMusicDuration(audio.duration || 0);
+    };
+
+    const handleEnded = () => {
+      const queue = queueRef.current;
+      const index = queueIndexRef.current;
+      if (queue.length > 1) {
+        const nextIndex = (index + 1) % queue.length;
+        void playSongAtIndex(nextIndex);
+      } else {
+        setIsMusicPlaying(false);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        if (audio.src && !audio.paused) {
+          audio.pause();
+          setIsMusicPlaying(false);
+        }
+      }
+    };
+
+    audio.addEventListener("timeupdate", handleTimeUpdate);
+    audio.addEventListener("durationchange", handleDurationChange);
+    audio.addEventListener("ended", handleEnded);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener("timeupdate", handleTimeUpdate);
+      audio.removeEventListener("durationchange", handleDurationChange);
+      audio.removeEventListener("ended", handleEnded);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      audioRef.current = null;
+    };
+  }, []);
   const t = getLang(language);
   const [profileName, setProfileName] = useState(() => user?.displayName?.trim() || (isGuest ? readGuestProfileName() : "User"));
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(() => user?.photoURL || (isGuest ? readGuestProfilePhoto() : ""));
@@ -2363,10 +2643,17 @@ export default function Chat() {
         setIsLoading(false);
       }
 
-      updateStreamingMessage(chatId, partialText);
+      // Intercept and strip music tags from the displayed text
+      let cleanPartial = partialText;
+      const tagIndex = partialText.indexOf("[MUSIC_");
+      if (tagIndex !== -1) {
+        cleanPartial = partialText.substring(0, tagIndex).trim();
+      }
+
+      updateStreamingMessage(chatId, cleanPartial);
 
       if (!didTriggerEarlyTts) {
-        const preview = getStreamingTtsPreview(partialText);
+        const preview = getStreamingTtsPreview(cleanPartial);
         if (preview) {
           didTriggerEarlyTts = true;
           if (!isTtsMuted) {
@@ -2377,7 +2664,7 @@ export default function Chat() {
         }
       }
 
-      onPartialText?.(partialText);
+      onPartialText?.(cleanPartial);
     };
 
     try {
@@ -2391,6 +2678,10 @@ export default function Chat() {
         memoryEnabled ? "enabled" : "disabled",
         activeMode,
         handleChunk,
+        undefined,
+        undefined,
+        currentSongRef.current,
+        isPlayingRef.current
       );
       
       if (response.warning) {
@@ -2436,14 +2727,35 @@ export default function Chat() {
       const responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
       lastModelUsedRef.current = modelUsed;
-      saveFinalMessage(request.chatId, responseText);
+
+      // Extract music tags
+      const playMatch = responseText.match(/\[MUSIC_PLAY:\s*(.*?)\]/);
+      const stopMatch = responseText.includes("[MUSIC_STOP]");
+
+      // Clean tags
+      const cleanResponseText = responseText
+        .replace(/\[MUSIC_PLAY:\s*.*?\]/g, "")
+        .replace(/\[MUSIC_STOP\]/g, "")
+        .trim();
+
+      if (playMatch) {
+        const query = playMatch[1].trim();
+        void triggerAiMusicPlay(query);
+      } else if (stopMatch) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsMusicPlaying(false);
+      }
+
+      saveFinalMessage(request.chatId, cleanResponseText);
       // Note: Image was already saved during capture, no need to save again
       if (imageBase64) {
         console.log("📝 [DEBUG] Mobile vision response completed (image already saved during capture)");
       }
       setIsLoading(false);
-      const nextMood = detectMood(responseText);
-      const aiMessage = { role: "model" as const, content: responseText };
+      const nextMood = detectMood(cleanResponseText);
+      const aiMessage = { role: "model" as const, content: cleanResponseText };
       const nextHistory = [...request.history, aiMessage];
       setMood(nextMood);
 
@@ -2453,7 +2765,7 @@ export default function Chat() {
 
       void persistChatMessage(request.chatId, {
         role: "model",
-        content: responseText,
+        content: cleanResponseText,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error("Failed to persist model reply (mobile vision)", error);
@@ -2718,14 +3030,34 @@ export default function Chat() {
       const modelUsed = responseResult.modelUsed;
       lastModelUsedRef.current = modelUsed;
 
+      // Extract music tags
+      const playMatch = responseText.match(/\[MUSIC_PLAY:\s*(.*?)\]/);
+      const stopMatch = responseText.includes("[MUSIC_STOP]");
+
+      // Clean tags
+      const cleanResponseText = responseText
+        .replace(/\[MUSIC_PLAY:\s*.*?\]/g, "")
+        .replace(/\[MUSIC_STOP\]/g, "")
+        .trim();
+
+      if (playMatch) {
+        const query = playMatch[1].trim();
+        void triggerAiMusicPlay(query);
+      } else if (stopMatch) {
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsMusicPlaying(false);
+      }
+
       // Note: Image was already saved immediately after capture, no need to save again
       if (base64Image) {
         console.log("📝 [DEBUG] AI response completed for vision request (image already saved during capture)");
       }
-      saveFinalMessage(chatId, responseText);
+      saveFinalMessage(chatId, cleanResponseText);
       setIsLoading(false);
-      const nextMood = detectMood(responseText);
-      const aiMessage = { role: "model" as const, content: responseText };
+      const nextMood = detectMood(cleanResponseText);
+      const aiMessage = { role: "model" as const, content: cleanResponseText };
       const finalHistory = [...nextHistory, aiMessage];
       setMood(nextMood);
 
@@ -2735,7 +3067,7 @@ export default function Chat() {
 
       void persistChatMessage(chatId, {
         role: "model",
-        content: responseText,
+        content: cleanResponseText,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error("Failed to persist model reply", error);
@@ -3897,6 +4229,10 @@ export default function Chat() {
               onAwarenessTimeFormatChange={setTimeFormat}
               onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
               onAwarenessRefresh={() => void refreshLocationAndWeather()}
+              onOpenMusicSystem={() => {
+                setIsMusicPanelOpen(true);
+                setIsMusicMinimized(false);
+              }}
             />
           ) : null}
         </Suspense>
@@ -3916,6 +4252,50 @@ export default function Chat() {
             setSettingsPanelOpen(true);
             setActiveSettingsSection("memory");
           }}
+        />
+
+        <MusicPlayerPanel
+          isOpen={isMusicPanelOpen}
+          onClose={() => {
+            setIsMusicPanelOpen(false);
+            if (audioRef.current) {
+              audioRef.current.pause();
+            }
+            setIsMusicPlaying(false);
+          }}
+          currentSong={currentMusicSong}
+          isPlaying={isMusicPlaying}
+          currentTime={musicCurrentTime}
+          duration={musicDuration}
+          volume={musicVolume}
+          onPlayPause={handlePlayPause}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onPlaySong={(song) => void handlePlaySong(song, true)}
+          onNextTrack={handleNextTrack}
+          onPrevTrack={handlePrevTrack}
+          onToggleFullscreen={() => setIsFullscreenPlayerOpen(true)}
+          musicQueue={musicQueue}
+          currentQueueIndex={currentQueueIndex}
+          isMinimized={isMusicMinimized}
+          onMinimizeToggle={setIsMusicMinimized}
+        />
+
+        <FullscreenPlayer
+          isOpen={isFullscreenPlayerOpen}
+          onClose={() => setIsFullscreenPlayerOpen(false)}
+          currentSong={currentMusicSong}
+          isPlaying={isMusicPlaying}
+          currentTime={musicCurrentTime}
+          duration={musicDuration}
+          volume={musicVolume}
+          onPlayPause={handlePlayPause}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
+          onNextTrack={handleNextTrack}
+          onPrevTrack={handlePrevTrack}
+          musicQueue={musicQueue}
+          currentQueueIndex={currentQueueIndex}
         />
 
         <Profile
