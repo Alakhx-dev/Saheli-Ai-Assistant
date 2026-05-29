@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
@@ -322,9 +322,12 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   meher: "/Meher 🤎.png",
   nyra: "/Nyra 💙.png",
   suryanshi: "/Suryanshi 🌻.png",
+  aelina: "/Aelina 💎.png",
+  eshira: "/Eshira 🌸.png",
+  velora: "/Velora 🖤.png",
 };
 
-const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi"];
+const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
 
 const CHARACTER_LABELS: Record<string, string> = {
   swara: "Swara 🦋",
@@ -337,6 +340,9 @@ const CHARACTER_LABELS: Record<string, string> = {
   meher: "Meher 🤎",
   nyra: "Nyra 💙",
   suryanshi: "Suryanshi 🌻",
+  aelina: "Aelina 💎",
+  eshira: "Eshira 🌸",
+  velora: "Velora 🖤",
 };
 
 const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number }> = {
@@ -349,7 +355,10 @@ const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number
   lavanya: { scale: 0.96, yOffset: 10 },
   meher: { scale: 0.97, yOffset: 8 },
   nyra: { scale: 0.98, yOffset: 6 },
-  suryanshi: { scale: 1.0, yOffset: 0 },
+  suryanshi: { scale: 0.98, yOffset: 6 },
+  aelina: { scale: 0.98, yOffset: 6 },
+  eshira: { scale: 0.94, yOffset: 13 },
+  velora: { scale: 0.92, yOffset: 14 },
 };
 
 const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; text: string; buttonBg: string; buttonText: string }> = {
@@ -441,6 +450,7 @@ const DEMO_TRACKS: JioSaavnSong[] = [
 function normalizeCharacterId(value: string | null | undefined) {
   if (!value) return "swara";
   if (value === "butterfly") return "swara";
+  if (value.startsWith("char_")) return value;
   return CHARACTER_IMAGE_MAP[value] ? value : "swara";
 }
 
@@ -455,7 +465,8 @@ function getStoredCharacterId(themeColor: string) {
   // Default characters per theme color
   if (themeColor === "yellow") return "kiyara";
   if (themeColor === "peach") return "anvitha";
-  if (themeColor === "pink") return "aarunya";
+  if (themeColor === "pink") return "eshira";
+  if (themeColor === "blue") return "aelina";
   if (themeColor === "orchid") return "lavanya";
   if (themeColor === "gemini") return "nyra";
   if (themeColor === "beige") return "aaradhya";
@@ -1491,6 +1502,37 @@ export default function Chat() {
   const [livePreviewCharacter, setLivePreviewCharacter] = useState<string>("");
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
+  const [uploadedCharacters, setUploadedCharacters] = useState<{ id: string; url: string; timestamp: number }[]>([]);
+
+  // Listen to custom characters and active character from Firestore user document
+  useEffect(() => {
+    if (!user) {
+      setUploadedCharacters([]);
+      return;
+    }
+
+    const userDocRef = doc(db, "users", user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.uploadedCharacters) {
+          setUploadedCharacters(data.uploadedCharacters || []);
+        }
+        if (data.activeCharacter) {
+          setSelectedCharacter(data.activeCharacter);
+        }
+      }
+    }, (error) => {
+      console.error("Error listening to user document: ", error);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const selectedCharacterRef = useRef(selectedCharacter);
+  useEffect(() => {
+    selectedCharacterRef.current = selectedCharacter;
+  }, [selectedCharacter]);
 
   const [activeTheme, setActiveTheme] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1518,12 +1560,15 @@ export default function Chat() {
   }, [activeTheme, isThemeTransitioning]);
 
   useEffect(() => {
-    setSelectedCharacter(getStoredCharacterId(activeTheme));
-  }, [activeTheme]);
+    const isCustomActive = uploadedCharacters.some((c) => c.id === selectedCharacterRef.current);
+    if (!isCustomActive) {
+      setSelectedCharacter(getStoredCharacterId(activeTheme));
+    }
+  }, [activeTheme, uploadedCharacters]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const migrationKey = "saheli_character_defaults_migrated_v3";
+      const migrationKey = "saheli_character_defaults_migrated_v4";
       if (!window.localStorage.getItem(migrationKey)) {
         const themes = ["pink", "yellow", "blue", "orchid", "peach", "beige", "maroon", "gemini"];
         themes.forEach((t) => {
@@ -1551,18 +1596,19 @@ export default function Chat() {
 
   const handleSlideCharacter = useCallback((direction: "next" | "prev") => {
     setLivePreviewCharacter((prev) => {
-      const currentIndex = CHARACTER_KEYS.indexOf(prev);
+      const keys = [...CHARACTER_KEYS, ...uploadedCharacters.map((c) => c.id)];
+      const currentIndex = keys.indexOf(prev);
       if (currentIndex === -1) return "swara";
       
       let nextIndex;
       if (direction === "next") {
-        nextIndex = (currentIndex + 1) % CHARACTER_KEYS.length;
+        nextIndex = (currentIndex + 1) % keys.length;
       } else {
-        nextIndex = (currentIndex - 1 + CHARACTER_KEYS.length) % CHARACTER_KEYS.length;
+        nextIndex = (currentIndex - 1 + keys.length) % keys.length;
       }
-      return CHARACTER_KEYS[nextIndex];
+      return keys[nextIndex];
     });
-  }, []);
+  }, [uploadedCharacters]);
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -3576,9 +3622,17 @@ export default function Chat() {
   const handleCharacterChange = useCallback((character: string) => {
     const nextChar = normalizeCharacterId(character);
     setSelectedCharacter(nextChar);
-    window.localStorage.setItem(`saheli_selected_character_${activeTheme}`, nextChar);
-    window.localStorage.setItem(SELECTED_CHARACTER_STORAGE_KEY, nextChar);
-  }, [activeTheme]);
+    if (CHARACTER_IMAGE_MAP[nextChar]) {
+      window.localStorage.setItem(`saheli_selected_character_${activeTheme}`, nextChar);
+      window.localStorage.setItem(SELECTED_CHARACTER_STORAGE_KEY, nextChar);
+    }
+    if (user) {
+      const userDocRef = doc(db, "users", user.uid);
+      setDoc(userDocRef, { activeCharacter: nextChar }, { merge: true }).catch((err) => {
+        console.error("Error saving active character in Firestore:", err);
+      });
+    }
+  }, [activeTheme, user]);
   const handleToggleWeatherPanel = useCallback(() => {
     setWeatherPanelOpen((previous) => !previous);
   }, []);
@@ -4040,11 +4094,14 @@ export default function Chat() {
                     <AnimatePresence mode="wait">
                       {(() => {
                         const activeMascotKey = isLiveSelectorActive ? livePreviewCharacter : selectedCharacter;
-                        const mascotOverride = CHARACTER_STYLE_OVERRIDES[activeMascotKey] || { scale: 1.0, yOffset: 0 };
+                        const customChar = uploadedCharacters.find((c) => c.id === activeMascotKey);
+                        const mascotSrc = customChar ? customChar.url : (CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png");
+                        const mascotOverride = CHARACTER_STYLE_OVERRIDES[activeMascotKey] || 
+                          (activeMascotKey.startsWith("char_") ? { scale: 0.98, yOffset: 6 } : { scale: 1.0, yOffset: 0 });
                         return (
                           <motion.img
                             key={activeMascotKey}
-                            src={CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png"}
+                            src={mascotSrc}
                             alt={`${activeMascotKey} Mascot`}
                             initial={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
                             animate={{ opacity: 1, scale: mascotOverride.scale, y: -4 + mascotOverride.yOffset }}
@@ -4423,6 +4480,7 @@ export default function Chat() {
               onToggleTtsMute={handleToggleTtsMute}
               selectedCharacter={selectedCharacter}
               onCharacterChange={handleCharacterChange}
+              uploadedCharacters={uploadedCharacters}
               activeMode={currentMode}
               onModeChange={setCurrentMode}
               profileDraftName={profileDraftName}
@@ -4641,7 +4699,7 @@ export default function Chat() {
                       <div className="flex flex-col min-w-[125px] select-none text-left">
                         <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Previewing</span>
                         <span className={`text-sm font-bold transition-colors duration-300 ${themeStyles.text}`}>
-                          {CHARACTER_LABELS[livePreviewCharacter] || livePreviewCharacter}
+                          {CHARACTER_LABELS[livePreviewCharacter] || "Custom companion"}
                         </span>
                       </div>
                       <div className="h-7 w-[1px] bg-white/10" />
@@ -4650,7 +4708,7 @@ export default function Chat() {
                         onClick={() => {
                           handleCharacterChange(livePreviewCharacter);
                           setIsLiveSelectorActive(false);
-                          toast.success(`Character updated to ${CHARACTER_LABELS[livePreviewCharacter] || livePreviewCharacter}!`);
+                          toast.success(`Character updated to ${CHARACTER_LABELS[livePreviewCharacter] || "Custom companion"}!`);
                         }}
                         className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
                       >

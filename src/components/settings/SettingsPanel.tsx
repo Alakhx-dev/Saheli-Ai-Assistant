@@ -6,8 +6,9 @@ import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
-import { auth, db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db, storage } from "@/lib/firebase";
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
@@ -107,6 +108,7 @@ interface SettingsPanelProps {
   onToggleTtsMute: () => void;
   selectedCharacter: string;
   onCharacterChange: (character: string) => void;
+  uploadedCharacters: { id: string; url: string; timestamp: number }[];
   activeMode: "bestie" | "mentor";
   onModeChange: (mode: "bestie" | "mentor") => void;
   // Inline account editing props
@@ -141,6 +143,9 @@ const characterCards = [
   { id: "meher", label: "Meher 🤎", image: "/Meher 🤎.png", accent: "from-amber-600/20 to-stone-500/10" },
   { id: "nyra", label: "Nyra 💙", image: "/Nyra 💙.png", accent: "from-blue-400/20 to-cyan-400/10" },
   { id: "suryanshi", label: "Suryanshi 🌻", image: "/Suryanshi 🌻.png", accent: "from-yellow-500/20 to-amber-500/10" },
+  { id: "aelina", label: "Aelina 💎", image: "/Aelina 💎.png", accent: "from-cyan-400/20 to-blue-400/10" },
+  { id: "eshira", label: "Eshira 🌸", image: "/Eshira 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
+  { id: "velora", label: "Velora 🖤", image: "/Velora 🖤.png", accent: "from-slate-500/20 to-zinc-600/10" },
 ];
 
 export interface ConfigItem {
@@ -297,6 +302,7 @@ export default function SettingsPanel({
   onToggleTtsMute,
   selectedCharacter,
   onCharacterChange,
+  uploadedCharacters,
   activeMode,
   onModeChange,
   profileDraftName,
@@ -319,6 +325,115 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const t = getLang();
   const accountFileRef = useRef<HTMLInputElement>(null);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showApplyConfirmChar, setShowApplyConfirmChar] = useState<{ id: string; url: string; timestamp: number } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getThemeDefaultCharacter = (themeColor: string) => {
+    if (themeColor === "yellow") return "kiyara";
+    if (themeColor === "peach") return "anvitha";
+    if (themeColor === "pink") return "eshira";
+    if (themeColor === "blue") return "aelina";
+    if (themeColor === "orchid") return "lavanya";
+    if (themeColor === "gemini") return "nyra";
+    if (themeColor === "beige") return "aaradhya";
+    if (themeColor === "maroon") return "aarohi";
+    return "swara";
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      toast.error("Please sign in to upload characters. ✨");
+      return;
+    }
+
+    if (uploadedCharacters.length >= 5) {
+      toast.error("You can only upload up to 5 custom characters. 🤨");
+      return;
+    }
+
+    const allowedTypes = ["image/png", "image/webp", "image/jpeg", "image/jpg"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please upload a PNG, WEBP, or JPG image.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const imageId = `char_${Date.now()}`;
+      const storagePath = `custom-characters/${currentUser.uid}/${imageId}`;
+      const imageRef = storageRef(storage, storagePath);
+
+      const snapshot = await uploadBytes(imageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      const userDocRef = doc(db, "users", currentUser.uid);
+      const newChar = {
+        id: imageId,
+        url: downloadURL,
+        timestamp: Date.now(),
+      };
+
+      await setDoc(
+        userDocRef,
+        {
+          uploadedCharacters: arrayUnion(newChar),
+        },
+        { merge: true }
+      );
+
+      toast.success("Character uploaded successfully! 🎉");
+    } catch (error) {
+      console.error("Custom character upload failed:", error);
+      toast.error("Failed to upload character. Please try again.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleDeleteCharacter = async (charToDelete: { id: string; url: string; timestamp: number }) => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      // 1. Remove database entry
+      const userDocRef = doc(db, "users", currentUser.uid);
+      await setDoc(
+        userDocRef,
+        {
+          uploadedCharacters: arrayRemove(charToDelete),
+        },
+        { merge: true }
+      );
+
+      // 2. Remove from storage
+      const storagePath = `custom-characters/${currentUser.uid}/${charToDelete.id}`;
+      const imageRef = storageRef(storage, storagePath);
+      await deleteObject(imageRef).catch((err) => {
+        console.warn("Storage object deletion failed/ignored:", err);
+      });
+
+      // 3. Fallback if active
+      if (selectedCharacter === charToDelete.id) {
+        const defaultChar = getThemeDefaultCharacter(selectedColor);
+        onCharacterChange(defaultChar);
+        toast.info("Active companion deleted. Switched back to default. 🦋");
+      } else {
+        toast.success("Character deleted successfully.");
+      }
+    } catch (error) {
+      console.error("Custom character deletion failed:", error);
+      toast.error("Failed to delete character.");
+    }
+  };
   const [isEditingName, setIsEditingName] = useState(false);
   const [localName, setLocalName] = useState(profileDraftName);
   const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
@@ -1107,13 +1222,363 @@ export default function SettingsPanel({
     );
   };
 
+  const renderApplyConfirmationModal = () => {
+    if (!showApplyConfirmChar) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-pink-600 hover:bg-pink-700 text-white hover:shadow-[0_0_15px_rgba(255,105,180,0.4)]" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-yellow-500 hover:bg-yellow-600 text-black hover:shadow-[0_0_15px_rgba(255,215,0,0.4)]" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-cyan-500 hover:bg-cyan-600 text-black hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-[0_0_15px_rgba(213,0,249,0.4)]" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-orange-500 hover:bg-orange-600 text-white hover:shadow-[0_0_15px_rgba(255,158,125,0.4)]" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-amber-600 hover:bg-amber-700 text-white hover:shadow-[0_0_15px_rgba(212,184,149,0.3)]" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-600 hover:bg-red-700 text-white hover:shadow-[0_0_15px_rgba(208,28,63,0.4)]" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-blue-600 hover:bg-blue-700 text-white hover:shadow-[0_0_15px_rgba(74,137,255,0.4)]" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[210] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 20, stiffness: 400 }}
+          style={{
+            background: "rgba(20, 10, 25, 0.75)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[380px] rounded-[24px] p-6 flex flex-col gap-4 text-center text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          <div className={`mx-auto w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center ${activeModalTheme.text}`}>
+            <Upload className="h-6 w-6" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-bold tracking-tight text-white">Apply in Chat Page?</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Do you want to set this custom character as your active chat companion?
+            </p>
+          </div>
+
+          {/* Mini preview */}
+          <div className="h-28 w-24 mx-auto flex items-center justify-center bg-black/20 rounded-xl overflow-hidden p-2">
+            <img src={showApplyConfirmChar.url} alt="Companion Preview" className="h-full max-w-full object-contain filter drop-shadow-md" />
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowApplyConfirmChar(null)}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onCharacterChange(showApplyConfirmChar.id);
+                setShowApplyConfirmChar(null);
+                setIsUploadModalOpen(false);
+                toast.success("Character applied successfully! 🎉");
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
+            >
+              Apply
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderUploadModal = () => {
+    const themeStyles = {
+      pink: {
+        border: "border-pink-500/20",
+        glow: "rgba(255, 105, 180, 0.08)",
+        activeGlow: "rgba(255, 105, 180, 0.15)",
+        activeBorder: "border-pink-500/40",
+        activeBg: "bg-pink-500/5",
+        text: "text-pink-400",
+        textLight: "text-pink-300",
+        progressBorder: "border-pink-500",
+        uploadBg: "bg-pink-500/10",
+        uploadBorder: "border-pink-500/20",
+        uploadText: "text-pink-400"
+      },
+      yellow: {
+        border: "border-yellow-400/25",
+        glow: "rgba(255, 215, 0, 0.08)",
+        activeGlow: "rgba(255, 215, 0, 0.15)",
+        activeBorder: "border-yellow-400/40",
+        activeBg: "bg-yellow-500/5",
+        text: "text-yellow-400",
+        textLight: "text-yellow-300",
+        progressBorder: "border-yellow-500",
+        uploadBg: "bg-yellow-500/10",
+        uploadBorder: "border-yellow-500/20",
+        uploadText: "text-yellow-400"
+      },
+      blue: {
+        border: "border-cyan-400/25",
+        glow: "rgba(0, 229, 255, 0.08)",
+        activeGlow: "rgba(0, 229, 255, 0.15)",
+        activeBorder: "border-cyan-400/40",
+        activeBg: "bg-cyan-500/5",
+        text: "text-cyan-400",
+        textLight: "text-cyan-300",
+        progressBorder: "border-cyan-500",
+        uploadBg: "bg-cyan-500/10",
+        uploadBorder: "border-cyan-500/20",
+        uploadText: "text-cyan-400"
+      },
+      orchid: {
+        border: "border-purple-500/25",
+        glow: "rgba(213, 0, 249, 0.08)",
+        activeGlow: "rgba(213, 0, 249, 0.15)",
+        activeBorder: "border-purple-500/40",
+        activeBg: "bg-purple-500/5",
+        text: "text-purple-400",
+        textLight: "text-purple-300",
+        progressBorder: "border-purple-500",
+        uploadBg: "bg-purple-500/10",
+        uploadBorder: "border-purple-500/20",
+        uploadText: "text-purple-400"
+      },
+      peach: {
+        border: "border-orange-400/25",
+        glow: "rgba(255, 158, 125, 0.08)",
+        activeGlow: "rgba(255, 158, 125, 0.15)",
+        activeBorder: "border-orange-400/40",
+        activeBg: "bg-orange-500/5",
+        text: "text-orange-400",
+        textLight: "text-orange-300",
+        progressBorder: "border-orange-500",
+        uploadBg: "bg-orange-500/10",
+        uploadBorder: "border-orange-500/20",
+        uploadText: "text-orange-400"
+      },
+      beige: {
+        border: "border-amber-400/20",
+        glow: "rgba(212, 184, 149, 0.08)",
+        activeGlow: "rgba(212, 184, 149, 0.15)",
+        activeBorder: "border-amber-400/35",
+        activeBg: "bg-amber-500/5",
+        text: "text-amber-300",
+        textLight: "text-amber-250",
+        progressBorder: "border-amber-500",
+        uploadBg: "bg-amber-500/10",
+        uploadBorder: "border-amber-500/20",
+        uploadText: "text-amber-300"
+      },
+      maroon: {
+        border: "border-red-500/25",
+        glow: "rgba(208, 28, 63, 0.08)",
+        activeGlow: "rgba(208, 28, 63, 0.15)",
+        activeBorder: "border-red-500/40",
+        activeBg: "bg-red-500/5",
+        text: "text-red-400",
+        textLight: "text-red-300",
+        progressBorder: "border-red-500",
+        uploadBg: "bg-red-500/10",
+        uploadBorder: "border-red-500/20",
+        uploadText: "text-red-400"
+      },
+      gemini: {
+        border: "border-blue-500/25",
+        glow: "rgba(74, 137, 255, 0.08)",
+        activeGlow: "rgba(74, 137, 255, 0.15)",
+        activeBorder: "border-blue-500/40",
+        activeBg: "bg-blue-500/5",
+        text: "text-blue-400",
+        textLight: "text-blue-300",
+        progressBorder: "border-blue-500",
+        uploadBg: "bg-blue-500/10",
+        uploadBorder: "border-blue-500/20",
+        uploadText: "text-blue-400"
+      }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 25, stiffness: 350 }}
+          style={{
+            background: "rgba(15, 10, 20, 0.6)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[450px] rounded-[28px] p-6 flex flex-col gap-4 text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+            <h3 className={`text-lg font-bold tracking-tight flex items-center gap-2 ${activeModalTheme.text}`}>
+              <Upload className="h-5 w-5" />
+              Upload Custom Character
+            </h3>
+            <button
+              type="button"
+              onClick={() => setIsUploadModalOpen(false)}
+              className="p-1 rounded-full hover:bg-white/10 transition text-white/70 hover:text-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Warning Message */}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200/90 leading-relaxed">
+            <p className="font-semibold mb-1 flex items-center gap-1.5">
+              ⚠️ Recommendation
+            </p>
+            For best cinematic results, upload a transparent/background-removed PNG image.
+          </div>
+
+          {/* Upload Button */}
+          <div className="flex flex-col items-center justify-center p-6 border border-dashed border-white/15 rounded-2xl bg-white/[0.01] hover:bg-white/[0.03] transition relative group">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageUpload}
+              accept="image/png, image/webp, image/jpeg, image/jpg"
+              className="hidden"
+            />
+            {isUploading ? (
+              <div className="flex flex-col items-center gap-2 py-2">
+                <div className={`h-8 w-8 rounded-full border-2 border-t-transparent animate-spin ${activeModalTheme.progressBorder}`} />
+                <span className={`text-xs font-semibold animate-pulse ${activeModalTheme.textLight}`}>Uploading to Storage...</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!auth.currentUser) {
+                    toast.error("Please sign in to upload characters. ✨");
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                disabled={uploadedCharacters.length >= 5}
+                className={`flex flex-col items-center gap-2.5 cursor-pointer w-full h-full py-2 ${uploadedCharacters.length >= 5 ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <div className={`w-12 h-12 rounded-full border flex items-center justify-center group-hover:scale-105 transition-transform ${activeModalTheme.uploadBg} ${activeModalTheme.uploadBorder} ${activeModalTheme.uploadText}`}>
+                  <Upload className="h-6 w-6" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-white">Select character image file</p>
+                  <p className="text-[11px] text-white/40 mt-1">PNG, WEBP, or JPG (Max 5 images)</p>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Uploaded Characters Gallery */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-white/40 mb-2.5">
+              Your Custom Characters ({uploadedCharacters.length}/5)
+            </h4>
+            
+            {uploadedCharacters.length === 0 ? (
+              <div className="flex-1 min-h-[140px] flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl p-4 text-center text-xs text-white/30 italic">
+                No custom characters uploaded yet.
+              </div>
+            ) : (
+              <div className="flex-1 max-h-[220px] overflow-y-auto pr-1 no-scrollbar grid grid-cols-2 gap-3.5">
+                {uploadedCharacters.map((char) => {
+                  const isActive = selectedCharacter === char.id;
+                  return (
+                    <div
+                      key={char.id}
+                      style={
+                        isActive 
+                          ? { 
+                              borderColor: activeModalTheme.text.replace("text-", "rgba(var(--color-"), 
+                              boxShadow: `0 0 12px ${activeModalTheme.activeGlow}` 
+                            } 
+                          : {}
+                      }
+                      className={`relative flex flex-col rounded-2xl border p-2 bg-[#12091f]/40 transition-all duration-300 ${
+                        isActive 
+                          ? `${activeModalTheme.activeBorder} ${activeModalTheme.activeBg}` 
+                          : "border-white/5 hover:border-white/10"
+                      }`}
+                    >
+                      {/* Delete button (absolute top-right) */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCharacter(char)}
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition z-10"
+                        title="Delete Character"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Image Preview */}
+                      <div className="h-24 w-full flex items-center justify-center bg-black/25 rounded-xl overflow-hidden mb-2 relative group">
+                        <img
+                          src={char.url}
+                          alt="Custom Character Preview"
+                          className="h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] transition group-hover:scale-105"
+                        />
+                      </div>
+
+                      {/* Apply button */}
+                      <button
+                        type="button"
+                        onClick={() => setShowApplyConfirmChar(char)}
+                        disabled={isActive}
+                        className={`w-full py-1.5 rounded-lg text-[10px] font-bold border transition ${
+                          isActive 
+                            ? `${activeModalTheme.uploadBorder} ${activeModalTheme.activeBg} ${activeModalTheme.textLight} font-semibold` 
+                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white cursor-pointer"
+                        }`}
+                      >
+                        {isActive ? "Active companion" : "Apply in Chat"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
   const renderItemContent = (itemId: string, isCompact: boolean) => {
     switch (itemId) {
-      case "character":
+      case "character": {
+        const uploadBtnThemeClasses = {
+          pink: "hover:border-pink-500/35 text-pink-300",
+          yellow: "hover:border-yellow-400/40 text-yellow-300",
+          blue: "hover:border-cyan-400/40 text-cyan-300",
+          orchid: "hover:border-purple-500/40 text-purple-300",
+          peach: "hover:border-orange-400/40 text-orange-300",
+          beige: "hover:border-amber-400/30 text-amber-200",
+          maroon: "hover:border-red-500/40 text-red-300",
+          gemini: "hover:border-blue-500/40 text-blue-300",
+        };
+        const activeBtnTheme = uploadBtnThemeClasses[selectedColor as keyof typeof uploadBtnThemeClasses] || uploadBtnThemeClasses.pink;
+
         return (
           <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <SectionShell label="Personalization" title="Character Selection" description="Select your AI companion." compact={isCompact}>
-              <div className="flex flex-col gap-2 max-h-[230px] overflow-y-auto pr-1 custom-scrollbar">
+              <div className="flex flex-col gap-2 max-h-[175px] overflow-y-auto pr-1 no-scrollbar">
                 {characterCards.map((card) => {
                   const active = selectedCharacter === card.id;
                   return (
@@ -1134,20 +1599,52 @@ export default function SettingsPanel({
                     </motion.button>
                   );
                 })}
+                {(() => {
+                  const isCustomActive = !characterCards.some((card) => card.id === selectedCharacter);
+                  const activeCustomChar = isCustomActive ? uploadedCharacters.find((c) => c.id === selectedCharacter) : null;
+                  if (!activeCustomChar) return null;
+                  return (
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      key={activeCustomChar.id}
+                      type="button"
+                      className={`settings-character-btn flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${getThemeClasses(selectedColor, "active")}`}
+                    >
+                      <span className="font-medium flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-pink-400 animate-pulse" />
+                        Custom companion ✨
+                      </span>
+                      <span className={`settings-character-badge inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getThemeClasses(selectedColor, "badge")}`}>
+                        <Check className={`h-3 w-3 ${getThemeClasses(selectedColor, "textLight")}`} />
+                        Active
+                      </span>
+                    </motion.button>
+                  );
+                })()}
               </div>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                type="button"
+                onClick={() => setIsUploadModalOpen(true)}
+                className={`mt-3 w-full py-2.5 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${activeBtnTheme}`}
+              >
+                <Upload className="h-4 w-4" />
+                Upload Your Character
+              </motion.button>
               <button
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent("saheli_open_live_character_selector"));
                   onOpenChange(false);
                 }}
-                className={`mt-3.5 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
+                className={`mt-2 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
               >
-                Show in Chat Page
+                View in Chat Page
               </button>
             </SectionShell>
           </motion.div>
         );
+      }
 
       case "color":
         return (
@@ -1971,6 +2468,8 @@ export default function SettingsPanel({
             <AnimatePresence>
               {isWidescreenCustomizerOpen && renderWidescreenCustomizer()}
               {showConfirmRestore && renderConfirmationModal()}
+              {isUploadModalOpen && renderUploadModal()}
+              {showApplyConfirmChar && renderApplyConfirmationModal()}
             </AnimatePresence>,
             document.body
           )}
