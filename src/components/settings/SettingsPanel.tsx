@@ -9,6 +9,7 @@ import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
 import { auth, db, storage } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { characterDb } from "../../utils/indexedDb";
 
 type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
@@ -108,7 +109,8 @@ interface SettingsPanelProps {
   onToggleTtsMute: () => void;
   selectedCharacter: string;
   onCharacterChange: (character: string) => void;
-  uploadedCharacters: { id: string; url: string; timestamp: number }[];
+  uploadedCharacters: { id: string; name: string; url: string; timestamp: number }[];
+  onRefreshUploadedCharacters?: () => void;
   activeMode: "bestie" | "mentor";
   onModeChange: (mode: "bestie" | "mentor") => void;
   // Inline account editing props
@@ -303,6 +305,7 @@ export default function SettingsPanel({
   selectedCharacter,
   onCharacterChange,
   uploadedCharacters,
+  onRefreshUploadedCharacters,
   activeMode,
   onModeChange,
   profileDraftName,
@@ -327,19 +330,53 @@ export default function SettingsPanel({
   const accountFileRef = useRef<HTMLInputElement>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [showApplyConfirmChar, setShowApplyConfirmChar] = useState<{ id: string; url: string; timestamp: number } | null>(null);
+  const [showApplyConfirmChar, setShowApplyConfirmChar] = useState<{ id: string; name: string; url: string; timestamp: number } | null>(null);
+  const [showNameInputModal, setShowNameInputModal] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [customCharacterNameInput, setCustomCharacterNameInput] = useState("");
+  const [showDeleteConfirmChar, setShowDeleteConfirmChar] = useState<{ id: string; name: string; url: string; timestamp: number } | null>(null);
+  const [isCustomizeModalOpen, setIsCustomizeModalOpen] = useState(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<string[]>([]);
+  const [showMultiDeleteConfirm, setShowMultiDeleteConfirm] = useState(false);
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+  const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_deleted_default_characters");
+        return saved ? JSON.parse(saved) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getThemeDefaultCharacter = (themeColor: string) => {
-    if (themeColor === "yellow") return "kiyara";
-    if (themeColor === "peach") return "anvitha";
-    if (themeColor === "pink") return "eshira";
-    if (themeColor === "blue") return "aelina";
-    if (themeColor === "orchid") return "lavanya";
-    if (themeColor === "gemini") return "nyra";
-    if (themeColor === "beige") return "aaradhya";
-    if (themeColor === "maroon") return "aarohi";
-    return "swara";
+    let ideal = "swara";
+    if (themeColor === "yellow") ideal = "kiyara";
+    else if (themeColor === "peach") ideal = "anvitha";
+    else if (themeColor === "pink") ideal = "eshira";
+    else if (themeColor === "blue") ideal = "aelina";
+    else if (themeColor === "orchid") ideal = "lavanya";
+    else if (themeColor === "gemini") ideal = "nyra";
+    else if (themeColor === "beige") ideal = "aaradhya";
+    else if (themeColor === "maroon") ideal = "aarohi";
+    
+    if (!deletedDefaultIds.includes(ideal)) return ideal;
+    const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
+    return order.find(id => !deletedDefaultIds.includes(id)) || "swara";
+  };
+
+  const compressAndResizeImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // Read directly to preserve 100% original quality with zero compression or resizing
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = (err) => reject(err);
+    });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -363,40 +400,9 @@ export default function SettingsPanel({
       return;
     }
 
-    setIsUploading(true);
-    try {
-      const imageId = `char_${Date.now()}`;
-      const storagePath = `custom-characters/${currentUser.uid}/${imageId}`;
-      const imageRef = storageRef(storage, storagePath);
-
-      const snapshot = await uploadBytes(imageRef, file);
-      const downloadURL = await getDownloadURL(snapshot.ref);
-
-      const userDocRef = doc(db, "users", currentUser.uid);
-      const newChar = {
-        id: imageId,
-        url: downloadURL,
-        timestamp: Date.now(),
-      };
-
-      await setDoc(
-        userDocRef,
-        {
-          uploadedCharacters: arrayUnion(newChar),
-        },
-        { merge: true }
-      );
-
-      toast.success("Character uploaded successfully! 🎉");
-    } catch (error) {
-      console.error("Custom character upload failed:", error);
-      toast.error("Failed to upload character. Please try again.");
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
+    setPendingUploadFile(file);
+    setCustomCharacterNameInput("");
+    setShowNameInputModal(true);
   };
 
   const handleDeleteCharacter = async (charToDelete: { id: string; url: string; timestamp: number }) => {
@@ -404,7 +410,10 @@ export default function SettingsPanel({
     if (!currentUser) return;
 
     try {
-      // 1. Remove database entry
+      // 1. Remove from local IndexedDB
+      await characterDb.deleteCustomCharacter(currentUser.uid, charToDelete.id);
+
+      // 2. Try to clean up from Firestore if it exists in the old user document structure
       const userDocRef = doc(db, "users", currentUser.uid);
       await setDoc(
         userDocRef,
@@ -412,16 +421,25 @@ export default function SettingsPanel({
           uploadedCharacters: arrayRemove(charToDelete),
         },
         { merge: true }
-      );
-
-      // 2. Remove from storage
-      const storagePath = `custom-characters/${currentUser.uid}/${charToDelete.id}`;
-      const imageRef = storageRef(storage, storagePath);
-      await deleteObject(imageRef).catch((err) => {
-        console.warn("Storage object deletion failed/ignored:", err);
+      ).catch((err) => {
+        console.warn("Firestore clean up ignored or failed:", err);
       });
 
-      // 3. Fallback if active
+      // 3. Remove from storage only if it is a storage URL
+      if (charToDelete.url.startsWith("http")) {
+        const storagePath = `custom-characters/${currentUser.uid}/${charToDelete.id}`;
+        const imageRef = storageRef(storage, storagePath);
+        await deleteObject(imageRef).catch((err) => {
+          console.warn("Storage object deletion failed/ignored:", err);
+        });
+      }
+
+      // 4. Trigger state refresh in Chat.tsx
+      if (onRefreshUploadedCharacters) {
+        onRefreshUploadedCharacters();
+      }
+
+      // 5. Fallback if active
       if (selectedCharacter === charToDelete.id) {
         const defaultChar = getThemeDefaultCharacter(selectedColor);
         onCharacterChange(defaultChar);
@@ -434,6 +452,78 @@ export default function SettingsPanel({
       toast.error("Failed to delete character.");
     }
   };
+
+  const handleDeleteSelected = async () => {
+    if (selectedForDelete.length === 0) return;
+
+    const currentUser = auth.currentUser;
+    const newDeletedDefaults = [...deletedDefaultIds];
+
+    for (const charId of selectedForDelete) {
+      const isCustom = charId.startsWith("char_");
+      if (isCustom) {
+        if (currentUser) {
+          await characterDb.deleteCustomCharacter(currentUser.uid, charId);
+        }
+      } else {
+        if (!newDeletedDefaults.includes(charId)) {
+          newDeletedDefaults.push(charId);
+        }
+      }
+
+      // If active, fallback
+      if (selectedCharacter === charId) {
+        const defaultChar = getThemeDefaultCharacter(selectedColor);
+        onCharacterChange(defaultChar);
+      }
+    }
+
+    // Save hidden defaults
+    window.localStorage.setItem("saheli_deleted_default_characters", JSON.stringify(newDeletedDefaults));
+    setDeletedDefaultIds(newDeletedDefaults);
+
+    // Refresh custom characters
+    if (onRefreshUploadedCharacters) {
+      onRefreshUploadedCharacters();
+    }
+
+    // Reset selection state
+    setSelectedForDelete([]);
+    setIsSelectMode(false);
+    toast.success("Selected companion(s) deleted successfully.");
+  };
+
+  const handleRestoreDefaults = async () => {
+    const currentUser = auth.currentUser;
+    
+    // 1. Clear deleted defaults
+    window.localStorage.removeItem("saheli_deleted_default_characters");
+    setDeletedDefaultIds([]);
+
+    // 2. Delete all custom characters from IndexedDB
+    if (currentUser) {
+      try {
+        const customs = await characterDb.getCustomCharacters(currentUser.uid);
+        for (const char of customs) {
+          await characterDb.deleteCustomCharacter(currentUser.uid, char.id);
+        }
+      } catch (err) {
+        console.error("Error clearing custom characters during restore:", err);
+      }
+    }
+
+    // 3. Fallback active character to theme default
+    const defaultChar = getThemeDefaultCharacter(selectedColor);
+    onCharacterChange(defaultChar);
+
+    // 4. Refresh parent
+    if (onRefreshUploadedCharacters) {
+      onRefreshUploadedCharacters();
+    }
+
+    toast.success("Default companions restored successfully! 🦋");
+  };
+
   const [isEditingName, setIsEditingName] = useState(false);
   const [localName, setLocalName] = useState(profileDraftName);
   const [isPhotoMenuOpen, setIsPhotoMenuOpen] = useState(false);
@@ -963,6 +1053,7 @@ export default function SettingsPanel({
 
     return (
       <motion.div
+        key="widescreen-customizer-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1164,6 +1255,7 @@ export default function SettingsPanel({
   const renderConfirmationModal = () => {
     return (
       <motion.div
+        key="confirm-restore-modal-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1238,6 +1330,7 @@ export default function SettingsPanel({
 
     return (
       <motion.div
+        key="apply-confirm-modal-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1260,7 +1353,7 @@ export default function SettingsPanel({
           </div>
 
           <div className="space-y-1">
-            <h3 className="text-base font-bold tracking-tight text-white">Apply in Chat Page?</h3>
+            <h3 className="text-base font-bold tracking-tight text-white">Apply {showApplyConfirmChar.name || "companion"}?</h3>
             <p className="text-xs text-white/55 leading-relaxed">
               Do you want to set this custom character as your active chat companion?
             </p>
@@ -1285,11 +1378,562 @@ export default function SettingsPanel({
                 onCharacterChange(showApplyConfirmChar.id);
                 setShowApplyConfirmChar(null);
                 setIsUploadModalOpen(false);
-                toast.success("Character applied successfully! 🎉");
+                toast.success(`Character "${showApplyConfirmChar.name || "Custom companion"}" applied successfully! 🎉`);
               }}
               className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
             >
               Apply
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderNameInputModal = () => {
+    if (!pendingUploadFile) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-pink-600 hover:bg-pink-700 text-white hover:shadow-[0_0_15px_rgba(255,105,180,0.4)]", focusRing: "focus:ring-pink-500/50" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-yellow-500 hover:bg-yellow-600 text-black hover:shadow-[0_0_15px_rgba(255,215,0,0.4)]", focusRing: "focus:ring-yellow-500/50" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-cyan-500 hover:bg-cyan-600 text-black hover:shadow-[0_0_15px_rgba(0,229,255,0.4)]", focusRing: "focus:ring-cyan-500/50" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-purple-600 hover:bg-purple-700 text-white hover:shadow-[0_0_15px_rgba(213,0,249,0.4)]", focusRing: "focus:ring-purple-500/50" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-orange-500 hover:bg-orange-600 text-white hover:shadow-[0_0_15px_rgba(255,158,125,0.4)]", focusRing: "focus:ring-orange-500/50" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-amber-600 hover:bg-amber-700 text-white hover:shadow-[0_0_15px_rgba(212,184,149,0.3)]", focusRing: "focus:ring-amber-500/50" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-600 hover:bg-red-700 text-white hover:shadow-[0_0_15px_rgba(208,28,63,0.4)]", focusRing: "focus:ring-red-500/50" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-blue-600 hover:bg-blue-700 text-white hover:shadow-[0_0_15px_rgba(74,137,255,0.4)]", focusRing: "focus:ring-blue-500/50" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    const handleSave = async () => {
+      const finalName = customCharacterNameInput.trim() || "Custom Companion";
+      setIsUploading(true);
+      setShowNameInputModal(false);
+      try {
+        const imageId = `char_${Date.now()}`;
+        const base64Data = await compressAndResizeImage(pendingUploadFile);
+        await characterDb.saveCustomCharacter(auth.currentUser!.uid, imageId, finalName, base64Data, Date.now());
+        if (onRefreshUploadedCharacters) {
+          onRefreshUploadedCharacters();
+        }
+        toast.success(`Character "${finalName}" uploaded successfully! 🎉`);
+      } catch (error) {
+        console.error("Custom character upload failed:", error);
+        toast.error("Failed to upload character. Please try again.");
+      } finally {
+        setIsUploading(false);
+        setPendingUploadFile(null);
+        setCustomCharacterNameInput("");
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+
+    return (
+      <motion.div
+        key="custom-name-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[220] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 20, stiffness: 400 }}
+          style={{
+            background: "rgba(20, 10, 25, 0.75)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[380px] rounded-[24px] p-6 flex flex-col gap-4 text-center text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          <div className={`mx-auto w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center ${activeModalTheme.text}`}>
+            <Pencil className="h-5 w-5" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-bold tracking-tight text-white">Name Your Companion</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Give a name to your new custom character.
+            </p>
+          </div>
+
+          <div className="relative mt-2">
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. Swara, Nyra, Sweety..."
+              value={customCharacterNameInput}
+              onChange={(e) => setCustomCharacterNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleSave();
+                }
+              }}
+              className={`w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-white/20 focus:ring-2 transition duration-200 ${activeModalTheme.focusRing}`}
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowNameInputModal(false);
+                setPendingUploadFile(null);
+                setCustomCharacterNameInput("");
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                }
+                toast.info("Upload cancelled.");
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
+            >
+              Upload
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderDeleteConfirmationModal = () => {
+    if (!showDeleteConfirmChar) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    const handleDelete = async () => {
+      const char = showDeleteConfirmChar;
+      setShowDeleteConfirmChar(null);
+      await handleDeleteCharacter(char);
+    };
+
+    return (
+      <motion.div
+        key="delete-confirm-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[230] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 20, stiffness: 400 }}
+          style={{
+            background: "rgba(20, 10, 25, 0.75)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[380px] rounded-[24px] p-6 flex flex-col gap-4 text-center text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          <div className="mx-auto w-12 h-12 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center text-red-300">
+            <Trash2 className="h-5 w-5" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-bold tracking-tight text-white">Delete Image?</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Do you really want to delete this image?
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDeleteConfirmChar(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer"
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
+            >
+              Yes
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderCustomizeModal = () => {
+    if (!isCustomizeModalOpen) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-pink-600 hover:bg-pink-700 text-white", activeBorder: "border-pink-500/40", activeBg: "bg-pink-500/10", activeGlow: "rgba(255, 105, 180, 0.15)" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-yellow-500 hover:bg-yellow-600 text-black", activeBorder: "border-yellow-400/40", activeBg: "bg-yellow-500/10", activeGlow: "rgba(255, 215, 0, 0.15)" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-cyan-500 hover:bg-cyan-600 text-black", activeBorder: "border-cyan-400/40", activeBg: "bg-cyan-500/10", activeGlow: "rgba(0, 229, 255, 0.15)" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-purple-600 hover:bg-purple-700 text-white", activeBorder: "border-purple-500/40", activeBg: "bg-purple-500/10", activeGlow: "rgba(213, 0, 249, 0.15)" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-orange-500 hover:bg-orange-600 text-white", activeBorder: "border-orange-400/40", activeBg: "bg-orange-500/10", activeGlow: "rgba(255, 158, 125, 0.15)" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-amber-600 hover:bg-amber-700 text-white", activeBorder: "border-amber-400/35", activeBg: "bg-amber-500/10", activeGlow: "rgba(212, 184, 149, 0.15)" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-600 hover:bg-red-700 text-white", activeBorder: "border-red-500/40", activeBg: "bg-red-500/10", activeGlow: "rgba(208, 28, 63, 0.15)" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-blue-600 hover:bg-blue-700 text-white", activeBorder: "border-blue-500/40", activeBg: "bg-blue-500/10", activeGlow: "rgba(74, 137, 255, 0.15)" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    const allChars = [
+      ...characterCards.filter(c => !deletedDefaultIds.includes(c.id)).map(c => ({ id: c.id, name: c.label, url: c.image, isCustom: false })),
+      ...uploadedCharacters.map(c => ({ id: c.id, name: c.name, url: c.url, isCustom: true }))
+    ];
+
+    const toggleSelect = (id: string) => {
+      if (!isSelectMode) return;
+      setSelectedForDelete(prev => 
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      );
+    };
+
+    const handleSelectAll = () => {
+      if (!isSelectMode) return;
+      if (selectedForDelete.length === allChars.length) {
+        setSelectedForDelete([]);
+      } else {
+        setSelectedForDelete(allChars.map(c => c.id));
+      }
+    };
+
+    return (
+      <motion.div
+        key="customize-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 25, stiffness: 350 }}
+          style={{
+            background: "rgba(15, 10, 20, 0.6)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[450px] rounded-[28px] p-6 flex flex-col gap-4 text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+            <h3 className={`text-base font-bold tracking-tight flex items-center gap-2 ${activeModalTheme.text}`}>
+              <Pencil className="h-5 w-5" />
+              Customize Companions
+            </h3>
+            <div className="flex items-center gap-2">
+              {isSelectMode && (
+                <button
+                  type="button"
+                  disabled={selectedForDelete.length === 0}
+                  onClick={() => setShowMultiDeleteConfirm(true)}
+                  className={`p-1.5 rounded-lg transition-all duration-300 ${
+                    selectedForDelete.length > 0 
+                      ? "text-red-400 hover:text-red-300 hover:scale-110 active:scale-95 cursor-pointer" 
+                      : "text-white/20 opacity-40 cursor-not-allowed"
+                  }`}
+                  title="Delete Selected"
+                >
+                  <Trash2 className="h-4.5 w-4.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCustomizeModalOpen(false);
+                  setIsSelectMode(false);
+                  setSelectedForDelete([]);
+                }}
+                className="p-1 rounded-full hover:bg-white/10 transition text-white/70 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Subtitle / Tip */}
+          <p className="text-[11px] text-white/50 leading-relaxed text-left shrink-0">
+            {isSelectMode 
+              ? "Select companions to delete. Default companions will be hidden; custom uploads will be permanently removed."
+              : "View all standard and custom companions. Click Delete below to enter select-to-remove mode."
+            }
+          </p>
+
+          {/* Character Grid */}
+          <div className="flex-1 max-h-[260px] overflow-y-auto pr-1 no-scrollbar grid grid-cols-3 gap-3">
+            {allChars.map((char) => {
+              const isSelected = selectedForDelete.includes(char.id);
+              return (
+                <div
+                  key={char.id}
+                  onClick={() => toggleSelect(char.id)}
+                  style={
+                    isSelected 
+                      ? { 
+                          borderColor: activeModalTheme.text.replace("text-", "rgba(var(--color-"), 
+                          boxShadow: `0 0 10px ${activeModalTheme.activeGlow}` 
+                        } 
+                      : {}
+                  }
+                  className={`relative flex flex-col rounded-2xl border p-2 bg-[#12091f]/40 transition-all duration-300 cursor-pointer select-none ${
+                    isSelected 
+                      ? `${activeModalTheme.activeBorder} ${activeModalTheme.activeBg}` 
+                      : "border-white/5 hover:border-white/10"
+                  }`}
+                >
+                  {/* Select Bubble */}
+                  {isSelectMode && (
+                    <div className="absolute top-1.5 right-1.5 z-10">
+                      <div className={`h-4.5 w-4.5 rounded-full border flex items-center justify-center transition-all ${
+                        isSelected 
+                          ? `${activeModalTheme.activeBorder} ${activeModalTheme.buttonBg.split(" ")[0]} text-white` 
+                          : "border-white/20 bg-black/40"
+                      }`}>
+                        {isSelected && <Check className="h-3 w-3" />}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Character Image */}
+                  <div className="h-16 w-full flex items-center justify-center bg-black/20 rounded-lg overflow-hidden mb-1">
+                    <img src={char.url} alt={char.name} className="h-full max-w-full object-contain filter drop-shadow-md" />
+                  </div>
+
+                  {/* Name */}
+                  <p className="text-[10px] font-semibold text-center text-white/90 truncate px-0.5 mt-0.5">
+                    {char.name}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Bottom Buttons */}
+          <div className="flex flex-col gap-2 pt-3 border-t border-white/5 shrink-0">
+            {!isSelectMode ? (
+              <>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  type="button"
+                  onClick={() => {
+                    setIsCustomizeModalOpen(false);
+                    setIsUploadModalOpen(true);
+                  }}
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${activeModalTheme.text}`}
+                >
+                  <Upload className="h-4 w-4" />
+                  Upload Your Character
+                </motion.button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSelectMode(true);
+                    }}
+                    className="py-2 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRestoreConfirm(true);
+                    }}
+                    className="py-2 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    Restore
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectMode(false);
+                    setSelectedForDelete([]);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-red-500/25 bg-red-500/5 text-red-300 hover:bg-red-500/10 transition duration-200 cursor-pointer text-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!isSelectMode}
+                  onClick={handleSelectAll}
+                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold border transition duration-200 text-center ${
+                    isSelectMode 
+                      ? `${activeModalTheme.border} ${activeModalTheme.activeBg} ${activeModalTheme.text} cursor-pointer hover:bg-white/5` 
+                      : "border-white/5 text-white/30 cursor-not-allowed opacity-40"
+                  }`}
+                >
+                  Select All
+                </button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderMultiDeleteConfirmationModal = () => {
+    if (!showMultiDeleteConfirm) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(213,0,249,0.4)]" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(255,158,125,0.4)]" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(212,184,149,0.3)]" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(208,28,63,0.4)]" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-red-500 hover:bg-red-600 text-white hover:shadow-[0_0_15px_rgba(74,137,255,0.4)]" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    const handleDelete = async () => {
+      setShowMultiDeleteConfirm(false);
+      setIsCustomizeModalOpen(false);
+      await handleDeleteSelected();
+    };
+
+    return (
+      <motion.div
+        key="multi-delete-confirm-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[230] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 20, stiffness: 400 }}
+          style={{
+            background: "rgba(20, 10, 25, 0.75)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[380px] rounded-[24px] p-6 flex flex-col gap-4 text-center text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          <div className="mx-auto w-12 h-12 rounded-full bg-red-500/15 border border-red-500/25 flex items-center justify-center text-red-300">
+            <Trash2 className="h-5 w-5" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-bold tracking-tight text-white">Delete Image?</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Do you really want to delete this image?
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowMultiDeleteConfirm(false);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer"
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleDelete()}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
+            >
+              Yes
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  };
+
+  const renderRestoreConfirmationModal = () => {
+    if (!showRestoreConfirm) return null;
+    const themeStyles = {
+      pink: { border: "border-pink-500/20", glow: "rgba(255, 105, 180, 0.08)", text: "text-pink-400", buttonBg: "bg-pink-600 hover:bg-pink-700 text-white" },
+      yellow: { border: "border-yellow-400/25", glow: "rgba(255, 215, 0, 0.08)", text: "text-yellow-400", buttonBg: "bg-yellow-500 hover:bg-yellow-600 text-black" },
+      blue: { border: "border-cyan-400/25", glow: "rgba(0, 229, 255, 0.08)", text: "text-cyan-400", buttonBg: "bg-cyan-500 hover:bg-cyan-600 text-black" },
+      orchid: { border: "border-purple-500/25", glow: "rgba(213, 0, 249, 0.08)", text: "text-purple-400", buttonBg: "bg-purple-600 hover:bg-purple-700 text-white" },
+      peach: { border: "border-orange-400/25", glow: "rgba(255, 158, 125, 0.08)", text: "text-orange-400", buttonBg: "bg-orange-500 hover:bg-orange-600 text-white" },
+      beige: { border: "border-amber-400/20", glow: "rgba(212, 184, 149, 0.08)", text: "text-amber-300", buttonBg: "bg-amber-600 hover:bg-amber-700 text-white" },
+      maroon: { border: "border-red-500/25", glow: "rgba(208, 28, 63, 0.08)", text: "text-red-400", buttonBg: "bg-red-600 hover:bg-red-700 text-white" },
+      gemini: { border: "border-blue-500/25", glow: "rgba(74, 137, 255, 0.08)", text: "text-blue-400", buttonBg: "bg-blue-600 hover:bg-blue-700 text-white" }
+    };
+    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
+
+    return (
+      <motion.div
+        key="restore-confirm-modal-overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[240] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
+      >
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          transition={{ type: "spring", damping: 20, stiffness: 400 }}
+          style={{
+            background: "rgba(20, 10, 25, 0.75)",
+            backdropFilter: "blur(30px)",
+            boxShadow: `0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px ${activeModalTheme.glow}`
+          }}
+          className={`w-full max-w-[380px] rounded-[24px] p-6 flex flex-col gap-4 text-center text-white relative overflow-hidden border ${activeModalTheme.border}`}
+        >
+          <div className={`mx-auto w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center ${activeModalTheme.text}`}>
+            <Undo2 className="h-6 w-6" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-bold tracking-tight text-white">Restore Companions?</h3>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Do you want to restore the default character list? This will remove all your custom uploaded characters and bring back all hidden default characters.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowRestoreConfirm(false)}
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowRestoreConfirm(false);
+                void handleRestoreDefaults();
+              }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
+            >
+              Restore
             </button>
           </div>
         </motion.div>
@@ -1406,8 +2050,45 @@ export default function SettingsPanel({
     };
     const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
 
+    const capsuleBtnClasses = {
+      pink: {
+        inactive: "border-pink-500/25 bg-pink-500/10 text-pink-300 hover:bg-pink-500/20 hover:border-pink-500/45",
+        active: "border-pink-500/35 bg-pink-500/25 text-pink-200"
+      },
+      yellow: {
+        inactive: "border-yellow-500/25 bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20 hover:border-yellow-500/45",
+        active: "border-yellow-500/35 bg-yellow-500/25 text-yellow-200"
+      },
+      blue: {
+        inactive: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/45",
+        active: "border-cyan-500/35 bg-cyan-500/25 text-cyan-200"
+      },
+      orchid: {
+        inactive: "border-purple-500/25 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/45",
+        active: "border-purple-500/35 bg-purple-500/25 text-purple-200"
+      },
+      peach: {
+        inactive: "border-orange-500/25 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 hover:border-orange-500/45",
+        active: "border-orange-500/35 bg-orange-500/25 text-orange-200"
+      },
+      beige: {
+        inactive: "border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 hover:border-amber-500/40",
+        active: "border-amber-500/30 bg-amber-500/25 text-amber-250"
+      },
+      maroon: {
+        inactive: "border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/45",
+        active: "border-red-500/35 bg-red-500/25 text-red-200"
+      },
+      gemini: {
+        inactive: "border-blue-500/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-500/45",
+        active: "border-blue-500/35 bg-blue-500/25 text-blue-200"
+      }
+    };
+    const activeCapsuleTheme = capsuleBtnClasses[selectedColor as keyof typeof capsuleBtnClasses] || capsuleBtnClasses.pink;
+
     return (
       <motion.div
+        key="upload-character-modal-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -1520,7 +2201,7 @@ export default function SettingsPanel({
                       {/* Delete button (absolute top-right) */}
                       <button
                         type="button"
-                        onClick={() => handleDeleteCharacter(char)}
+                        onClick={() => setShowDeleteConfirmChar(char)}
                         className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition z-10"
                         title="Delete Character"
                       >
@@ -1536,15 +2217,20 @@ export default function SettingsPanel({
                         />
                       </div>
 
+                      {/* Character Name */}
+                      <p className="text-[11px] font-semibold text-center text-white/90 mb-2 truncate px-1">
+                        {char.name || "Custom Companion"}
+                      </p>
+
                       {/* Apply button */}
                       <button
                         type="button"
                         onClick={() => setShowApplyConfirmChar(char)}
                         disabled={isActive}
-                        className={`w-full py-1.5 rounded-lg text-[10px] font-bold border transition ${
+                        className={`w-full py-1.5 rounded-full text-[10px] font-bold border transition ${
                           isActive 
-                            ? `${activeModalTheme.uploadBorder} ${activeModalTheme.activeBg} ${activeModalTheme.textLight} font-semibold` 
-                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white cursor-pointer"
+                            ? `${activeCapsuleTheme.active} font-semibold cursor-default` 
+                            : `${activeCapsuleTheme.inactive} cursor-pointer`
                         }`}
                       >
                         {isActive ? "Active companion" : "Apply in Chat"}
@@ -1579,7 +2265,7 @@ export default function SettingsPanel({
           <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <SectionShell label="Personalization" title="Character Selection" description="Select your AI companion." compact={isCompact}>
               <div className="flex flex-col gap-2 max-h-[175px] overflow-y-auto pr-1 no-scrollbar">
-                {characterCards.map((card) => {
+                {characterCards.filter((card) => !deletedDefaultIds.includes(card.id)).map((card) => {
                   const active = selectedCharacter === card.id;
                   return (
                     <motion.button
@@ -1610,9 +2296,9 @@ export default function SettingsPanel({
                       type="button"
                       className={`settings-character-btn flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${getThemeClasses(selectedColor, "active")}`}
                     >
-                      <span className="font-medium flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-pink-400 animate-pulse" />
-                        Custom companion ✨
+                      <span className="font-medium flex items-center gap-2 truncate max-w-[150px]">
+                        <span className="h-2 w-2 rounded-full bg-pink-400 animate-pulse shrink-0" />
+                        <span className="truncate">{activeCustomChar.name || "Custom companion"}</span>
                       </span>
                       <span className={`settings-character-badge inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getThemeClasses(selectedColor, "badge")}`}>
                         <Check className={`h-3 w-3 ${getThemeClasses(selectedColor, "textLight")}`} />
@@ -1625,19 +2311,20 @@ export default function SettingsPanel({
               <motion.button
                 whileTap={{ scale: 0.97 }}
                 type="button"
-                onClick={() => setIsUploadModalOpen(true)}
+                onClick={() => setIsCustomizeModalOpen(true)}
                 className={`mt-3 w-full py-2.5 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${activeBtnTheme}`}
               >
-                <Upload className="h-4 w-4" />
-                Upload Your Character
+                <Pencil className="h-4 w-4" />
+                Customize Character
               </motion.button>
+
               <button
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent("saheli_open_live_character_selector"));
                   onOpenChange(false);
                 }}
-                className={`mt-2 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
+                className={`mt-2.5 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
               >
                 View in Chat Page
               </button>
@@ -2470,6 +3157,11 @@ export default function SettingsPanel({
               {showConfirmRestore && renderConfirmationModal()}
               {isUploadModalOpen && renderUploadModal()}
               {showApplyConfirmChar && renderApplyConfirmationModal()}
+              {showNameInputModal && pendingUploadFile && renderNameInputModal()}
+              {showDeleteConfirmChar && renderDeleteConfirmationModal()}
+              {isCustomizeModalOpen && renderCustomizeModal()}
+              {showMultiDeleteConfirm && renderMultiDeleteConfirmationModal()}
+              {showRestoreConfirm && renderRestoreConfirmationModal()}
             </AnimatePresence>,
             document.body
           )}

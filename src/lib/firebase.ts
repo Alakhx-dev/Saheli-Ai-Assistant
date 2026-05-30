@@ -7,7 +7,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDIOeFUPlfs3F5g_avQvglGxMKCKG43BwQ",
   authDomain: "saheli-3f68f.firebaseapp.com",
   projectId: "saheli-3f68f",
-  storageBucket: "saheli-3f68f.firebasestorage.app",
+  storageBucket: "saheli-3f68f.appspot.com",
   messagingSenderId: "400858981809",
   appId: "1:400858981809:web:5515939fe6d14130e14990",
   measurementId: "G-4DFJ6D94BS"

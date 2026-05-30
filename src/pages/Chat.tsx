@@ -89,6 +89,7 @@ const SettingsPanel = lazy(() => import("../components/settings/SettingsPanel"))
 import MusicPlayerPanel from "../components/music/MusicPlayerPanel";
 import FullscreenPlayer from "../components/music/FullscreenPlayer";
 import type { JioSaavnSong } from "../../lib/musicService";
+import { characterDb } from "../utils/indexedDb";
 
 // Intent-based vision trigger — matches natural Hindi/English phrases asking to be looked at.
 const isVisionIntent = (text: string, lastModelMessage?: string) => {
@@ -458,20 +459,32 @@ function getStoredCharacterId(themeColor: string) {
   if (typeof window === "undefined") {
     return "swara";
   }
+  let deletedIds: string[] = [];
+  try {
+    const savedDeleted = window.localStorage.getItem("saheli_deleted_default_characters");
+    if (savedDeleted) deletedIds = JSON.parse(savedDeleted);
+  } catch (e) {
+    console.error(e);
+  }
+
   const saved = window.localStorage.getItem(`saheli_selected_character_${themeColor}`);
-  if (saved) {
+  if (saved && !deletedIds.includes(normalizeCharacterId(saved))) {
     return normalizeCharacterId(saved);
   }
   // Default characters per theme color
-  if (themeColor === "yellow") return "kiyara";
-  if (themeColor === "peach") return "anvitha";
-  if (themeColor === "pink") return "eshira";
-  if (themeColor === "blue") return "aelina";
-  if (themeColor === "orchid") return "lavanya";
-  if (themeColor === "gemini") return "nyra";
-  if (themeColor === "beige") return "aaradhya";
-  if (themeColor === "maroon") return "aarohi";
-  return "swara";
+  let ideal = "swara";
+  if (themeColor === "yellow") ideal = "kiyara";
+  else if (themeColor === "peach") ideal = "anvitha";
+  else if (themeColor === "pink") ideal = "eshira";
+  else if (themeColor === "blue") ideal = "aelina";
+  else if (themeColor === "orchid") ideal = "lavanya";
+  else if (themeColor === "gemini") ideal = "nyra";
+  else if (themeColor === "beige") ideal = "aaradhya";
+  else if (themeColor === "maroon") ideal = "aarohi";
+
+  if (!deletedIds.includes(ideal)) return ideal;
+  const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
+  return order.find(id => !deletedIds.includes(id)) || "swara";
 }
 
 function getStoredThemeColor() {
@@ -1502,22 +1515,53 @@ export default function Chat() {
   const [livePreviewCharacter, setLivePreviewCharacter] = useState<string>("");
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
-  const [uploadedCharacters, setUploadedCharacters] = useState<{ id: string; url: string; timestamp: number }[]>([]);
+  const [uploadedCharacters, setUploadedCharacters] = useState<{ id: string; name: string; url: string; timestamp: number }[]>([]);
+  const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_deleted_default_characters");
+        return saved ? JSON.parse(saved) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
 
-  // Listen to custom characters and active character from Firestore user document
+  const refreshCustomCharacters = useCallback(async () => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_deleted_default_characters");
+        setDeletedDefaultIds(saved ? JSON.parse(saved) : []);
+      } catch (err) {
+        console.error("Error loading deleted default characters:", err);
+      }
+    }
+    if (!user) {
+      setUploadedCharacters([]);
+      return;
+    }
+    try {
+      const chars = await characterDb.getCustomCharacters(user.uid);
+      setUploadedCharacters(chars);
+    } catch (err) {
+      console.error("Error loading custom characters from IndexedDB:", err);
+    }
+  }, [user]);
+
+  // Listen to active character from Firestore user document and load custom characters from IndexedDB
   useEffect(() => {
     if (!user) {
       setUploadedCharacters([]);
       return;
     }
 
+    refreshCustomCharacters();
+
     const userDocRef = doc(db, "users", user.uid);
     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.uploadedCharacters) {
-          setUploadedCharacters(data.uploadedCharacters || []);
-        }
         if (data.activeCharacter) {
           setSelectedCharacter(data.activeCharacter);
         }
@@ -1527,7 +1571,7 @@ export default function Chat() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, refreshCustomCharacters]);
 
   const selectedCharacterRef = useRef(selectedCharacter);
   useEffect(() => {
@@ -1596,9 +1640,12 @@ export default function Chat() {
 
   const handleSlideCharacter = useCallback((direction: "next" | "prev") => {
     setLivePreviewCharacter((prev) => {
-      const keys = [...CHARACTER_KEYS, ...uploadedCharacters.map((c) => c.id)];
+      const keys = [
+        ...CHARACTER_KEYS.filter((id) => !deletedDefaultIds.includes(id)),
+        ...uploadedCharacters.map((c) => c.id)
+      ];
       const currentIndex = keys.indexOf(prev);
-      if (currentIndex === -1) return "swara";
+      if (currentIndex === -1) return keys[0] || "swara";
       
       let nextIndex;
       if (direction === "next") {
@@ -1608,7 +1655,7 @@ export default function Chat() {
       }
       return keys[nextIndex];
     });
-  }, [uploadedCharacters]);
+  }, [uploadedCharacters, deletedDefaultIds]);
   
   // Real-time presence: Teasing logic for typing
   const [presenceStatus, setPresenceStatus] = useState<string | null>(null);
@@ -4481,6 +4528,7 @@ export default function Chat() {
               selectedCharacter={selectedCharacter}
               onCharacterChange={handleCharacterChange}
               uploadedCharacters={uploadedCharacters}
+              onRefreshUploadedCharacters={refreshCustomCharacters}
               activeMode={currentMode}
               onModeChange={setCurrentMode}
               profileDraftName={profileDraftName}
@@ -4696,24 +4744,32 @@ export default function Chat() {
                         boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 30px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
                       }}
                     >
-                      <div className="flex flex-col min-w-[125px] select-none text-left">
-                        <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Previewing</span>
-                        <span className={`text-sm font-bold transition-colors duration-300 ${themeStyles.text}`}>
-                          {CHARACTER_LABELS[livePreviewCharacter] || "Custom companion"}
-                        </span>
-                      </div>
-                      <div className="h-7 w-[1px] bg-white/10" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleCharacterChange(livePreviewCharacter);
-                          setIsLiveSelectorActive(false);
-                          toast.success(`Character updated to ${CHARACTER_LABELS[livePreviewCharacter] || "Custom companion"}!`);
-                        }}
-                        className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
-                      >
-                        Done
-                      </button>
+                      {(() => {
+                        const customPreviewChar = uploadedCharacters.find((c) => c.id === livePreviewCharacter);
+                        const companionDisplayName = customPreviewChar ? customPreviewChar.name : (CHARACTER_LABELS[livePreviewCharacter] || "Custom companion");
+                        return (
+                          <>
+                            <div className="flex flex-col min-w-[125px] select-none text-left">
+                              <span className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Previewing</span>
+                              <span className={`text-sm font-bold transition-colors duration-300 ${themeStyles.text}`}>
+                                {companionDisplayName}
+                              </span>
+                            </div>
+                            <div className="h-7 w-[1px] bg-white/10" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCharacterChange(livePreviewCharacter);
+                                setIsLiveSelectorActive(false);
+                                toast.success(`Character updated to ${companionDisplayName}!`);
+                              }}
+                              className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
+                            >
+                              Done
+                            </button>
+                          </>
+                        );
+                      })()}
                       <button
                         type="button"
                         onClick={() => {
