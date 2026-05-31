@@ -136,7 +136,7 @@ interface SettingsPanelProps {
 
 const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
-  { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-red-500/20 to-rose-400/10" },
+  { id: "aarohi", label: "Aarohi 🌸", image: "/Aarohi 🌸.png", accent: "from-red-500/20 to-rose-400/10" },
   { id: "aaradhya", label: "Aaradhya 🤍", image: "/Aaradhya 🤍.png", accent: "from-slate-400/20 to-zinc-400/10" },
   { id: "aarunya", label: "Aarunya 🌸", image: "/Aarunya 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
   { id: "anvitha", label: "Anvitha 🤎", image: "/Anvitha 🤎.png", accent: "from-amber-600/20 to-amber-700/10" },
@@ -146,7 +146,6 @@ const characterCards = [
   { id: "nyra", label: "Nyra 💙", image: "/Nyra 💙.png", accent: "from-blue-400/20 to-cyan-400/10" },
   { id: "suryanshi", label: "Suryanshi 🌻", image: "/Suryanshi 🌻.png", accent: "from-yellow-500/20 to-amber-500/10" },
   { id: "aelina", label: "Aelina 💎", image: "/Aelina 💎.png", accent: "from-cyan-400/20 to-blue-400/10" },
-  { id: "eshira", label: "Eshira 🌸", image: "/Eshira 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
   { id: "velora", label: "Velora 🖤", image: "/Velora 🖤.png", accent: "from-slate-500/20 to-zinc-600/10" },
 ];
 
@@ -357,7 +356,7 @@ export default function SettingsPanel({
     let ideal = "swara";
     if (themeColor === "yellow") ideal = "kiyara";
     else if (themeColor === "peach") ideal = "anvitha";
-    else if (themeColor === "pink") ideal = "eshira";
+    else if (themeColor === "pink") ideal = "aarohi";
     else if (themeColor === "blue") ideal = "aelina";
     else if (themeColor === "orchid") ideal = "lavanya";
     else if (themeColor === "gemini") ideal = "nyra";
@@ -365,7 +364,7 @@ export default function SettingsPanel({
     else if (themeColor === "maroon") ideal = "aarohi";
     
     if (!deletedDefaultIds.includes(ideal)) return ideal;
-    const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
+    const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
     return order.find(id => !deletedDefaultIds.includes(id)) || "swara";
   };
 

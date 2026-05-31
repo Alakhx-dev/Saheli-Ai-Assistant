@@ -48,6 +48,9 @@ export interface WeatherSnapshot {
     isCloudy: boolean;
     dayState: DayState;
   }>;
+  aqi?: number;
+  aqiStatus?: string;
+  activeAlert?: string;
 }
 
 export interface ConversationTiming {

@@ -99,21 +99,50 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
   };
 }
 
+function resolveWeatherAlert(weatherCode: number, windSpeedKph: number, temperatureC: number, uvIndex: number): string {
+  if ([95, 96, 99].includes(weatherCode)) return "Thunderstorm";
+  if (temperatureC >= 40 || temperatureC <= 0) return "Extreme Weather";
+  if ([65, 82].includes(weatherCode)) return "Heavy Rain";
+  if (windSpeedKph >= 40) return "High Wind";
+  if (uvIndex >= 6) return "High UV";
+  return "No Active Alerts";
+}
+
 export async function fetchForecast(latitude: number, longitude: number) {
   // Correct Open-Meteo URL parameters: relative_humidity_2m and wind_speed_10m are valid in current; precipitation_probability is ONLY valid in hourly.
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&forecast_days=2&timezone=auto`;
-  
-  const response = await fetchWithTimeout(url);
-  if (!response.ok) {
-    throw new Error(`Weather forecast failed: ${response.status}`);
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&forecast_days=2&timezone=auto`;
+  const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi`;
+
+  let weatherData: any = null;
+  let aqiData: any = null;
+
+  try {
+    const [weatherRes, aqiRes] = await Promise.allSettled([
+      fetchWithTimeout(url),
+      fetchWithTimeout(aqiUrl)
+    ]);
+
+    if (weatherRes.status === "fulfilled" && weatherRes.value.ok) {
+      weatherData = await weatherRes.value.json();
+    } else {
+      const errorMsg = weatherRes.status === "rejected" ? weatherRes.reason : `HTTP ${weatherRes.value?.status}`;
+      throw new Error(`Weather forecast failed: ${errorMsg}`);
+    }
+
+    if (aqiRes.status === "fulfilled" && aqiRes.value.ok) {
+      aqiData = await aqiRes.value.json();
+    }
+  } catch (err: any) {
+    throw new Error(`Weather/AQI query failed: ${err?.message || err}`);
   }
-  const data: any = await response.json();
-  const current = data.current;
-  const hourly = data.hourly;
+
+  const current = weatherData.current;
+  const hourly = weatherData.hourly;
 
   const temperatureC = typeof current?.temperature_2m === "number" ? current.temperature_2m : 0;
   const feelsLikeC = typeof current?.apparent_temperature === "number" ? current.apparent_temperature : undefined;
   const weatherCode = typeof current?.weather_code === "number" ? current.weather_code : 0;
+  const uvIndex = typeof current?.uv_index === "number" ? current.uv_index : 0;
   const weatherMeta = weatherConditionFromCode(weatherCode);
 
   const forecastTimes = hourly?.time ?? [];
@@ -179,6 +208,19 @@ export async function fetchForecast(latitude: number, longitude: number) {
     ? forecastRain[currentForecastIndex]
     : undefined;
 
+  const usAqi = typeof aqiData?.current?.us_aqi === "number" ? aqiData.current.us_aqi : undefined;
+  let aqiStatus: string | undefined = undefined;
+  if (usAqi !== undefined) {
+    if (usAqi <= 50) aqiStatus = "Good";
+    else if (usAqi <= 100) aqiStatus = "Moderate";
+    else if (usAqi <= 150) aqiStatus = "Sensitive Groups";
+    else if (usAqi <= 200) aqiStatus = "Unhealthy";
+    else if (usAqi <= 300) aqiStatus = "Very Unhealthy";
+    else aqiStatus = "Hazardous";
+  }
+
+  const activeAlert = resolveWeatherAlert(weatherCode, windSpeedKph ?? 0, temperatureC, uvIndex);
+
   return {
     temperatureC,
     feelsLikeC,
@@ -193,6 +235,9 @@ export async function fetchForecast(latitude: number, longitude: number) {
     dayState: current?.is_day === 1 ? "day" : "night",
     updatedAt: Date.now(),
     hourlyForecast,
+    aqi: usAqi,
+    aqiStatus,
+    activeAlert,
   };
 }
 

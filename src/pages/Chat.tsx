@@ -29,6 +29,7 @@ import {
   Sun,
   Thermometer,
   Wind,
+  AlertTriangle,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -225,6 +226,46 @@ const TITLE_STOPWORDS = new Set([
   "unse",
 ]);
 
+function getMoonDetails(date: Date) {
+  const newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+  const diffMs = date.getTime() - newMoonRef.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  const cycle = 29.530588853;
+  const phase = (diffDays / cycle) % 1;
+  const normalizedPhase = phase < 0 ? phase + 1 : phase;
+
+  let moonPhaseName = "New Moon";
+  let litPath = "";
+
+  if (normalizedPhase < 0.05 || normalizedPhase > 0.95) {
+    moonPhaseName = "New Moon";
+    litPath = "";
+  } else if (normalizedPhase >= 0.05 && normalizedPhase < 0.20) {
+    moonPhaseName = "Waxing Crescent";
+    litPath = "M16,2 A14,14 0 0,1 16,30 A9,14 0 0,1 16,2";
+  } else if (normalizedPhase >= 0.20 && normalizedPhase < 0.30) {
+    moonPhaseName = "First Quarter";
+    litPath = "M16,2 A14,14 0 0,1 16,30 Z";
+  } else if (normalizedPhase >= 0.30 && normalizedPhase < 0.45) {
+    moonPhaseName = "Waxing Gibbous";
+    litPath = "M16,2 A14,14 0 0,1 16,30 A7,14 0 0,0 16,2";
+  } else if (normalizedPhase >= 0.45 && normalizedPhase < 0.55) {
+    moonPhaseName = "Full Moon";
+    litPath = "FULL";
+  } else if (normalizedPhase >= 0.55 && normalizedPhase < 0.70) {
+    moonPhaseName = "Waning Gibbous";
+    litPath = "M16,2 A14,14 0 0,0 16,30 A7,14 0 0,1 16,2";
+  } else if (normalizedPhase >= 0.70 && normalizedPhase < 0.80) {
+    moonPhaseName = "Last Quarter";
+    litPath = "M16,2 A14,14 0 0,0 16,30 Z";
+  } else {
+    moonPhaseName = "Waning Crescent";
+    litPath = "M16,2 A14,14 0 0,0 16,30 A9,14 0 0,0 16,2";
+  }
+
+  return { name: moonPhaseName, litPath };
+}
+
 function normalizeTitleContext(text: string) {
   return text
     .toLowerCase()
@@ -314,7 +355,7 @@ type SettingsSectionId =
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
-  aarohi: "/Aarohi ✨.png",
+  aarohi: "/Aarohi 🌸.png",
   aaradhya: "/Aaradhya 🤍.png",
   aarunya: "/Aarunya 🌸.png",
   anvitha: "/Anvitha 🤎.png",
@@ -324,15 +365,14 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   nyra: "/Nyra 💙.png",
   suryanshi: "/Suryanshi 🌻.png",
   aelina: "/Aelina 💎.png",
-  eshira: "/Eshira 🌸.png",
   velora: "/Velora 🖤.png",
 };
 
-const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
+const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
 
 const CHARACTER_LABELS: Record<string, string> = {
   swara: "Swara 🦋",
-  aarohi: "Aarohi ✨",
+  aarohi: "Aarohi 🌸",
   aaradhya: "Aaradhya 🤍",
   aarunya: "Aarunya 🌸",
   anvitha: "Anvitha 🤎",
@@ -342,7 +382,6 @@ const CHARACTER_LABELS: Record<string, string> = {
   nyra: "Nyra 💙",
   suryanshi: "Suryanshi 🌻",
   aelina: "Aelina 💎",
-  eshira: "Eshira 🌸",
   velora: "Velora 🖤",
 };
 
@@ -358,7 +397,6 @@ const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number
   nyra: { scale: 0.98, yOffset: 6 },
   suryanshi: { scale: 0.98, yOffset: 6 },
   aelina: { scale: 0.98, yOffset: 6 },
-  eshira: { scale: 0.94, yOffset: 13 },
   velora: { scale: 0.92, yOffset: 14 },
 };
 
@@ -475,7 +513,7 @@ function getStoredCharacterId(themeColor: string) {
   let ideal = "swara";
   if (themeColor === "yellow") ideal = "kiyara";
   else if (themeColor === "peach") ideal = "anvitha";
-  else if (themeColor === "pink") ideal = "eshira";
+  else if (themeColor === "pink") ideal = "aarohi";
   else if (themeColor === "blue") ideal = "aelina";
   else if (themeColor === "orchid") ideal = "lavanya";
   else if (themeColor === "gemini") ideal = "nyra";
@@ -483,7 +521,7 @@ function getStoredCharacterId(themeColor: string) {
   else if (themeColor === "maroon") ideal = "aarohi";
 
   if (!deletedIds.includes(ideal)) return ideal;
-  const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "eshira", "velora"];
+  const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
   return order.find(id => !deletedIds.includes(id)) || "swara";
 }
 
@@ -1612,7 +1650,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const migrationKey = "saheli_character_defaults_migrated_v4";
+      const migrationKey = "saheli_character_defaults_migrated_v5";
       if (!window.localStorage.getItem(migrationKey)) {
         const themes = ["pink", "yellow", "blue", "orchid", "peach", "beige", "maroon", "gemini"];
         themes.forEach((t) => {
@@ -3405,6 +3443,56 @@ export default function Chat() {
       ? "afternoon"
       : "night";
 
+  const currentTimeDate = weatherPanelClockNow || new Date();
+  const sunDetailsHour = weatherThemeOverride === "auto"
+    ? currentTimeDate.getHours() + currentTimeDate.getMinutes() / 60
+    : weatherThemeMode === "day"
+      ? 12
+      : 0;
+
+  const getSunDetails = (hour: number) => {
+    const start = 5.5; // 5:30 AM
+    const end = 18.5; // 6:30 PM
+    if (hour < start || hour > end) return null;
+    
+    const p = (hour - start) / (end - start); // progress from 0 (sunrise) to 1 (sunset)
+    
+    const left = 232;
+    const top = 20;
+    
+    let sunClass = "";
+    let rayColor = "";
+    let glowColor = "";
+    let raySize = "1.2";
+    
+    if (p < 0.25) {
+      // Morning (reddish orange)
+      sunClass = "from-red-500 via-orange-400 to-amber-300 shadow-[0_0_24px_rgba(239,68,68,0.7)]";
+      rayColor = "rgba(249,115,22,0.25)";
+      glowColor = "rgba(239,68,68,0.12)";
+      raySize = "1.15";
+    } else if (p < 0.75) {
+      // Noon/Afternoon (bright yellow white)
+      sunClass = "from-yellow-300 via-amber-100 to-white shadow-[0_0_36px_rgba(251,191,36,0.95),0_0_60px_rgba(255,255,255,0.5)]";
+      rayColor = "rgba(251,191,36,0.45)";
+      glowColor = "rgba(253,224,71,0.2)";
+      raySize = "1.35";
+    } else {
+      // Evening/Sunset (orange crimson)
+      sunClass = "from-orange-500 via-rose-500 to-red-600 shadow-[0_0_28px_rgba(239,68,68,0.85)]";
+      rayColor = "rgba(239,68,68,0.3)";
+      glowColor = "rgba(239,68,68,0.15)";
+      raySize = "1.2";
+    }
+    
+    return { left, top, sunClass, rayColor, glowColor, raySize };
+  };
+  const sunDetails = getSunDetails(sunDetailsHour);
+
+  const moonDetails = useMemo(() => {
+    return getMoonDetails(currentTimeDate);
+  }, [currentTimeDate]);
+
   const weatherAtmosphere = visualTheme === "morning"
     ? "shadow-[0_20px_48px_rgba(252,165,89,0.08),0_0_36px_rgba(255,99,132,0.04)]"
     : visualTheme === "afternoon"
@@ -3419,6 +3507,17 @@ export default function Chat() {
   const isClearNight = visualTheme === "night" && !isCloudy && !isRainy;
   const isHotWeather = awareness.weather?.hotColdState === "hot";
   const isSunset = awareness.datetime.hour24 >= 17 && awareness.datetime.hour24 < 19;
+  const isThunderstorm = [95, 96, 99].includes(awareness.weather?.weatherCode ?? -1) ||
+    (awareness.weather?.condition?.toLowerCase().includes("storm") ?? false) ||
+    (awareness.weather?.condition?.toLowerCase().includes("thunder") ?? false);
+
+  const windSpeed = awareness.weather?.windSpeedKph ?? 0;
+  const isStorm = windSpeed >= 40 || isThunderstorm;
+  const isWindy = windSpeed >= 10 ||
+    (awareness.weather?.condition?.toLowerCase().includes("wind") ?? false) ||
+    (awareness.weather?.condition?.toLowerCase().includes("breeze") ?? false) ||
+    isStorm;
+  const windDuration = Math.max(1.2, Math.min(10, 60 / (windSpeed || 1)));
   const isPinkTheme = activeTheme === "pink";
   const isOrchidTheme = activeTheme === "orchid";
   const isMaroonTheme = activeTheme === "maroon";
@@ -3878,7 +3977,7 @@ export default function Chat() {
 
                     {/* CINEMATIC WEATHER THEMES */}
                     <div className="absolute inset-0 pointer-events-none transition-opacity duration-1500 ease-in-out">
-                      {isRainy && (
+                      {isRainy && !isThunderstorm && (
                         <div className="absolute inset-0 opacity-80 mix-blend-screen">
                           <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent" />
                           {Array.from({ length: 12 }).map((_, i) => (
@@ -3896,48 +3995,241 @@ export default function Chat() {
                           ))}
                         </div>
                       )}
-                      
-                      {isFoggy && (
-                        <div className="absolute inset-0 opacity-40 mix-blend-screen overflow-hidden">
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent w-[200%] animate-[weatherFog_8s_ease-in-out_infinite_alternate]" />
+
+                      {isThunderstorm && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen">
+                          <div className="absolute inset-0 bg-blue-100/30 opacity-0 animate-[weatherLightningFlash_6s_ease-out_infinite]" />
+                          <div className="absolute inset-0 opacity-70">
+                            {Array.from({ length: 18 }).map((_, i) => (
+                              <div 
+                                key={`storm-rain-${i}`}
+                                className="absolute bg-gradient-to-b from-sky-200/30 to-sky-200/0 w-[1.5px]"
+                                style={{
+                                  left: `${Math.random() * 100}%`,
+                                  top: `-30px`,
+                                  height: `${30 + Math.random() * 50}px`,
+                                  animation: `weatherStormRainDrop ${0.35 + Math.random() * 0.2}s linear infinite`,
+                                  animationDelay: `${Math.random() * 2}s`
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Real Vector Clouds (fluffy cloud shapes, no smoky blur) */}
+                      {isCloudy ? (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen opacity-55">
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-2 w-[85px] h-[55px] animate-[weatherCloudMove_35s_linear_infinite]"
+                            style={{ left: "-100px" }}
+                          >
+                            <defs>
+                              <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.45)" />
+                                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.15)" />
+                              </linearGradient>
+                              <linearGradient id="stormCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="rgba(148, 163, 184, 0.45)" />
+                                <stop offset="100%" stopColor="rgba(71, 85, 105, 0.2)" />
+                              </linearGradient>
+                            </defs>
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
+                          </svg>
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-8 w-[110px] h-[70px] animate-[weatherCloudMove_48s_linear_infinite]"
+                            style={{ left: "-130px", animationDelay: "4s" }}
+                          >
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
+                          </svg>
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-14 w-[65px] h-[45px] animate-[weatherCloudMove_26s_linear_infinite]"
+                            style={{ left: "-80px", animationDelay: "10s" }}
+                          >
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
+                          </svg>
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-4 w-[95px] h-[60px] animate-[weatherCloudMove_42s_linear_infinite]"
+                            style={{ left: "-110px", animationDelay: "16s" }}
+                          >
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
+                          </svg>
+                        </div>
+                      ) : (
+                        // Clear / Nirmal sky - very faint drift clouds
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen opacity-20">
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-3 w-[70px] h-[45px] animate-[weatherCloudMove_55s_linear_infinite]"
+                            style={{ left: "-100px" }}
+                          >
+                            <defs>
+                              <linearGradient id="cloudGradClear" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.3)" />
+                                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.08)" />
+                              </linearGradient>
+                            </defs>
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="url(#cloudGradClear)" />
+                          </svg>
+                          <svg 
+                            viewBox="0 0 24 24" 
+                            className="absolute top-9 w-[55px] h-[35px] animate-[weatherCloudMove_75s_linear_infinite]"
+                            style={{ left: "-90px", animationDelay: "12s" }}
+                          >
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="url(#cloudGradClear)" />
+                          </svg>
+                        </div>
+                      )}
+
+                      {/* Dynamic Wind particles (Streaks, Leaves, Dust) with speed scaling */}
+                      {isWindy && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen animate-none">
+                          {Array.from({ length: isStorm ? 16 : 6 }).map((_, i) => {
+                            const type = i % 3;
+                            const delay = i * 0.35;
+                            const topPercent = 15 + (i * 17) % 70;
+                            
+                            let childNode = null;
+                            if (type === 0) {
+                              childNode = <div className="h-[1px] w-10 bg-gradient-to-r from-transparent via-white/25 to-transparent" />;
+                            } else if (type === 1) {
+                              childNode = (
+                                <svg width="8" height="6" viewBox="0 0 8 6" className="fill-emerald-500/40 opacity-70">
+                                  <path d="M0,3 C2,0 6,0 8,3 C6,6 2,6 0,3 Z" />
+                                </svg>
+                              );
+                            } else {
+                              childNode = <div className="h-[1.5px] w-[1.5px] rounded-full bg-amber-600/30" />;
+                            }
+                            
+                            return (
+                              <div
+                                key={`wind-particle-${i}`}
+                                className="absolute pointer-events-none"
+                                style={{
+                                  top: `${topPercent}%`,
+                                  left: `-50px`,
+                                  animation: `weatherWindDrift ${windDuration}s linear infinite`,
+                                  animationDelay: `${delay}s`,
+                                  willChange: 'transform',
+                                }}
+                              >
+                                {childNode}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                       
-                      {isHotWeather && !isRainy && (
+                      {isFoggy && (
+                        <div className="absolute inset-0 opacity-30 mix-blend-screen overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-r from-white/5 via-white/20 to-white/5 w-[200%] animate-[weatherFog_10s_ease-in-out_infinite_alternate]" />
+                          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent h-[150%] animate-[weatherFogVertical_14s_ease-in-out_infinite_alternate]" style={{ animationDelay: '2s' }} />
+                        </div>
+                      )}
+                      
+                      {isHotWeather && !isRainy && !isThunderstorm && (
                         <div className="absolute inset-0 mix-blend-overlay opacity-30 bg-gradient-to-t from-orange-500/20 to-transparent animate-[weatherHeatShimmer_3s_ease-in-out_infinite_alternate]" />
                       )}
                       
-                      {isSunset && !isRainy && !isFoggy && (
+                      {isSunset && !isRainy && !isFoggy && !isThunderstorm && (
                         <div className="absolute inset-0 mix-blend-screen opacity-40 bg-gradient-to-tr from-purple-500/20 via-orange-500/20 to-transparent" />
                       )}
                     </div>
 
                     {visualTheme === "night" ? (
                       <>
-                        <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl" />
-                        <div className="absolute right-4 top-3 h-10 w-10 rounded-full border border-sky-100/12 bg-white/[0.04] shadow-[0_0_30px_rgba(99,102,241,0.12)]" />
-                        {Array.from({ length: 8 }).map((_, index) => (
-                          <span
-                            key={`weather-star-${index}`}
-                            className="absolute h-1 w-1 rounded-full bg-white/70"
-                            style={{
-                              right: `${14 + index * 8}px`,
-                              top: `${10 + (index % 4) * 11}px`,
-                              opacity: 0.35 + index * 0.06,
-                              animation: `weatherStarDrift ${5 + index * 0.35}s linear infinite`,
-                            }}
-                          />
-                        ))}
+                        {isClearNight && (
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(224,242,254,0.18)_0%,rgba(99,102,241,0.03)_60%,transparent_100%)] mix-blend-screen pointer-events-none" />
+                        )}
+                        <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl animate-[weatherMoonGlow_4s_ease-in-out_infinite_alternate]" />
+                        
+                        {/* Dynamically calculated Moon Phase (clean top right, no dots nearby) */}
+                        {moonDetails.name !== "New Moon" && (
+                          <div className="absolute right-6 top-5 pointer-events-none z-0 animate-[weatherMoonPulse_4s_ease-in-out_infinite_alternate]">
+                            <svg width="32" height="32" viewBox="0 0 32 32">
+                              <defs>
+                                <radialGradient id="moonGlowGrad" cx="35%" cy="35%" r="65%">
+                                  <stop offset="0%" stopColor="#ffffff" />
+                                  <stop offset="50%" stopColor="#f1f5f9" />
+                                  <stop offset="100%" stopColor="#bae6fd" />
+                                </radialGradient>
+                              </defs>
+                              {/* Dark side silhouette */}
+                              <circle cx="16" cy="16" r="14" fill="rgba(255, 255, 255, 0.05)" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="0.5" />
+                              {/* Glowing lit part */}
+                              {moonDetails.litPath === "FULL" ? (
+                                <circle cx="16" cy="16" r="14" fill="url(#moonGlowGrad)" />
+                              ) : (
+                                <path d={moonDetails.litPath} fill="url(#moonGlowGrad)" />
+                              )}
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* Twinkling Starfield across entire card, avoiding top-right moon area */}
+                        {Array.from({ length: 15 }).map((_, index) => {
+                          const right = 10 + (index * 17) % 268;
+                          const top = 10 + (index * 23) % 180;
+                          if (right > 200 && top < 60) return null;
+                          return (
+                            <span
+                              key={`weather-star-field-${index}`}
+                              className="absolute h-0.5 w-0.5 rounded-full bg-white/80 animate-[weatherTwinkle_4s_ease-in-out_infinite]"
+                              style={{
+                                right: `${right}px`,
+                                top: `${top}px`,
+                                animationDelay: `${index * 0.35}s`,
+                              }}
+                            />
+                          );
+                        })}
+
+                        {/* Shooting Stars */}
+                        <div className="absolute top-2 left-1/4 w-[1px] h-[1px] bg-gradient-to-r from-white to-transparent rotate-[35deg] animate-[weatherShootingStar_12s_linear_infinite] pointer-events-none" />
+                        <div className="absolute top-12 left-1/2 w-[1px] h-[1px] bg-gradient-to-r from-white to-transparent rotate-[35deg] animate-[weatherShootingStar_15s_linear_infinite] pointer-events-none" style={{ animationDelay: "5s" }} />
                       </>
                     ) : (
                       <>
-                        <div className="absolute right-2 top-2 h-14 w-14 rounded-full bg-amber-200/18 blur-2xl" />
-                        <div className="absolute right-3 top-1 h-20 w-20 opacity-70">
-                          <div className="absolute right-0 top-0 h-9 w-9 rounded-full border border-amber-100/20 bg-amber-100/10 shadow-[0_0_28px_rgba(251,191,36,0.18)]" />
-                          <div className="absolute -right-2 top-2 h-12 w-[1px] rotate-12 bg-gradient-to-b from-amber-100/0 via-amber-100/40 to-amber-100/0" />
-                          <div className="absolute right-2 -top-1 h-14 w-[1px] -rotate-18 bg-gradient-to-b from-amber-100/0 via-amber-100/35 to-amber-100/0" />
-                          <div className="absolute right-5 top-0 h-12 w-[1px] rotate-30 bg-gradient-to-b from-amber-100/0 via-amber-100/28 to-amber-100/0" />
-                        </div>
+                        {sunDetails && (
+                          <>
+                            {/* Soft atmospheric sun glow spreading across the box */}
+                            <div 
+                              className="absolute inset-0 transition-all duration-1000 pointer-events-none z-0"
+                              style={{
+                                backgroundImage: `radial-gradient(circle at ${sunDetails.left + 16}px ${sunDetails.top + 16}px, ${sunDetails.glowColor} 0%, transparent 65%)`
+                              }}
+                            />
+                            
+                            {/* Dynamic Pulsating Sun Rays (smooth, no shake) */}
+                            <div 
+                              className="absolute h-8 w-8 rounded-full animate-[weatherSunRayPulse_8s_linear_infinite] pointer-events-none z-0"
+                              style={{
+                                left: `${sunDetails.left}px`,
+                                top: `${sunDetails.top}px`,
+                                background: sunDetails.rayColor,
+                                filter: 'blur(8px)',
+                                transform: `scale(${sunDetails.raySize}) translate3d(0,0,0)`,
+                                willChange: 'transform'
+                              }}
+                            />
+
+                            {/* Core Sun Body (smooth, no shake, real position) */}
+                            <div 
+                              className={`absolute h-8 w-8 rounded-full bg-gradient-to-br ${sunDetails.sunClass} animate-[weatherSunPulse_4s_ease-in-out_infinite] z-0`}
+                              style={{
+                                left: `${sunDetails.left}px`,
+                                top: `${sunDetails.top}px`,
+                                transform: 'translate3d(0,0,0)',
+                                willChange: 'transform'
+                              }}
+                            />
+                          </>
+                        )}
                       </>
                     )}
 
@@ -4025,7 +4317,21 @@ export default function Chat() {
                             <span className="shrink-0 text-white/34">Rain chance</span>
                             <span className="text-white/78">{weatherRainProbability}</span>
                           </span>
-                          <span className="text-right text-white/38">{awareness.weather?.hotColdState || "mild"}</span>
+                          <span className="text-right text-white/38">
+                            {awareness.weather?.aqi !== undefined ? `AQI: ${awareness.weather.aqi} (${awareness.weather.aqiStatus})` : "AQI: --"}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          <span className="inline-flex min-w-0 items-center gap-2">
+                            <AlertTriangle className={`h-3.5 w-3.5 ${awareness.weather?.activeAlert && awareness.weather?.activeAlert !== "No Active Alerts" ? "text-amber-400 animate-pulse" : "text-white/30"}`} />
+                            <span className="shrink-0 text-white/34">Alerts</span>
+                            <span className={`truncate ${awareness.weather?.activeAlert && awareness.weather?.activeAlert !== "No Active Alerts" ? "text-amber-300 font-medium" : "text-white/40"}`}>
+                              {awareness.weather?.activeAlert || "No Active Alerts"}
+                            </span>
+                          </span>
+                          <span className="text-right text-white/38">
+                            {awareness.weather?.activeAlert && awareness.weather?.activeAlert !== "No Active Alerts" ? "Warning" : "Normal"}
+                          </span>
                         </div>
                       </div>
 
@@ -4080,8 +4386,24 @@ export default function Chat() {
             <style>{`
               @keyframes weatherStarDrift { 0% { transform: translateY(0px); opacity: 0; } 12% { opacity: 0.9; } 85% { opacity: 0.6; } 100% { transform: translateY(16px); opacity: 0; } }
               @keyframes weatherRainDrop { 0% { transform: translateY(0) rotate(10deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(300px) rotate(10deg); opacity: 0; } }
-              @keyframes weatherFog { 0% { transform: translateX(-20%); } 100% { transform: translateX(0%); } }
+              @keyframes weatherFog { 0% { transform: translateX(-30%); } 100% { transform: translateX(10%); } }
+              @keyframes weatherFogVertical { 0% { transform: translateY(-20%); } 100% { transform: translateY(10%); } }
               @keyframes weatherHeatShimmer { 0% { opacity: 0.2; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.05); } }
+              @keyframes weatherMoonGlow { 0% { transform: scale(1); opacity: 0.6; filter: blur(24px); } 100% { transform: scale(1.2); opacity: 0.9; filter: blur(32px); } }
+              @keyframes weatherTwinkle { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
+              @keyframes weatherCloudMove { 0% { transform: translateX(0); } 100% { transform: translateX(450px); } }
+              @keyframes weatherLightningFlash { 0%, 92%, 100% { opacity: 0; } 93% { opacity: 0.8; } 94% { opacity: 0.1; } 96% { opacity: 0.9; } 98% { opacity: 0; } }
+              @keyframes weatherStormRainDrop { 0% { transform: translateY(0) rotate(18deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(320px) rotate(18deg); opacity: 0; } }
+              @keyframes weatherWindDrift { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 15% { opacity: 0.5; } 50% { transform: translate(150px, 15px) rotate(90deg); } 85% { opacity: 0.5; } 100% { transform: translate(320px, -15px) rotate(180deg); opacity: 0; } }
+              @keyframes weatherSunPulse { 0%, 100% { filter: drop-shadow(0 0 12px rgba(251,191,36,0.75)); } 50% { filter: drop-shadow(0 0 24px rgba(251,191,36,0.95)); } }
+              @keyframes weatherSunRayPulse { 0% { transform: scale(1.1) rotate(0deg); opacity: 0.4; } 50% { transform: scale(1.3) rotate(180deg); opacity: 0.75; } 100% { transform: scale(1.1) rotate(360deg); opacity: 0.4; } }
+              @keyframes weatherMoonPulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255,255,255,0.7)); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(255,255,255,0.95)); } }
+              @keyframes weatherShootingStar {
+                0% { transform: translate3d(0, 0, 0) scale(0); opacity: 0; width: 0px; }
+                5% { opacity: 1; width: 30px; }
+                15% { transform: translate3d(120px, 80px, 0) scale(1); opacity: 0; width: 0px; }
+                100% { transform: translate3d(120px, 80px, 0) scale(0); opacity: 0; }
+              }
             `}</style>
           </div>
         ) : (
@@ -4155,9 +4477,11 @@ export default function Chat() {
                             exit={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
                             transition={{ duration: 0.4, ease: "easeInOut" }}
                             className={
-                              isPinkTheme
-                                ? "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
-                                : "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
+                              activeMascotKey === "swara"
+                                ? "w-full h-full brightness-[90%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
+                                : isPinkTheme
+                                  ? "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
+                                  : "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
                             }
                             style={{
                               objectFit: "contain",
