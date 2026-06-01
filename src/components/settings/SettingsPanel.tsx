@@ -136,7 +136,8 @@ interface SettingsPanelProps {
 
 const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
-  { id: "aarohi", label: "Aarohi 🌸", image: "/Aarohi 🌸.png", accent: "from-red-500/20 to-rose-400/10" },
+  { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-rose-600/20 to-red-900/10" },
+  { id: "akansha", label: "Akansha 🌸", image: "/Akansha 🌸.png", accent: "from-red-500/20 to-rose-400/10" },
   { id: "aaradhya", label: "Aaradhya 🤍", image: "/Aaradhya 🤍.png", accent: "from-slate-400/20 to-zinc-400/10" },
   { id: "aarunya", label: "Aarunya 🌸", image: "/Aarunya 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
   { id: "anvitha", label: "Anvitha 🤎", image: "/Anvitha 🤎.png", accent: "from-amber-600/20 to-amber-700/10" },
@@ -356,7 +357,7 @@ export default function SettingsPanel({
     let ideal = "swara";
     if (themeColor === "yellow") ideal = "kiyara";
     else if (themeColor === "peach") ideal = "anvitha";
-    else if (themeColor === "pink") ideal = "aarohi";
+    else if (themeColor === "pink") ideal = "akansha";
     else if (themeColor === "blue") ideal = "aelina";
     else if (themeColor === "orchid") ideal = "lavanya";
     else if (themeColor === "gemini") ideal = "nyra";
@@ -364,7 +365,7 @@ export default function SettingsPanel({
     else if (themeColor === "maroon") ideal = "aarohi";
     
     if (!deletedDefaultIds.includes(ideal)) return ideal;
-    const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+    const order = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
     return order.find(id => !deletedDefaultIds.includes(id)) || "swara";
   };
 
@@ -541,7 +542,7 @@ export default function SettingsPanel({
       const saved = window.localStorage.getItem("saheli_theme_color");
       if (saved) return saved;
     }
-    return "pink";
+    return "maroon";
   });
 
   const handleColorChange = (color: string) => {

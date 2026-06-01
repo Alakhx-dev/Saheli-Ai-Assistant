@@ -355,7 +355,8 @@ type SettingsSectionId =
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
-  aarohi: "/Aarohi 🌸.png",
+  aarohi: "/Aarohi ✨.png",
+  akansha: "/Akansha 🌸.png",
   aaradhya: "/Aaradhya 🤍.png",
   aarunya: "/Aarunya 🌸.png",
   anvitha: "/Anvitha 🤎.png",
@@ -368,11 +369,12 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   velora: "/Velora 🖤.png",
 };
 
-const CHARACTER_KEYS = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+const CHARACTER_KEYS = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
 
 const CHARACTER_LABELS: Record<string, string> = {
   swara: "Swara 🦋",
-  aarohi: "Aarohi 🌸",
+  aarohi: "Aarohi ✨",
+  akansha: "Akansha 🌸",
   aaradhya: "Aaradhya 🤍",
   aarunya: "Aarunya 🌸",
   anvitha: "Anvitha 🤎",
@@ -388,6 +390,7 @@ const CHARACTER_LABELS: Record<string, string> = {
 const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number }> = {
   swara: { scale: 0.9, yOffset: 12 },
   aarohi: { scale: 1.0, yOffset: 0 },
+  akansha: { scale: 1.0, yOffset: 0 },
   aaradhya: { scale: 0.98, yOffset: 8 },
   aarunya: { scale: 0.98, yOffset: 6 },
   anvitha: { scale: 1.0, yOffset: 4 },
@@ -513,7 +516,7 @@ function getStoredCharacterId(themeColor: string) {
   let ideal = "swara";
   if (themeColor === "yellow") ideal = "kiyara";
   else if (themeColor === "peach") ideal = "anvitha";
-  else if (themeColor === "pink") ideal = "aarohi";
+  else if (themeColor === "pink") ideal = "akansha";
   else if (themeColor === "blue") ideal = "aelina";
   else if (themeColor === "orchid") ideal = "lavanya";
   else if (themeColor === "gemini") ideal = "nyra";
@@ -521,13 +524,13 @@ function getStoredCharacterId(themeColor: string) {
   else if (themeColor === "maroon") ideal = "aarohi";
 
   if (!deletedIds.includes(ideal)) return ideal;
-  const order = ["swara", "aarohi", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+  const order = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
   return order.find(id => !deletedIds.includes(id)) || "swara";
 }
 
 function getStoredThemeColor() {
-  if (typeof window === "undefined") return "pink";
-  return window.localStorage.getItem("saheli_theme_color") || "pink";
+  if (typeof window === "undefined") return "maroon";
+  return window.localStorage.getItem("saheli_theme_color") || "maroon";
 }
 
 interface ProfileImageMeta {
@@ -1618,9 +1621,9 @@ export default function Chat() {
 
   const [activeTheme, setActiveTheme] = useState(() => {
     if (typeof window !== "undefined") {
-      return window.localStorage.getItem("saheli_theme_color") || "pink";
+      return window.localStorage.getItem("saheli_theme_color") || "maroon";
     }
-    return "pink";
+    return "maroon";
   });
   const [targetTheme, setTargetTheme] = useState<string | null>(null);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
@@ -1628,7 +1631,7 @@ export default function Chat() {
 
   useEffect(() => {
     const handleThemeChange = () => {
-      const color = window.localStorage.getItem("saheli_theme_color") || "pink";
+      const color = window.localStorage.getItem("saheli_theme_color") || "maroon";
       if (color !== activeTheme && !isThemeTransitioning) {
         setTargetTheme(color);
         setIsThemeTransitioning(true);
@@ -1650,7 +1653,7 @@ export default function Chat() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const migrationKey = "saheli_character_defaults_migrated_v5";
+      const migrationKey = "saheli_character_defaults_migrated_v6";
       if (!window.localStorage.getItem(migrationKey)) {
         const themes = ["pink", "yellow", "blue", "orchid", "peach", "beige", "maroon", "gemini"];
         themes.forEach((t) => {
@@ -1659,10 +1662,17 @@ export default function Chat() {
         window.localStorage.removeItem("saheli_selected_character");
         window.localStorage.setItem(migrationKey, "true");
         // Force refresh selected character to trigger default lookup
-        setSelectedCharacter(getStoredCharacterId(activeTheme));
+        const defaultChar = getStoredCharacterId(activeTheme);
+        setSelectedCharacter(defaultChar);
+        if (user) {
+          const userDocRef = doc(db, "users", user.uid);
+          setDoc(userDocRef, { activeCharacter: defaultChar }, { merge: true }).catch((err) => {
+            console.error("Error migrating active character in Firestore:", err);
+          });
+        }
       }
     }
-  }, [activeTheme]);
+  }, [activeTheme, user]);
 
   useEffect(() => {
     const handleOpenLiveSelector = () => {

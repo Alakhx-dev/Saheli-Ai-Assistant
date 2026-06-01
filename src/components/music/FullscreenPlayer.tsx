@@ -156,15 +156,15 @@ export default function FullscreenPlayer({
 }: FullscreenPlayerProps) {
   const [selectedColor, setSelectedColor] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return window.localStorage.getItem("saheli_theme_color") || "pink";
+      return window.localStorage.getItem("saheli_theme_color") || "maroon";
     }
-    return "pink";
+    return "maroon";
   });
 
   useEffect(() => {
     const handleThemeChange = () => {
       if (typeof window !== "undefined") {
-        setSelectedColor(window.localStorage.getItem("saheli_theme_color") || "pink");
+        setSelectedColor(window.localStorage.getItem("saheli_theme_color") || "maroon");
       }
     };
     window.addEventListener("saheli_theme_color_changed", handleThemeChange);

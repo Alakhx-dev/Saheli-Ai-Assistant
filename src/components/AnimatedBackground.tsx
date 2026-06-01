@@ -55,14 +55,14 @@ const AnimatedBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [activeTheme, setActiveTheme] = useState(() => {
     if (typeof window !== "undefined") {
-      return window.localStorage.getItem("saheli_theme_color") || "pink";
+      return window.localStorage.getItem("saheli_theme_color") || "maroon";
     }
-    return "pink";
+    return "maroon";
   });
 
   useEffect(() => {
     const handleThemeChange = () => {
-      const color = window.localStorage.getItem("saheli_theme_color") || "pink";
+      const color = window.localStorage.getItem("saheli_theme_color") || "maroon";
       setActiveTheme(color);
     };
     window.addEventListener("saheli_theme_color_changed", handleThemeChange);
@@ -103,7 +103,7 @@ const AnimatedBackground = () => {
       // Access latest target colors ref or active state value inside draw loop
       // Reading from window localstorage is safe here too, but reading from our state is clean.
       // We will read activeTheme from a local variable captured at draw start or window storage.
-      const currentTheme = window.localStorage.getItem("saheli_theme_color") || "pink";
+      const currentTheme = window.localStorage.getItem("saheli_theme_color") || "maroon";
       const targetColors = THEME_BLOBS[currentTheme] || THEME_BLOBS.pink;
 
       blobs.forEach((b, i) => {

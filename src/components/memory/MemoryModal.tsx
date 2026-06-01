@@ -50,7 +50,7 @@ export default function MemoryModal({
       const saved = window.localStorage.getItem("saheli_theme_color");
       if (saved) return saved;
     }
-    return "pink";
+    return "maroon";
   });
 
   useEffect(() => {
