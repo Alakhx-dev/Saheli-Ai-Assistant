@@ -30,6 +30,14 @@ import {
   Thermometer,
   Wind,
   AlertTriangle,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Sliders,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -1556,7 +1564,18 @@ export default function Chat() {
   const [livePreviewCharacter, setLivePreviewCharacter] = useState<string>("");
   const [secondaryPanelType, setSecondaryPanelType] = useState<"memory" | "settings" | null>(null);
   const [moodTint, setMoodTint] = useState("neutral");
-  const [uploadedCharacters, setUploadedCharacters] = useState<{ id: string; name: string; url: string; timestamp: number }[]>([]);
+  const [uploadedCharacters, setUploadedCharacters] = useState<{ id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }[]>([]);
+  const [adjustingCharacter, setAdjustingCharacter] = useState<{
+    id: string;
+    name: string;
+    url: string;
+    scale: number;
+    xOffset: number;
+    yOffset: number;
+    originalScale: number;
+    originalXOffset: number;
+    originalYOffset: number;
+  } | null>(null);
   const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -3789,6 +3808,21 @@ export default function Chat() {
       });
     }
   }, [activeTheme, user]);
+  const handleEditCharacterAdjustments = useCallback((char: { id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }) => {
+    handleCharacterChange(char.id);
+    setSettingsPanelOpen(false);
+    setAdjustingCharacter({
+      id: char.id,
+      name: char.name,
+      url: char.url,
+      scale: char.scale ?? 1.0,
+      xOffset: char.xOffset ?? 0,
+      yOffset: char.yOffset ?? 0,
+      originalScale: char.scale ?? 1.0,
+      originalXOffset: char.xOffset ?? 0,
+      originalYOffset: char.yOffset ?? 0,
+    });
+  }, [handleCharacterChange]);
   const handleToggleWeatherPanel = useCallback(() => {
     setWeatherPanelOpen((previous) => !previous);
   }, []);
@@ -4475,16 +4509,23 @@ export default function Chat() {
                         const activeMascotKey = isLiveSelectorActive ? livePreviewCharacter : selectedCharacter;
                         const customChar = uploadedCharacters.find((c) => c.id === activeMascotKey);
                         const mascotSrc = customChar ? customChar.url : (CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png");
-                        const mascotOverride = CHARACTER_STYLE_OVERRIDES[activeMascotKey] || 
-                          (activeMascotKey.startsWith("char_") ? { scale: 0.98, yOffset: 6 } : { scale: 1.0, yOffset: 0 });
+                        const mascotOverride = (adjustingCharacter && adjustingCharacter.id === activeMascotKey)
+                          ? { scale: adjustingCharacter.scale, xOffset: adjustingCharacter.xOffset, yOffset: adjustingCharacter.yOffset }
+                          : (customChar 
+                              ? { scale: customChar.scale ?? 1.0, xOffset: customChar.xOffset ?? 0, yOffset: customChar.yOffset ?? 0 }
+                              : (CHARACTER_STYLE_OVERRIDES[activeMascotKey] 
+                                  ? { scale: CHARACTER_STYLE_OVERRIDES[activeMascotKey].scale, yOffset: CHARACTER_STYLE_OVERRIDES[activeMascotKey].yOffset, xOffset: 0 }
+                                  : { scale: activeMascotKey.startsWith("char_") ? 0.98 : 1.0, yOffset: activeMascotKey.startsWith("char_") ? 6 : 0, xOffset: 0 }
+                                )
+                            );
                         return (
                           <motion.img
                             key={activeMascotKey}
                             src={mascotSrc}
                             alt={`${activeMascotKey} Mascot`}
-                            initial={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
-                            animate={{ opacity: 1, scale: mascotOverride.scale, y: -4 + mascotOverride.yOffset }}
-                            exit={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset }}
+                            initial={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset, x: mascotOverride.xOffset }}
+                            animate={{ opacity: 1, scale: mascotOverride.scale, y: -4 + mascotOverride.yOffset, x: mascotOverride.xOffset }}
+                            exit={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset, x: mascotOverride.xOffset }}
                             transition={{ duration: 0.4, ease: "easeInOut" }}
                             className={
                               activeMascotKey === "swara"
@@ -4863,6 +4904,7 @@ export default function Chat() {
               onCharacterChange={handleCharacterChange}
               uploadedCharacters={uploadedCharacters}
               onRefreshUploadedCharacters={refreshCustomCharacters}
+              onEditCharacterAdjustments={handleEditCharacterAdjustments}
               activeMode={currentMode}
               onModeChange={setCurrentMode}
               profileDraftName={profileDraftName}
@@ -5121,6 +5163,243 @@ export default function Chat() {
           </div>
         )}
       </div>
+
+      {/* Floating Image Adjustment Panel */}
+      <AnimatePresence>
+        {adjustingCharacter && (() => {
+          const themeStyles = THEME_SLIDER_CARD_CLASSES[activeTheme] || THEME_SLIDER_CARD_CLASSES.pink;
+          const hoverBgMap = {
+            pink: "hover:bg-pink-500/10 hover:border-pink-500/30 text-pink-300",
+            yellow: "hover:bg-yellow-500/10 hover:border-yellow-500/30 text-yellow-300",
+            blue: "hover:bg-cyan-500/10 hover:border-cyan-500/30 text-cyan-300",
+            orchid: "hover:bg-purple-500/10 hover:border-purple-500/30 text-purple-300",
+            peach: "hover:bg-orange-500/10 hover:border-orange-500/30 text-orange-300",
+            beige: "hover:bg-amber-500/10 hover:border-amber-500/30 text-amber-300",
+            maroon: "hover:bg-red-500/10 hover:border-red-500/30 text-red-300",
+            gemini: "hover:bg-blue-500/10 hover:border-blue-500/30 text-blue-300",
+          };
+          const themeHoverClasses = hoverBgMap[activeTheme as keyof typeof hoverBgMap] || hoverBgMap.pink;
+          
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 50, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 50, scale: 0.95 }}
+              transition={{ type: "spring", damping: 22, stiffness: 220 }}
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[480px] px-4 pointer-events-auto"
+            >
+              <div
+                className={`rounded-[28px] border ${themeStyles.border} bg-[#0c0616]/85 backdrop-blur-[35px] p-6 text-white flex flex-col gap-4 relative overflow-hidden`}
+                style={{
+                  fontFamily: "'Outfit', 'Inter', sans-serif",
+                  boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 35px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sliders className={`h-4.5 w-4.5 ${themeStyles.text.split(" ")[0]} animate-pulse`} />
+                    <span className="text-sm font-bold tracking-tight">Adjust companion: {adjustingCharacter.name}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustingCharacter(null);
+                      toast.info("Adjustments discarded.");
+                    }}
+                    className="p-1 rounded-full hover:bg-white/10 transition text-white/50 hover:text-white cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Controls Layout */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+                  {/* Visual D-Pad & Scale Controls */}
+                  <div className="sm:col-span-5 flex flex-col items-center gap-2.5">
+                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Position Control</span>
+                    {/* D-Pad Container */}
+                    <div className="relative w-28 h-28 bg-white/[0.02] rounded-full border border-white/5 p-1 flex items-center justify-center">
+                      {/* Up */}
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset - 5 } : null)}
+                        className="absolute top-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        title="Move Up"
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      {/* Left */}
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset - 5 } : null)}
+                        className="absolute left-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        title="Move Left"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </button>
+                      {/* Reset in Center */}
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: 0, yOffset: 0, scale: 1.0 } : null)}
+                        className={`p-2 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 transition border border-white/10 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
+                        title="Reset Position & Size"
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      </button>
+                      {/* Right */}
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset + 5 } : null)}
+                        className="absolute right-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        title="Move Right"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                      {/* Down */}
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset + 5 } : null)}
+                        className="absolute bottom-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        title="Move Down"
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Zoom buttons */}
+                    <div className="flex gap-2 w-full justify-center">
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: Math.max(0.5, prev.scale - 0.05) } : null)}
+                        className="flex-1 py-1.5 px-2 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-white/10 transition active:scale-95 cursor-pointer text-white/80"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="h-3.5 w-3.5" /> Out
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: Math.min(2.5, prev.scale + 0.05) } : null)}
+                        className="flex-1 py-1.5 px-2 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-white/10 transition active:scale-95 cursor-pointer text-white/80"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5" /> In
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fine-Tuning Sliders */}
+                  <div className="sm:col-span-7 flex flex-col gap-3.5">
+                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Fine-tuning Sliders</span>
+                    
+                    {/* Slider: Zoom */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/60">Zoom Scale</span>
+                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{Math.round(adjustingCharacter.scale * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="2.5"
+                        step="0.05"
+                        value={adjustingCharacter.scale}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          setAdjustingCharacter(prev => prev ? { ...prev, scale: val } : null);
+                        }}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                      />
+                    </div>
+
+                    {/* Slider: Horiz Position */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/60">Horizontal Offset</span>
+                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{adjustingCharacter.xOffset}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-300"
+                        max="300"
+                        step="2"
+                        value={adjustingCharacter.xOffset}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setAdjustingCharacter(prev => prev ? { ...prev, xOffset: val } : null);
+                        }}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                      />
+                    </div>
+
+                    {/* Slider: Vert Position */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-white/60">Vertical Offset</span>
+                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{adjustingCharacter.yOffset}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-300"
+                        max="300"
+                        step="2"
+                        value={adjustingCharacter.yOffset}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          setAdjustingCharacter(prev => prev ? { ...prev, yOffset: val } : null);
+                        }}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 pt-2.5 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdjustingCharacter(null);
+                      toast.info("Adjustments discarded.");
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!user) return;
+                      try {
+                        await characterDb.updateCharacterAdjustments(
+                          user.uid,
+                          adjustingCharacter.id,
+                          adjustingCharacter.scale,
+                          adjustingCharacter.xOffset,
+                          adjustingCharacter.yOffset
+                        );
+                        await refreshCustomCharacters();
+                        setAdjustingCharacter(null);
+                        toast.success("Companion image adjustments saved! ✨");
+                      } catch (err) {
+                        console.error("Failed to save adjustments:", err);
+                        toast.error("Failed to save adjustments.");
+                      }
+                    }}
+                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer shadow-md text-center ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
+                  >
+                    Done & Save
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
       <ThemeTransitionOverlay
         targetTheme={targetTheme}
         onThemeUpdate={(theme) => {

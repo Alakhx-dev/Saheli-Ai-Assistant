@@ -49,7 +49,7 @@ class CharacterDB {
     });
   }
 
-  async getCustomCharacters(userId: string): Promise<Array<{ id: string; name: string; url: string; timestamp: number }>> {
+  async getCustomCharacters(userId: string): Promise<Array<{ id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }>> {
     const db = await this.init();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(this.storeName, "readonly");
@@ -66,6 +66,9 @@ class CharacterDB {
             name: item.name || "Custom companion",
             url: item.url,
             timestamp: item.timestamp,
+            scale: item.scale,
+            xOffset: item.xOffset,
+            yOffset: item.yOffset,
           }))
           .sort((a: any, b: any) => b.timestamp - a.timestamp); // newest first
 
@@ -86,6 +89,35 @@ class CharacterDB {
 
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
+    });
+  }
+
+  async updateCharacterAdjustments(userId: string, id: string, scale: number, xOffset: number, yOffset: number): Promise<void> {
+    const db = await this.init();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(this.storeName, "readwrite");
+      const store = transaction.objectStore(this.storeName);
+      
+      const key = `${userId}_${id}`;
+      const getReq = store.get(key);
+      
+      getReq.onsuccess = () => {
+        const record = getReq.result;
+        if (!record) {
+          reject(new Error("Character record not found"));
+          return;
+        }
+        
+        record.scale = scale;
+        record.xOffset = xOffset;
+        record.yOffset = yOffset;
+        
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve();
+        putReq.onerror = () => reject(putReq.error);
+      };
+      
+      getReq.onerror = () => reject(getReq.error);
     });
   }
 }

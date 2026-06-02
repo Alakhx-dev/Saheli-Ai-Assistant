@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -109,8 +109,9 @@ interface SettingsPanelProps {
   onToggleTtsMute: () => void;
   selectedCharacter: string;
   onCharacterChange: (character: string) => void;
-  uploadedCharacters: { id: string; name: string; url: string; timestamp: number }[];
+  uploadedCharacters: { id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }[];
   onRefreshUploadedCharacters?: () => void;
+  onEditCharacterAdjustments?: (char: { id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }) => void;
   activeMode: "bestie" | "mentor";
   onModeChange: (mode: "bestie" | "mentor") => void;
   // Inline account editing props
@@ -306,6 +307,7 @@ export default function SettingsPanel({
   onCharacterChange,
   uploadedCharacters,
   onRefreshUploadedCharacters,
+  onEditCharacterAdjustments,
   activeMode,
   onModeChange,
   profileDraftName,
@@ -2202,10 +2204,25 @@ export default function SettingsPanel({
                       <button
                         type="button"
                         onClick={() => setShowDeleteConfirmChar(char)}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition z-10"
+                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition z-10 cursor-pointer"
                         title="Delete Character"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+
+                      {/* Edit Adjustments button (absolute top-left) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUploadModalOpen(false);
+                          if (onEditCharacterAdjustments) {
+                            onEditCharacterAdjustments(char);
+                          }
+                        }}
+                        className="absolute top-2 left-2 p-1.5 rounded-lg bg-black/40 hover:bg-white/15 text-white/70 hover:text-white transition z-10 cursor-pointer"
+                        title="Adjust Image Position & Size"
+                      >
+                        <SlidersHorizontal className="h-3.5 w-3.5" />
                       </button>
 
                       {/* Image Preview */}
