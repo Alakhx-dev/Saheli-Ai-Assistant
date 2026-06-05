@@ -3,16 +3,13 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from "@/lib/firebase";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
+import CuteLoader from "./components/CuteLoader";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [user, loading] = useAuthState(auth);
   const devMode = sessionStorage.getItem('devMode');
   
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-black/95 text-purple-400">
-      <div className="animate-pulse">Loading Saheli AI...</div>
-    </div>
-  );
+  if (loading) return <CuteLoader />;
   if (!user && !devMode) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };

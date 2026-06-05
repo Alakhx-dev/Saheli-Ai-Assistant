@@ -94,7 +94,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const SettingsPanel = lazy(() => import("../components/settings/SettingsPanel"));
+import SettingsPanel from "../components/settings/SettingsPanel";
 import MusicPlayerPanel from "../components/music/MusicPlayerPanel";
 import FullscreenPlayer from "../components/music/FullscreenPlayer";
 import type { JioSaavnSong } from "../../lib/musicService";
@@ -1915,9 +1915,7 @@ export default function Chat() {
     useCallback((text: string) => setInput(text), [])
   );
 
-  useEffect(() => {
-    void import("../components/settings/SettingsPanel");
-  }, []);
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
@@ -4879,57 +4877,53 @@ export default function Chat() {
           )}
         </div>
 
-        <Suspense fallback={null}>
-          {settingsPanelOpen ? (
-            <SettingsPanel
-              open={settingsPanelOpen}
-              onOpenChange={handleSettingsOpenChange}
-              activeSection={activeSettingsSection}
-              onSectionChange={setActiveSettingsSection}
-              languageMode={replyLanguageMode}
-              onLanguageModeChange={handleLanguageModeChange}
-              memoryEnabled={memoryEnabled}
-              onMemoryToggle={handleMemoryToggle}
-              onManageMemory={handleOpenMemoryFromSettings}
-              profileName={effectiveUserName}
-              profileSubtext={profileSubtext}
-              profileImageUrl={profileDraftPhotoUrl}
-              profileInitial={profileInitial}
-              onEditProfile={handleOpenProfileFromSettings}
-              onChangePassword={() => void handleChangePassword()}
-              onLogout={() => void handleLogout()}
-              isTtsMuted={isTtsMuted}
-              onToggleTtsMute={handleToggleTtsMute}
-              selectedCharacter={selectedCharacter}
-              onCharacterChange={handleCharacterChange}
-              uploadedCharacters={uploadedCharacters}
-              onRefreshUploadedCharacters={refreshCustomCharacters}
-              onEditCharacterAdjustments={handleEditCharacterAdjustments}
-              activeMode={currentMode}
-              onModeChange={setCurrentMode}
-              profileDraftName={profileDraftName}
-              onProfileNameChange={setProfileDraftName}
-              onProfileImageSelect={handleProfileImageSelect}
-              onProfileImageDelete={() => void handleProfileImageDelete()}
-              onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
-              isSavingProfile={isSavingProfile}
-              originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
-              realtimeAwareness={awareness}
-              awarenessLocationLabel={locationLabel}
-              awarenessWeatherLabel={weatherLabel}
-              awarenessTimeFormat={awarenessSettings.timeFormat}
-              awarenessShowDayDate={awarenessSettings.showDayDate}
-              awarenessRefreshing={isRefreshingRealtime}
-              onAwarenessTimeFormatChange={setTimeFormat}
-              onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
-              onAwarenessRefresh={() => void refreshLocationAndWeather()}
-              onOpenMusicSystem={() => {
-                setIsMusicPanelOpen(true);
-                setIsMusicMinimized(false);
-              }}
-            />
-          ) : null}
-        </Suspense>
+        <SettingsPanel
+          open={settingsPanelOpen}
+          onOpenChange={handleSettingsOpenChange}
+          activeSection={activeSettingsSection}
+          onSectionChange={setActiveSettingsSection}
+          languageMode={replyLanguageMode}
+          onLanguageModeChange={handleLanguageModeChange}
+          memoryEnabled={memoryEnabled}
+          onMemoryToggle={handleMemoryToggle}
+          onManageMemory={handleOpenMemoryFromSettings}
+          profileName={effectiveUserName}
+          profileSubtext={profileSubtext}
+          profileImageUrl={profileDraftPhotoUrl}
+          profileInitial={profileInitial}
+          onEditProfile={handleOpenProfileFromSettings}
+          onChangePassword={() => void handleChangePassword()}
+          onLogout={() => void handleLogout()}
+          isTtsMuted={isTtsMuted}
+          onToggleTtsMute={handleToggleTtsMute}
+          selectedCharacter={selectedCharacter}
+          onCharacterChange={handleCharacterChange}
+          uploadedCharacters={uploadedCharacters}
+          onRefreshUploadedCharacters={refreshCustomCharacters}
+          onEditCharacterAdjustments={handleEditCharacterAdjustments}
+          activeMode={currentMode}
+          onModeChange={setCurrentMode}
+          profileDraftName={profileDraftName}
+          onProfileNameChange={setProfileDraftName}
+          onProfileImageSelect={handleProfileImageSelect}
+          onProfileImageDelete={() => void handleProfileImageDelete()}
+          onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
+          isSavingProfile={isSavingProfile}
+          originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
+          realtimeAwareness={awareness}
+          awarenessLocationLabel={locationLabel}
+          awarenessWeatherLabel={weatherLabel}
+          awarenessTimeFormat={awarenessSettings.timeFormat}
+          awarenessShowDayDate={awarenessSettings.showDayDate}
+          awarenessRefreshing={isRefreshingRealtime}
+          onAwarenessTimeFormatChange={setTimeFormat}
+          onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
+          onAwarenessRefresh={() => void refreshLocationAndWeather()}
+          onOpenMusicSystem={() => {
+            setIsMusicPanelOpen(true);
+            setIsMusicMinimized(false);
+          }}
+        />
 
         <MemoryModal
           open={memoryModalOpen}
