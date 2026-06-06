@@ -327,6 +327,20 @@ function buildLanguageInstruction(language: AppLanguage): string {
 function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
   if (!memoryProfile) return "";
   const lines: string[] = [];
+  
+  if (memoryProfile.customProfile) {
+    const cp = memoryProfile.customProfile;
+    const cpFacts: string[] = [];
+    if (cp.name?.trim()) cpFacts.push(`Name is ${cp.name.trim()}`);
+    if (cp.gender?.trim()) cpFacts.push(`Gender is ${cp.gender.trim()}`);
+    if (cp.age?.trim()) cpFacts.push(`Age is ${cp.age.trim()}`);
+    if (cp.hobby?.trim()) cpFacts.push(`Hobby is ${cp.hobby.trim()}`);
+    if (cp.description?.trim()) cpFacts.push(`Description/Bio: ${cp.description.trim()}`);
+    if (cpFacts.length) {
+      lines.push(`- Custom Profile Info: ${cpFacts.join("; ")}`);
+    }
+  }
+
   if (memoryProfile.facts?.length) lines.push(`- Facts: ${memoryProfile.facts.join("; ")}`);
   if (memoryProfile.preferences?.length) lines.push(`- Preferences: ${memoryProfile.preferences.join("; ")}`);
   if (memoryProfile.images?.length) {

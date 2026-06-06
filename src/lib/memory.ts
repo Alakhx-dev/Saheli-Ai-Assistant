@@ -64,18 +64,28 @@ export interface MemoryImageEntry {
   storagePath?: string;
 }
 
+export interface CustomProfile {
+  name?: string;
+  gender?: string;
+  age?: string;
+  hobby?: string;
+  description?: string;
+}
+
 export interface MemoryProfile {
   preferences: string[];
   facts: string[];
   memoryEnabled: boolean;
   chat_history: MemoryChatEntry[];
   images: MemoryImageEntry[];
+  customProfile?: CustomProfile;
 }
 
 interface MemoryDocShape {
   preferences?: string[];
   facts?: string[];
   memoryEnabled?: boolean;
+  customProfile?: CustomProfile;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -404,6 +414,7 @@ function mapMemoryDoc(data: MemoryDocShape | undefined): Omit<MemoryProfile, "ch
     preferences: normalizeList(data?.preferences, MAX_PREFERENCES),
     facts: normalizeList(data?.facts, MAX_FACTS),
     memoryEnabled: typeof data?.memoryEnabled === "boolean" ? data.memoryEnabled : true,
+    customProfile: data?.customProfile || {},
   };
 }
 
@@ -444,6 +455,7 @@ export function createEmptyMemoryProfile(): MemoryProfile {
     memoryEnabled: true,
     chat_history: [],
     images: [],
+    customProfile: {},
   };
 }
 
@@ -574,9 +586,19 @@ export async function fetchMemory(
   },
 ): Promise<MemoryProfile> {
   if (!user) {
+    let customProfile = {};
+    try {
+      const saved = localStorage.getItem("saheli_guest_custom_profile");
+      if (saved) {
+        customProfile = JSON.parse(saved);
+      }
+    } catch (err) {
+      console.error("Failed to parse guest custom profile:", err);
+    }
     return {
       ...createEmptyMemoryProfile(),
       memoryEnabled: localStorage.getItem(LOCAL_MEMORY_ENABLED_KEY) !== "false",
+      customProfile,
     };
   }
 

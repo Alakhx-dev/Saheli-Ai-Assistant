@@ -2281,6 +2281,16 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
   }, [setStoreMemory, setStoreSettings, user]);
 
+  useEffect(() => {
+    const handleRefresh = () => {
+      void refreshMemoryState();
+    };
+    window.addEventListener("saheli_refresh_memory_state", handleRefresh);
+    return () => {
+      window.removeEventListener("saheli_refresh_memory_state", handleRefresh);
+    };
+  }, [refreshMemoryState]);
+
   const handleDeleteMemoryChat = async (messageId: string) => {
     if (!window.confirm("Delete this chat memory?")) {
       return;

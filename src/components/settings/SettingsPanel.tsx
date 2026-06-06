@@ -736,6 +736,67 @@ export default function SettingsPanel({
   const [isLayoutLoading, setIsLayoutLoading] = useState(false);
   const [showConfirmRestore, setShowConfirmRestore] = useState(false);
 
+  const [customProfileName, setCustomProfileName] = useState("");
+  const [customProfileGender, setCustomProfileGender] = useState("");
+  const [customProfileAge, setCustomProfileAge] = useState("");
+  const [customProfileHobby, setCustomProfileHobby] = useState("");
+  const [customProfileDescription, setCustomProfileDescription] = useState("");
+  const [isSavingCustomProfile, setIsSavingCustomProfile] = useState(false);
+  const [isLoadingCustomProfile, setIsLoadingCustomProfile] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      const loadProfile = async () => {
+        setIsLoadingCustomProfile(true);
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          // Guest mode: load from localStorage
+          try {
+            const saved = window.localStorage.getItem("saheli_guest_custom_profile");
+            if (saved) {
+              const cp = JSON.parse(saved);
+              setCustomProfileName(cp.name || "");
+              setCustomProfileGender(cp.gender || "");
+              setCustomProfileAge(cp.age || "");
+              setCustomProfileHobby(cp.hobby || "");
+              setCustomProfileDescription(cp.description || "");
+            } else {
+              setCustomProfileName("");
+              setCustomProfileGender("");
+              setCustomProfileAge("");
+              setCustomProfileHobby("");
+              setCustomProfileDescription("");
+            }
+          } catch (err) {
+            console.error("Failed to load guest custom profile:", err);
+          }
+          setIsLoadingCustomProfile(false);
+          return;
+        }
+
+        try {
+          // Registered user: load from Firestore
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            const cp = data?.customProfile || {};
+            setCustomProfileName(cp.name || "");
+            setCustomProfileGender(cp.gender || "");
+            setCustomProfileAge(cp.age || "");
+            setCustomProfileHobby(cp.hobby || "");
+            setCustomProfileDescription(cp.description || "");
+          }
+        } catch (err) {
+          console.error("Failed to load custom profile from Firestore:", err);
+        }
+        setIsLoadingCustomProfile(false);
+      };
+      
+      void loadProfile();
+    }
+  }, [open]);
+
   const [layout, setLayout] = useState<ConfigItem[]>(() => {
     if (typeof window !== "undefined") {
       const saved = window.localStorage.getItem("saheli_settings_layout");
@@ -3175,6 +3236,154 @@ export default function SettingsPanel({
             Manage Image Memory
           </motion.button>
         );
+
+      case "custom_profile": {
+        const getCustomProfileDoneButtonClasses = () => {
+          switch (selectedColor) {
+            case "yellow": return "bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 hover:border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.15)] hover:shadow-[0_0_25px_rgba(234,179,8,0.35)] active:scale-95";
+            case "blue": return "bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.15)] hover:shadow-[0_0_25px_rgba(6,182,212,0.35)] active:scale-95";
+            case "orchid": return "bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.15)] hover:shadow-[0_0_25px_rgba(168,85,247,0.35)] active:scale-95";
+            case "peach": return "bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.15)] hover:shadow-[0_0_25px_rgba(249,115,22,0.35)] active:scale-95";
+            case "beige": return "bg-amber-600/10 hover:bg-amber-600/20 text-amber-200 border border-amber-500/20 hover:border-amber-500/40 shadow-[0_0_12px_rgba(217,119,6,0.1)] hover:shadow-[0_0_20px_rgba(217,119,6,0.25)] active:scale-95";
+            case "maroon": return "bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 hover:border-red-500/50 shadow-[0_0_15px_rgba(220,38,38,0.15)] hover:shadow-[0_0_25px_rgba(220,38,38,0.35)] active:scale-95";
+            case "gemini": return "bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 hover:border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)] hover:shadow-[0_0_25px_rgba(59,130,246,0.35)] active:scale-95";
+            case "pink":
+            default:
+              return "bg-pink-500/10 hover:bg-pink-500/20 text-pink-300 border border-pink-500/30 hover:border-pink-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)] hover:shadow-[0_0_25px_rgba(244,63,94,0.35)] active:scale-95";
+          }
+        };
+
+        const getInputFocusClass = () => {
+          switch (selectedColor) {
+            case "yellow": return "focus:border-yellow-500/40 focus:shadow-[0_0_12px_rgba(234,179,8,0.15)]";
+            case "blue": return "focus:border-cyan-500/40 focus:shadow-[0_0_12px_rgba(6,182,212,0.15)]";
+            case "orchid": return "focus:border-purple-500/40 focus:shadow-[0_0_12px_rgba(168,85,247,0.15)]";
+            case "peach": return "focus:border-orange-500/40 focus:shadow-[0_0_12px_rgba(249,115,22,0.15)]";
+            case "beige": return "focus:border-amber-500/30 focus:shadow-[0_0_12px_rgba(217,119,6,0.1)]";
+            case "maroon": return "focus:border-red-500/40 focus:shadow-[0_0_12px_rgba(220,38,38,0.15)]";
+            case "gemini": return "focus:border-blue-500/40 focus:shadow-[0_0_12px_rgba(37,99,235,0.15)]";
+            case "pink":
+            default:
+              return "focus:border-pink-500/40 focus:shadow-[0_0_12px_rgba(255,105,180,0.15)]";
+          }
+        };
+
+        const handleSaveCustomProfile = async () => {
+          setIsSavingCustomProfile(true);
+          const cp = {
+            name: customProfileName.trim(),
+            gender: customProfileGender.trim(),
+            age: customProfileAge.trim(),
+            hobby: customProfileHobby.trim(),
+            description: customProfileDescription.trim(),
+          };
+
+          const currentUser = auth.currentUser;
+          try {
+            if (!currentUser) {
+              window.localStorage.setItem("saheli_guest_custom_profile", JSON.stringify(cp));
+            } else {
+              const userDocRef = doc(db, "users", currentUser.uid);
+              await updateDoc(userDocRef, {
+                customProfile: cp,
+              });
+            }
+            toast.success("Custom profile saved successfully! 🎉");
+            window.dispatchEvent(new CustomEvent("saheli_refresh_memory_state"));
+          } catch (err) {
+            console.error("Failed to save custom profile:", err);
+            toast.error("Failed to save custom profile. 😢");
+          }
+          setIsSavingCustomProfile(false);
+        };
+
+        return (
+          <motion.div key="memory-custom-profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+            <div className="flex flex-col gap-4">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Custom Profile</p>
+                <p className="mt-0.5 text-[11px] text-white/50 leading-relaxed">
+                  Enter details manually that Saheli will remember about you.
+                </p>
+              </div>
+
+              {isLoadingCustomProfile ? (
+                <div className="flex items-center justify-center py-6 text-white/40 text-xs">
+                  Loading profile...
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">Full Name</label>
+                    <input
+                      value={customProfileName}
+                      onChange={(e) => setCustomProfileName(e.target.value)}
+                      type="text"
+                      placeholder="e.g. Swara"
+                      className={`w-full py-2.5 px-3.5 text-xs rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">Gender</label>
+                      <input
+                        value={customProfileGender}
+                        onChange={(e) => setCustomProfileGender(e.target.value)}
+                        type="text"
+                        placeholder="e.g. Male"
+                        className={`w-full py-2.5 px-3.5 text-xs rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">Age</label>
+                      <input
+                        value={customProfileAge}
+                        onChange={(e) => setCustomProfileAge(e.target.value)}
+                        type="text"
+                        placeholder="e.g. 21"
+                        className={`w-full py-2.5 px-3.5 text-xs rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">Hobby / Interests</label>
+                    <input
+                      value={customProfileHobby}
+                      onChange={(e) => setCustomProfileHobby(e.target.value)}
+                      type="text"
+                      placeholder="e.g. Coding, Gaming"
+                      className={`w-full py-2.5 px-3.5 text-xs rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">About Me / Description</label>
+                    <textarea
+                      value={customProfileDescription}
+                      onChange={(e) => setCustomProfileDescription(e.target.value)}
+                      placeholder="e.g. CS Student at Delhi University, loves biryani"
+                      rows={3}
+                      className={`w-full py-2.5 px-3.5 text-xs rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 resize-none ${getInputFocusClass()}`}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSavingCustomProfile}
+                    onClick={handleSaveCustomProfile}
+                    className={`w-full py-3 mt-1.5 text-xs font-bold rounded-xl text-white tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${getCustomProfileDoneButtonClasses()} ${isSavingCustomProfile ? "opacity-50 pointer-events-none" : ""}`}
+                  >
+                    <Check className="h-4 w-4" />
+                    {isSavingCustomProfile ? "Saving..." : "Save Profile"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        );
+      }
 
       case "password":
         return (
