@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -601,7 +601,120 @@ export default function SettingsPanel({
     return "personality";
   });
 
-  const [groqKey, setGroqKey] = useState("");
+  const [customKeys, setCustomKeys] = useState<Array<{ id: string; provider: "groq" | "gemini"; key: string; active: boolean }>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_custom_api_keys");
+        return saved ? JSON.parse(saved) : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+  const [keyProvider, setKeyProvider] = useState<"groq" | "gemini">("groq");
+  const [keyInput, setKeyInput] = useState("");
+  const [keyError, setKeyError] = useState("");
+  const [showSavedKeys, setShowSavedKeys] = useState(false);
+
+  const maskKey = (key: string) => {
+    if (key.length <= 8) return "••••••••";
+    return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+  };
+
+  const handleSaveKey = () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed) {
+      setKeyError("API key cannot be empty.");
+      return;
+    }
+
+    if (keyProvider === "groq") {
+      if (trimmed.startsWith("AIzaSy")) {
+        setKeyError("This looks like a Google Gemini key! Please select Gemini provider above.");
+        return;
+      }
+      if (!trimmed.startsWith("gsk_")) {
+        setKeyError("Groq API key must start with 'gsk_'.");
+        return;
+      }
+    } else if (keyProvider === "gemini") {
+      if (trimmed.startsWith("gsk_")) {
+        setKeyError("This looks like a Groq key! Please select Groq provider above.");
+        return;
+      }
+      if (!trimmed.startsWith("AIzaSy")) {
+        setKeyError("Gemini API key must start with 'AIzaSy'.");
+        return;
+      }
+    }
+
+    if (customKeys.length >= 5) {
+      toast.error("Maximum limit of 5 API keys reached. Delete an existing key to add a new one. ⚠️");
+      return;
+    }
+
+    const isDuplicate = customKeys.some((k) => k.key === trimmed);
+    if (isDuplicate) {
+      setKeyError("This API key is already saved.");
+      return;
+    }
+
+    const newKeyObj = {
+      id: `key_${Date.now()}`,
+      provider: keyProvider,
+      key: trimmed,
+      active: true,
+    };
+
+    const updatedKeys = customKeys.map((k) => {
+      if (k.provider === keyProvider) {
+        return { ...k, active: false };
+      }
+      return k;
+    });
+
+    const nextKeys = [...updatedKeys, newKeyObj];
+    setCustomKeys(nextKeys);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_custom_api_keys", JSON.stringify(nextKeys));
+    }
+
+    setKeyInput("");
+    setKeyError("");
+    toast.success("API key saved successfully! ✨");
+  };
+
+  const handleToggleActive = (id: string) => {
+    const targetKey = customKeys.find((k) => k.id === id);
+    if (!targetKey) return;
+
+    const nextActive = !targetKey.active;
+    const updatedKeys = customKeys.map((k) => {
+      if (k.id === id) {
+        return { ...k, active: nextActive };
+      }
+      if (k.provider === targetKey.provider && nextActive) {
+        return { ...k, active: false };
+      }
+      return k;
+    });
+
+    setCustomKeys(updatedKeys);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_custom_api_keys", JSON.stringify(updatedKeys));
+    }
+  };
+
+  const handleDeleteKey = (id: string) => {
+    const nextKeys = customKeys.filter((k) => k.id !== id);
+    setCustomKeys(nextKeys);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_custom_api_keys", JSON.stringify(nextKeys));
+    }
+    toast.success("API key deleted. 🗑️");
+  };
+
   const [personalizationChild, setPersonalizationChild] = useState<SettingsSectionId | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -2768,28 +2881,230 @@ export default function SettingsPanel({
           </motion.div>
         );
 
-      case "api_keys":
+      case "api_keys": {
+        const getProviderCardClasses = (providerName: "groq" | "gemini") => {
+          const isActive = keyProvider === providerName;
+          if (!isActive) {
+            return "border-white/5 bg-white/[0.02] text-white/60 hover:border-white/10 hover:bg-white/[0.04] hover:text-white/80";
+          }
+          switch (selectedColor) {
+            case "yellow":
+              return "border-yellow-500/40 bg-gradient-to-br from-yellow-500/15 to-amber-500/10 text-white shadow-[0_0_15px_rgba(255,215,0,0.15)]";
+            case "blue":
+              return "border-cyan-500/40 bg-gradient-to-br from-cyan-500/15 to-blue-500/10 text-white shadow-[0_0_15px_rgba(0,229,255,0.15)]";
+            case "orchid":
+              return "border-purple-500/40 bg-gradient-to-br from-purple-500/15 to-pink-500/10 text-white shadow-[0_0_15px_rgba(213,0,249,0.15)]";
+            case "peach":
+              return "border-orange-500/40 bg-gradient-to-br from-orange-500/15 to-red-500/10 text-white shadow-[0_0_15px_rgba(255,158,125,0.15)]";
+            case "beige":
+              return "border-amber-500/30 bg-gradient-to-br from-amber-600/10 to-amber-900/10 text-white shadow-[0_0_15px_rgba(212,184,149,0.1)]";
+            case "maroon":
+              return "border-red-500/40 bg-gradient-to-br from-red-800/15 to-red-950/15 text-white shadow-[0_0_15px_rgba(208,28,63,0.15)]";
+            case "gemini":
+              return "border-blue-500/40 bg-gradient-to-br from-blue-500/15 to-indigo-950/20 text-white shadow-[0_0_15px_rgba(74,137,255,0.15)]";
+            case "pink":
+            default:
+              return "border-pink-500/40 bg-gradient-to-br from-pink-500/15 to-purple-500/10 text-white shadow-[0_0_15px_rgba(255,105,180,0.15)]";
+          }
+        };
+
+        const getActiveAccentTextClass = () => {
+          switch (selectedColor) {
+            case "yellow": return "text-yellow-400";
+            case "blue": return "text-cyan-400";
+            case "orchid": return "text-purple-400";
+            case "peach": return "text-orange-400";
+            case "beige": return "text-amber-300";
+            case "maroon": return "text-red-400";
+            case "gemini": return "text-blue-400";
+            case "pink":
+            default:
+              return "text-pink-400";
+          }
+        };
+
+        const getDoneButtonClasses = () => {
+          switch (selectedColor) {
+            case "yellow": return "bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-black shadow-[0_0_12px_rgba(234,179,8,0.2)] hover:shadow-[0_0_20px_rgba(234,179,8,0.45)] border border-yellow-400/20 active:scale-95";
+            case "blue": return "bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.2)] hover:shadow-[0_0_20px_rgba(6,182,212,0.45)] border border-cyan-400/20 active:scale-95";
+            case "orchid": return "bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white shadow-[0_0_12px_rgba(168,85,247,0.2)] hover:shadow-[0_0_20px_rgba(168,85,247,0.45)] border border-purple-400/20 active:scale-95";
+            case "peach": return "bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500 text-white shadow-[0_0_12px_rgba(249,115,22,0.2)] hover:shadow-[0_0_20px_rgba(249,115,22,0.45)] border border-orange-400/20 active:scale-95";
+            case "beige": return "bg-gradient-to-r from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-white shadow-[0_0_12px_rgba(217,119,6,0.15)] hover:shadow-[0_0_20px_rgba(217,119,6,0.35)] border border-amber-400/15 active:scale-95";
+            case "maroon": return "bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white shadow-[0_0_12px_rgba(220,38,38,0.2)] hover:shadow-[0_0_20px_rgba(220,38,38,0.45)] border border-red-500/20 active:scale-95";
+            case "gemini": return "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.2)] hover:shadow-[0_0_20px_rgba(59,130,246,0.45)] border border-blue-400/20 active:scale-95";
+            case "pink":
+            default:
+              return "bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 text-white shadow-[0_0_12px_rgba(255,105,180,0.2)] hover:shadow-[0_0_20px_rgba(255,105,180,0.45)] border border-pink-400/20 active:scale-95";
+          }
+        };
+
+        const getInputFocusClass = () => {
+          switch (selectedColor) {
+            case "yellow": return "focus:border-yellow-500/40 focus:shadow-[0_0_12px_rgba(234,179,8,0.15)]";
+            case "blue": return "focus:border-cyan-500/40 focus:shadow-[0_0_12px_rgba(6,182,212,0.15)]";
+            case "orchid": return "focus:border-purple-500/40 focus:shadow-[0_0_12px_rgba(168,85,247,0.15)]";
+            case "peach": return "focus:border-orange-500/40 focus:shadow-[0_0_12px_rgba(249,115,22,0.15)]";
+            case "beige": return "focus:border-amber-500/30 focus:shadow-[0_0_12px_rgba(217,119,6,0.1)]";
+            case "maroon": return "focus:border-red-500/40 focus:shadow-[0_0_12px_rgba(220,38,38,0.15)]";
+            case "gemini": return "focus:border-blue-500/40 focus:shadow-[0_0_12px_rgba(37,99,235,0.15)]";
+            case "pink":
+            default:
+              return "focus:border-pink-500/40 focus:shadow-[0_0_12px_rgba(255,105,180,0.15)]";
+          }
+        };
+
         return (
           <motion.div key="about-api-keys" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
-            <div className="settings-glass-card flex items-start justify-between gap-3 !p-3">
+            <div className="flex flex-col gap-4">
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Custom API Keys (Optional)</p>
-                <p className="mt-1 text-[12px] leading-5 text-white/45">
-                  Use your own keys to bypass system limits. Models and backend logic will remain 100% identical.
+                <p className="mt-1 text-[11.5px] leading-relaxed text-white/50">
+                  Apni API keys add karke system limits ko bypass karein. Model behavior aur prompts unchanged rahenge. (Max 5 keys)
                 </p>
-                <div className="mt-3 flex flex-col gap-2.5">
+              </div>
+
+              {/* Premium Provider Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: "groq", name: "Groq Cloud", sub: "Ultra-fast inference", icon: Cpu },
+                  { id: "gemini", name: "Google Gemini", sub: "Advanced models", icon: Sparkles }
+                ].map((provider) => {
+                  const IconComponent = provider.icon;
+                  const isActive = keyProvider === provider.id;
+                  return (
+                    <button
+                      key={provider.id}
+                      type="button"
+                      onClick={() => { setKeyProvider(provider.id as any); setKeyError(""); }}
+                      className={`relative flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-300 select-none text-center cursor-pointer group backdrop-blur-md ${getProviderCardClasses(provider.id as any)}`}
+                    >
+                      <div className={`absolute inset-0 rounded-2xl transition-opacity duration-300 pointer-events-none opacity-0 group-hover:opacity-100 bg-white/[0.01]`} />
+                      
+                      {/* Active indicator */}
+                      <div className="absolute top-2.5 right-2.5 flex items-center justify-center">
+                        <div className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center transition-all ${
+                          isActive 
+                            ? `${getActiveAccentTextClass().replace("text-", "border-").replace("400", "500/50")} ${getActiveAccentTextClass().replace("text-", "bg-").replace("400", "500/10")} text-white` 
+                            : "border-white/10 bg-black/20"
+                        }`}>
+                          {isActive && <div className={`h-1.5 w-1.5 rounded-full ${getActiveAccentTextClass().replace("text-", "bg-")}`} />}
+                        </div>
+                      </div>
+
+                      {/* Icon */}
+                      <div className={`p-2.5 rounded-xl border transition-all duration-300 group-hover:scale-105 ${
+                        isActive 
+                          ? `${getActiveAccentTextClass().replace("text-", "border-").replace("400", "500/20")} ${getActiveAccentTextClass().replace("text-", "bg-").replace("400", "500/5")} ${getActiveAccentTextClass()}` 
+                          : "border-white/5 bg-white/[0.01] text-white/40"
+                      }`}>
+                        <IconComponent className="h-5 w-5" />
+                      </div>
+
+                      {/* Label & Subtext */}
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`text-[12px] font-bold tracking-wide transition-colors ${isActive ? "text-white" : "text-white/70"}`}>
+                          {provider.name}
+                        </span>
+                        <span className="text-[9.5px] font-medium text-white/35 leading-tight">
+                          {provider.sub}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Spacious Key Input */}
+              <div className="flex flex-col gap-3">
+                <div className="relative w-full">
                   <input
-                    value={groqKey}
-                    onChange={(event) => setGroqKey(event.target.value)}
+                    value={keyInput}
+                    onChange={(event) => {
+                      setKeyInput(event.target.value);
+                      if (keyError) setKeyError("");
+                    }}
                     type="password"
-                    placeholder="Enter Groq API Key (gsk_...)"
-                    className="settings-api-input py-2.5 text-[13px] w-full"
+                    placeholder={keyProvider === "groq" ? "Enter Groq API Key (gsk_...)" : "Enter Gemini API Key (AIzaSy...)"}
+                    className={`w-full py-3 px-4 text-xs font-mono rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
                   />
                 </div>
+                
+                {keyError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs text-red-200/90 leading-relaxed flex items-start gap-2"
+                  >
+                    <span className="text-red-400 shrink-0 font-bold">⚠️</span>
+                    <p className="flex-1">{keyError}</p>
+                  </motion.div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSaveKey}
+                  className={`w-full py-3 text-xs font-bold rounded-xl text-white tracking-wider uppercase transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${getDoneButtonClasses()}`}
+                >
+                  <Check className="h-4 w-4" />
+                  Save API Key
+                </button>
+              </div>
+
+              {/* Show / Hide Toggle */}
+              <div className="border-t border-white/5 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowSavedKeys(!showSavedKeys)}
+                  className="flex items-center justify-between w-full py-2 px-3 text-xs font-semibold text-white/70 hover:text-white bg-white/[0.02] hover:bg-white/[0.05] border border-white/5 hover:border-white/10 rounded-xl transition-all duration-200"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <KeyRound className={`h-3.5 w-3.5 ${getActiveAccentTextClass()}`} />
+                    Show Saved Keys ({customKeys.length}/5)
+                  </span>
+                  {showSavedKeys ? <ChevronDown className="h-4 w-4 text-white/50" /> : <ChevronRight className="h-4 w-4 text-white/50" />}
+                </button>
+
+                {showSavedKeys && (
+                  <div className="space-y-2 mt-2 max-h-[160px] overflow-y-auto pr-1 no-scrollbar">
+                    {customKeys.length === 0 ? (
+                      <p className="text-center py-4 text-xs text-white/30 italic">No saved API keys yet</p>
+                    ) : (
+                      customKeys.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 p-2.5 bg-white/[0.02] border border-white/5 hover:border-white/10 rounded-xl hover:bg-white/[0.04] transition duration-200 shadow-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded tracking-wide uppercase ${item.provider === "gemini" ? "bg-blue-500/10 text-blue-300 border border-blue-500/20" : "bg-purple-500/10 text-purple-300 border border-purple-500/20"}`}>
+                              {item.provider}
+                            </span>
+                            <span className="text-xs text-white/70 font-mono truncate">
+                              {maskKey(item.key)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActive(item.id)}
+                              className={`text-[10px] px-2.5 py-1.5 rounded-lg transition-all duration-300 font-bold border ${item.active ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]" : "bg-white/[0.02] border-white/10 text-white/50 hover:text-white hover:bg-white/[0.06]"}`}
+                            >
+                              {item.active ? "Active" : "Activate"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteKey(item.id)}
+                              className="p-1.5 rounded-lg bg-white/[0.02] hover:bg-red-500/20 hover:text-red-400 text-white/50 border border-white/5 hover:border-red-500/30 transition duration-200"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
         );
+      }
 
       case "memory_toggle":
         return (
@@ -3017,6 +3332,21 @@ export default function SettingsPanel({
     }
   }, [open]);
 
+  const getChildPanelShadow = (color: string) => {
+    switch (color) {
+      case "yellow": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(234, 179, 8, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "blue": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(6, 182, 212, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "orchid": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "peach": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(249, 115, 22, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "beige": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(217, 119, 6, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "maroon": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(220, 38, 38, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "gemini": return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(37, 99, 235, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+      case "pink":
+      default:
+        return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(236, 72, 153, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
+    }
+  };
+
   return (
     <AnimatePresence>
       {open && (
@@ -3033,10 +3363,10 @@ export default function SettingsPanel({
                 exit={{ opacity: 0, x: -20, scale: 0.95 }}
                 transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                 style={{
-                  background: "rgba(15, 15, 15, 0.4)",
-                  backdropFilter: "blur(25px)",
-                  border: "0.5px solid rgba(255, 255, 255, 0.06)",
-                  boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+                  background: "rgba(255, 255, 255, 0.03)",
+                  backdropFilter: "blur(40px) saturate(160%)",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  boxShadow: getChildPanelShadow(selectedColor)
                 }}
                 className="settings-menu-container relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
               >
@@ -3087,10 +3417,10 @@ export default function SettingsPanel({
                     exit={{ opacity: 0, x: -20, scale: 0.95 }}
                     transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     style={{
-                      background: "rgba(15, 15, 15, 0.4)",
-                      backdropFilter: "blur(25px)",
-                      border: "0.5px solid rgba(255, 255, 255, 0.06)",
-                      boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+                      background: "rgba(255, 255, 255, 0.03)",
+                      backdropFilter: "blur(40px) saturate(160%)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      boxShadow: getChildPanelShadow(selectedColor)
                     }}
                     className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 ${
                       activeItem?.id === "character" ? "w-[280px]" : activeItem?.id === "memory" ? "w-[300px]" : activeItem?.id === "personalization" ? "w-[320px]" : activeItem?.id === "realtime" ? "w-[380px]" : activeItem?.id === "color" ? "w-[245px]" : activeItem?.id === "customization" ? "w-[350px]" : "w-[360px]"
@@ -3232,10 +3562,10 @@ export default function SettingsPanel({
                     exit={{ opacity: 0, x: -20, scale: 0.95 }}
                     transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
                     style={{
-                      background: "rgba(15, 15, 15, 0.4)",
-                      backdropFilter: "blur(25px)",
-                      border: "0.5px solid rgba(255, 255, 255, 0.06)",
-                      boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)"
+                      background: "rgba(255, 255, 255, 0.03)",
+                      backdropFilter: "blur(40px) saturate(160%)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      boxShadow: getChildPanelShadow(selectedColor)
                     }}
                     className={`settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] flex-col rounded-[28px] overflow-hidden transition-[width] duration-150 ${
                       personalizationChild === "color" 

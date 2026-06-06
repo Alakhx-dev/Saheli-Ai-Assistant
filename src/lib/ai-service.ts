@@ -522,6 +522,21 @@ type ProviderResponseData = {
   message?: string;
 };
 
+function getCustomApiKey(provider: ProviderName): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const rawKeys = window.localStorage.getItem("saheli_custom_api_keys");
+    if (!rawKeys) return null;
+    const keys = JSON.parse(rawKeys);
+    if (!Array.isArray(keys)) return null;
+    const activeKeyObj = keys.find((k) => k.provider === provider && k.active);
+    return activeKeyObj ? activeKeyObj.key.trim() : null;
+  } catch (e) {
+    console.error("Failed to parse custom api keys:", e);
+    return null;
+  }
+}
+
 function getProviderApiKey(provider: ProviderName) {
   const env = import.meta.env as Record<string, string | undefined>;
   if (provider === "gemini") {
@@ -690,27 +705,14 @@ async function callGeminiNativeAPI(
   }
 }
 
-async function callProviderAPI(
-  tier: PipelineTier,
+async function executeGroqFetch(
+  modelId: string,
   payload: ProviderRequestPayload,
+  apiKey: string,
 ): Promise<string> {
-  const provider = tier.provider;
-  const apiKey = getProviderApiKey(provider);
-
-  if (provider === "gemini") {
-    if (!apiKey) {
-      throw new Error("Missing VITE_GEMINI_API_KEY in environment");
-    }
-    return callGeminiNativeAPI(tier.modelId, payload, apiKey);
-  }
-
-  if (!apiKey) {
-    throw new Error("Missing VITE_GROQ_API_KEY in environment");
-  }
-
   const apiUrl = GROQ_API_URL;
   const requestBody = buildRequestBody(
-    tier.modelId,
+    modelId,
     payload.systemPrompt,
     payload.messages,
     payload.imageBase64,
@@ -750,11 +752,47 @@ async function callProviderAPI(
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error("Groq request timeout ho gaya");
     }
-
     throw error;
   } finally {
     globalThis.clearTimeout(timeoutId);
   }
+}
+
+async function callProviderAPI(
+  tier: PipelineTier,
+  payload: ProviderRequestPayload,
+): Promise<string> {
+  const provider = tier.provider;
+  const customKey = getCustomApiKey(provider);
+
+  if (customKey) {
+    try {
+      debugLog(`Attempting ${provider} API call with custom key...`);
+      if (provider === "gemini") {
+        return await callGeminiNativeAPI(tier.modelId, payload, customKey);
+      } else {
+        return await executeGroqFetch(tier.modelId, payload, customKey);
+      }
+    } catch (error: any) {
+      console.warn(`Custom key failed for ${provider}:`, error?.message || error);
+      console.warn("Falling back to default system key...");
+    }
+  }
+
+  const defaultKey = getProviderApiKey(provider);
+
+  if (provider === "gemini") {
+    if (!defaultKey) {
+      throw new Error("Missing VITE_GEMINI_API_KEY in environment");
+    }
+    return callGeminiNativeAPI(tier.modelId, payload, defaultKey);
+  }
+
+  if (!defaultKey) {
+    throw new Error("Missing VITE_GROQ_API_KEY in environment");
+  }
+
+  return executeGroqFetch(tier.modelId, payload, defaultKey);
 }
 
 function isModelVisionCompatible(modelId: string): boolean {
