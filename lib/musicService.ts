@@ -15,17 +15,19 @@ export async function searchSongs(query: string, apiKey: string): Promise<JioSaa
   const cleanQuery = query.trim();
   if (!cleanQuery) return [];
 
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Referer": "https://www.jiosaavn.com/",
+  };
+
   // We fetch directly from the public JioSaavn API to avoid 404 search errors on JioSaavn unofficial RapidAPI
   const url = `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&q=${encodeURIComponent(cleanQuery)}`;
 
   try {
     const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-        "Referer": "https://www.jiosaavn.com/",
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -35,7 +37,34 @@ export async function searchSongs(query: string, apiKey: string): Promise<JioSaa
     const resData: any = await response.json();
     
     // Parse the results from different possible response formats
-    const rawSongs = resData?.results || resData?.data?.results || resData?.data || (Array.isArray(resData) ? resData : []);
+    let rawSongs = resData?.results || resData?.data?.results || resData?.data || (Array.isArray(resData) ? resData : []);
+
+    // Fallback to autocomplete search to correct spelling if no direct results were found
+    if (rawSongs.length === 0) {
+      const autocompleteUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(cleanQuery)}`;
+      try {
+        const autoResponse = await fetch(autocompleteUrl, { headers });
+        if (autoResponse.ok) {
+          const autoData = await autoResponse.json();
+          const firstSongTitle = autoData?.songs?.data?.[0]?.title || autoData?.songs?.[0]?.title;
+          if (firstSongTitle) {
+            console.log(`🔍 [musicService] Auto-corrected spelling fallback: "${cleanQuery}" -> "${firstSongTitle}"`);
+            // Query search API again with corrected spelling
+            const retryUrl = `https://www.jiosaavn.com/api.php?__call=search.getResults&_format=json&_marker=0&cc=in&includeMetaTags=1&q=${encodeURIComponent(firstSongTitle)}`;
+            const retryResponse = await fetch(retryUrl, { headers });
+            if (retryResponse.ok) {
+              const retryData = await retryResponse.json();
+              const retrySongs = retryData?.results || retryData?.data?.results || retryData?.data || [];
+              if (Array.isArray(retrySongs) && retrySongs.length > 0) {
+                rawSongs = retrySongs;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Autocomplete spelling correction failed:", err);
+      }
+    }
     
     return rawSongs.map((song: any): JioSaavnSong => {
       // Parse artist names

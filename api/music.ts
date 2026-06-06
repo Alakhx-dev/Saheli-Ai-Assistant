@@ -74,6 +74,27 @@ export default async function handler(request: Request) {
         return jsonResponse({ songs });
       }
 
+      if (action === "autocomplete") {
+        if (!query.trim()) {
+          return jsonResponse({ suggestions: [] });
+        }
+        const autocompleteUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`;
+        const autoResponse = await fetch(autocompleteUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json",
+            "Referer": "https://www.jiosaavn.com/",
+          }
+        });
+        if (autoResponse.ok) {
+          const autoData = await autoResponse.json();
+          const rawSuggestions = autoData?.songs?.data || autoData?.songs || [];
+          const suggestions = rawSuggestions.map((s: any) => s.title || s.query || s.song).filter(Boolean);
+          return jsonResponse({ suggestions });
+        }
+        return jsonResponse({ suggestions: [] });
+      }
+
       // Also support getsong via GET for convenience
       if (action === "getsong") {
         const encryptedMediaUrl = url.searchParams.get("encryptedMediaUrl") || url.searchParams.get("url") || "";

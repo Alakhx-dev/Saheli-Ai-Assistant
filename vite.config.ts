@@ -290,6 +290,47 @@ export default defineConfig(({ mode }) => {
             return;
           }
 
+          if (action === "autocomplete") {
+            if (!query.trim()) {
+              res.statusCode = 200;
+              res.setHeader("Access-Control-Allow-Origin", "*");
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ suggestions: [] }));
+              return;
+            }
+            const autocompleteUrl = `https://www.jiosaavn.com/api.php?__call=autocomplete.get&_format=json&_marker=0&cc=in&includeMetaTags=1&query=${encodeURIComponent(query)}`;
+            fetch(autocompleteUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Referer": "https://www.jiosaavn.com/",
+              }
+            })
+              .then(async (autoResponse) => {
+                if (autoResponse.ok) {
+                  const autoData = await autoResponse.json();
+                  const rawSuggestions = autoData?.songs?.data || autoData?.songs || [];
+                  const suggestions = rawSuggestions.map((s: any) => s.title || s.query || s.song).filter(Boolean);
+                  res.statusCode = 200;
+                  res.setHeader("Access-Control-Allow-Origin", "*");
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify({ suggestions }));
+                } else {
+                  res.statusCode = 200;
+                  res.setHeader("Access-Control-Allow-Origin", "*");
+                  res.setHeader("Content-Type", "application/json");
+                  res.end(JSON.stringify({ suggestions: [] }));
+                }
+              })
+              .catch((error) => {
+                res.statusCode = 500;
+                res.setHeader("Access-Control-Allow-Origin", "*");
+                res.setHeader("Content-Type", "application/json");
+                res.end(JSON.stringify({ error: "Autocomplete failed", details: error?.message || error }));
+              });
+            return;
+          }
+
           if (action === "getsong") {
             const encryptedMediaUrl = parsedUrl.searchParams.get("encryptedMediaUrl") || parsedUrl.searchParams.get("url") || "";
             if (!encryptedMediaUrl) {

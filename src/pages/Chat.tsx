@@ -1334,6 +1334,37 @@ export default function Chat() {
         setIsMusicMinimized(true);
       } else {
         console.warn("Could not find any song for query:", query);
+        let suggestionText = "";
+        try {
+          const autoResponse = await fetch(`/api/music?action=autocomplete&query=${encodeURIComponent(query)}`);
+          const autoData = await autoResponse.json();
+          if (autoData.suggestions && autoData.suggestions.length > 0) {
+            const firstSuggestion = autoData.suggestions[0];
+            suggestionText = `Mujhe exact song nahi mil raha hai bestie... Tum "${firstSuggestion}" to nahi bol rahe? 🎵`;
+          }
+        } catch (autoErr) {
+          console.error("Autocomplete search failed in fallback:", autoErr);
+        }
+
+        if (!suggestionText) {
+          suggestionText = `Mujhe exact song nahi mil raha hai bestie... Ek baar spelling check karo ya koi aur song try karo! 🎵`;
+        }
+
+        const fallbackMessage = { role: "model" as const, content: suggestionText };
+        setMessages((prev) => [...prev, fallbackMessage]);
+        messagesRef.current = [...messagesRef.current, fallbackMessage];
+
+        setLatestSaheliMessage(suggestionText);
+        toast.error(suggestionText);
+
+        const chatId = currentChatIdRef.current;
+        if (chatId) {
+          void persistChatMessage(chatId, {
+            role: "model",
+            content: suggestionText,
+            createdAt: Date.now(),
+          });
+        }
       }
     } catch (err) {
       console.error("AI music play search failed:", err);
@@ -1365,26 +1396,15 @@ export default function Chat() {
       }
     };
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        if (audio.src && !audio.paused) {
-          audio.pause();
-          setIsMusicPlaying(false);
-        }
-      }
-    };
-
     audio.addEventListener("timeupdate", handleTimeUpdate);
     audio.addEventListener("durationchange", handleDurationChange);
     audio.addEventListener("ended", handleEnded);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       audio.pause();
       audio.removeEventListener("timeupdate", handleTimeUpdate);
       audio.removeEventListener("durationchange", handleDurationChange);
       audio.removeEventListener("ended", handleEnded);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
       audioRef.current = null;
     };
   }, []);
