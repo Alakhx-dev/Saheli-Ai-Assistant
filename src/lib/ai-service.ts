@@ -952,6 +952,13 @@ async function emitStreamingText(text: string, onChunk?: (partialText: string) =
   }
 }
 
+function buildTemporaryMemoryContext(temporaryMemories: string[]): string {
+  if (!temporaryMemories || !temporaryMemories.length) return "";
+  return `CHAT SESSION CONTEXT (TEMPORARY - ONLY FOR THIS CONVERSATION):
+${temporaryMemories.map(m => `- ${m}`).join("\n")}
+(Note: These are temporary facts about the user's current status or topics discussed in the active chat. Use them naturally where relevant, but do not save them to permanent memory.)`;
+}
+
 export async function fetchAISwarasResponse(
   messages: ChatMessage[],
   imageBase64?: string,
@@ -964,6 +971,7 @@ export async function fetchAISwarasResponse(
   onChunk?: (partialText: string) => void,
   currentSong?: any,
   isMusicPlaying?: boolean,
+  temporaryMemories: string[] = [],
 ): Promise<AiResponse> {
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
   if (!lastUserMessage || !lastUserMessage.content.trim()) {
@@ -981,6 +989,7 @@ export async function fetchAISwarasResponse(
     chosenPrompt,
     personality === "mentor" ? buildMoodContext(mood) : "",
     buildStyleContext(detailedReply, personality),
+    buildTemporaryMemoryContext(temporaryMemories),
     buildHinglishContext(lastUserMessage.content),
     identity ? buildIdentityContext({ ...identity, language }) : "",
     buildRealtimeAwarenessContext(realtimeAwareness),
@@ -1046,6 +1055,7 @@ export async function sendMessage(
   _autoSwitchEnabled?: boolean,
   currentSong?: any,
   isMusicPlaying?: boolean,
+  temporaryMemories: string[] = [],
 ): Promise<AiResponse> {
   if (activeRequest) return activeRequest;
   activeRequest = fetchAISwarasResponse(
@@ -1059,7 +1069,8 @@ export async function sendMessage(
     activeMode,
     onChunk,
     currentSong,
-    isMusicPlaying
+    isMusicPlaying,
+    temporaryMemories
   );
   try {
     return await activeRequest;
@@ -1262,3 +1273,55 @@ Remember:
     return currentTitle || "";
   }
 }
+
+const MEMORY_EXTRACTOR_PROMPT = `You are a highly precise memory extraction system. Your job is to analyze the conversation and extract important details about the user to help personalize future sessions.
+
+You MUST extract details into two separate categories:
+1. "permanent": Durable facts, interests, or preferences about the user (e.g. user's name, age, hometown, relationship status, job/role, permanent likes/dislikes, habits, hobbies).
+2. "temporary": Short-term, situational facts or context specific ONLY to this current active chat session (e.g. user is feeling sleepy right now, user is about to go eat dinner, user is studying for a chemistry exam right now, user's current task is debugging a React component).
+
+CRITICAL RULES:
+- Ignore casual remarks, generic small talk, transient emotions, greetings, and chat assistant instructions (e.g. "hi", "bye", "wtf", "hmm", "okay").
+- Do NOT extract visual descriptions of images.
+- Keep the facts extremely concise (max 8-10 words per fact) and write them from a third-person perspective (e.g. "User likes dal-chawal", "User name is Alakh").
+- If there is absolutely nothing worth remembering under a category, return an empty list for that category.
+- You MUST respond in JSON format ONLY, matching this schema:
+{
+  "permanent": ["Fact 1", "Fact 2"],
+  "temporary": ["Fact 1", "Fact 2"]
+}`;
+
+export async function extractMemoryAI(
+  messages: ChatMessage[],
+): Promise<{ permanent: string[]; temporary: string[] }> {
+  // Use a fast model tier for memory extraction
+  const extractTiers = [
+    { provider: "gemini" as const, modelId: "gemini-2.5-flash-lite" },
+    { provider: "groq" as const, modelId: "llama-3.3-70b-versatile" }
+  ];
+
+  const payload = {
+    systemPrompt: MEMORY_EXTRACTOR_PROMPT,
+    messages: messages.slice(-5), // only analyze the last few messages for memory extraction
+    maxTokens: 150,
+    temperature: 0.1, // low temperature for high precision JSON
+  };
+
+  try {
+    const result = await executeWithFallback(extractTiers, payload);
+    const text = result.text.trim();
+    
+    // Find the JSON block if the model returned markdown
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonString = jsonMatch ? jsonMatch[0] : text;
+    
+    const parsed = JSON.parse(jsonString);
+    const permanent = Array.isArray(parsed.permanent) ? parsed.permanent.map(String) : [];
+    const temporary = Array.isArray(parsed.temporary) ? parsed.temporary.map(String) : [];
+    return { permanent, temporary };
+  } catch (error) {
+    console.error("AI memory extraction failed:", error);
+    return { permanent: [], temporary: [] };
+  }
+}
+

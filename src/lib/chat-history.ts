@@ -3,6 +3,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -103,6 +104,7 @@ export interface StoredChatMessage extends ChatMessage {
 
 interface LocalChatRecord extends ChatSessionSummary {
   messages: StoredChatMessage[];
+  temporaryMemories?: string[];
 }
 
 type LocalChatsMap = Record<string, LocalChatRecord>;
@@ -304,4 +306,40 @@ export async function deleteChatSession(chatId: string, user: User | null) {
   await Promise.all(snapshot.docs.map((messageDoc) => deleteDoc(messageDoc.ref)));
   await deleteDoc(doc(db, "chats", chatId));
 }
+
+export async function saveTemporaryMemories(chatId: string, memories: string[], user: User | null) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    const existingChat = chats[chatId];
+    if (existingChat) {
+      existingChat.temporaryMemories = memories;
+      chats[chatId] = existingChat;
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, "chats", chatId), {
+    temporaryMemories: memories,
+  });
+}
+
+export async function loadTemporaryMemories(chatId: string, user: User | null): Promise<string[]> {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    return chats[chatId]?.temporaryMemories ?? [];
+  }
+
+  try {
+    const snapshot = await getDoc(doc(db, "chats", chatId));
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      return Array.isArray(data?.temporaryMemories) ? data.temporaryMemories : [];
+    }
+  } catch (err) {
+    console.error("Failed to load temporary memories from Firestore:", err);
+  }
+  return [];
+}
+
 

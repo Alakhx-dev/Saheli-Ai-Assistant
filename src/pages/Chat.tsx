@@ -46,7 +46,7 @@ import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "fi
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { sendMessage, detectChatMode, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
+import { sendMessage, detectChatMode, extractMemoryAI, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -55,6 +55,8 @@ import {
   saveChatMessage,
   updateChatSessionTitle,
   getChatEmoji,
+  saveTemporaryMemories,
+  loadTemporaryMemories,
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
@@ -1505,6 +1507,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [latestSaheliMessage, setLatestSaheliMessage] = useState("");
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
+  const [temporaryMemories, setTemporaryMemories] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobile());
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
@@ -2075,6 +2078,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     const hydrateActiveChat = async () => {
       try {
         const storedMessages = await loadChatMessages(nextChatId, user);
+        const storedTempMemories = await loadTemporaryMemories(nextChatId, user);
         if (cancelled) {
           return;
         }
@@ -2083,6 +2087,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         setCurrentChatId(nextChatId);
         setMessages(normalizedMessages);
         messagesRef.current = normalizedMessages;
+        setTemporaryMemories(storedTempMemories);
         setPendingMobileVisionRequest(null);
         pendingMobileVisionRequestRef.current = null;
         setStoreChats(
@@ -3116,7 +3121,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         undefined,
         undefined,
         currentSongRef.current,
-        isPlayingRef.current
+        isPlayingRef.current,
+        temporaryMemories
       );
       
       if (response.warning) {
@@ -3288,6 +3294,85 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     void handleSubmit();
   };
 
+  const handleAIMemoryExtraction = useCallback(async (chatId: string, history: ChatMessage[]) => {
+    try {
+      const result = await extractMemoryAI(history);
+      if (!result.permanent.length && !result.temporary.length) {
+        return;
+      }
+
+      console.log("🧠 [MEMORY EXTRACTION AI] Extracted:", result);
+
+      // 1. Process permanent memories
+      if (result.permanent.length) {
+        setMemoryProfile((prev) => {
+          const currentProfile = prev ?? createEmptyMemoryProfile();
+          // Filter duplicates
+          const newFacts = result.permanent.filter(fact => !currentProfile.facts.includes(fact));
+          if (!newFacts.length) return currentProfile;
+
+          const updatedFacts = [...newFacts, ...currentProfile.facts];
+          const nextMemoryFields = {
+            preferences: currentProfile.preferences,
+            facts: updatedFacts,
+          };
+
+          // Re-generate chat_history dynamically so it updates instantly in the UI!
+          const nextChatHistory = [
+            ...nextMemoryFields.preferences.map((value, index) => ({
+              id: `preference:${index}`,
+              role: "user" as const,
+              content: value,
+              timestamp: new Date(0).toISOString(),
+            })),
+            ...nextMemoryFields.facts.map((value, index) => ({
+              id: `fact:${index}`,
+              role: "user" as const,
+              content: value,
+              timestamp: new Date(0).toISOString(),
+            })),
+          ];
+
+          const updatedProfile = {
+            ...currentProfile,
+            ...nextMemoryFields,
+            chat_history: nextChatHistory,
+          };
+
+          // Update store outside of render/state setter callback
+          setTimeout(() => {
+            setStoreMemory(updatedProfile);
+          }, 0);
+
+          // Persist globally to Firestore
+          if (user) {
+            void saveMemoryFields(user, nextMemoryFields, { skipAiFilter: true }).catch((err) => {
+              console.error("Failed to save permanent memories to Firestore:", err);
+            });
+          }
+
+          return updatedProfile;
+        });
+      }
+
+      // 2. Process temporary memories
+      if (result.temporary.length) {
+        setTemporaryMemories((prev) => {
+          const updated = [...result.temporary, ...prev];
+          
+          // Persist to DB or localStorage
+          void saveTemporaryMemories(chatId, updated, user).catch((err) => {
+            console.error("Failed to save temporary memories:", err);
+          });
+          
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error("Failed to extract or save AI memory:", err);
+    }
+  }, [user, setMemoryProfile, setTemporaryMemories, setStoreMemory]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if ((!(input.trim() || selectedImageRef.current)) || isLoading || submitLockRef.current) {
@@ -3304,20 +3389,6 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     const userText = input.trim() || (selectedImageRef.current ? "Please analyze this image carefully." : "");
     setInput("");
     const mobile = isMobile();
-    if (!isGuest && user?.uid && !incognitoMode) {
-      const memoryResult = detectMemory(userText);
-      if (memoryResult.save && memoryResult.type && memoryResult.content) {
-        void saveMemoryToDB(
-          {
-            type: memoryResult.type,
-            content: memoryResult.content,
-          },
-          user.uid,
-        ).catch((error) => {
-          console.error("Failed to save detected memory", error);
-        });
-      }
-    }
 
     const { chatId } = await ensureActiveChat();
 
@@ -3362,27 +3433,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
 
 
-    let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
     if (memoryEnabled && !incognitoMode) {
-      const nextMemoryFields = deriveMemoryFields(
-        {
-          preferences: nextMemoryProfile.preferences,
-          facts: nextMemoryProfile.facts,
-        },
-        userText,
-      );
-      nextMemoryProfile = {
-        ...nextMemoryProfile,
-        ...nextMemoryFields,
-        memoryEnabled: true,
-      };
-      setMemoryProfile(nextMemoryProfile);
-
-      // skipAiFilter: deriveMemoryFields already applies strict validation,
-      // so the secondary AI-based filter was silently dropping valid memories.
-      void saveMemoryFields(user, nextMemoryFields, { skipAiFilter: true }).catch((error) => {
-        console.error("Failed to persist memory fields", error);
-      });
+      void handleAIMemoryExtraction(chatId, nextHistory);
     }
 
     const lastModelMessage = [...messagesRef.current].reverse().find(msg => msg.role === "model")?.content || "";
@@ -3392,7 +3444,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         id: ++mobileVisionRequestIdRef.current,
         chatId,
         history: nextHistory,
-        memoryProfile: memoryEnabled ? nextMemoryProfile : null,
+        memoryProfile: memoryEnabled ? memoryProfile : null,
         identity: requestIdentity as any,
       };
       pendingMobileVisionRequestRef.current = pendingRequest;
@@ -3459,7 +3511,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         base64Image,
         undefined,
         requestIdentity as any,
-        nextMemoryProfile,
+        memoryProfile,
         currentMode,
       );
       responseText = responseResult.text;
