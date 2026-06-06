@@ -88,6 +88,66 @@ const getThemeClasses = (color: string, type: "active" | "inactive" | "text" | "
   }
 };
 
+const getFocusBorderClass = (color: string) => {
+  switch (color) {
+    case "yellow": return "focus:border-yellow-500/45 focus:shadow-[0_0_8px_rgba(250,204,21,0.15)]";
+    case "blue": return "focus:border-cyan-400/45 focus:shadow-[0_0_8px_rgba(34,211,238,0.15)]";
+    case "orchid": return "focus:border-purple-500/45 focus:shadow-[0_0_8px_rgba(168,85,247,0.15)]";
+    case "peach": return "focus:border-orange-400/45 focus:shadow-[0_0_8px_rgba(251,146,60,0.15)]";
+    case "beige": return "focus:border-amber-500/35 focus:shadow-[0_0_8px_rgba(245,158,11,0.1)]";
+    case "maroon": return "focus:border-red-500/45 focus:shadow-[0_0_8px_rgba(239,68,68,0.15)]";
+    case "gemini": return "focus:border-blue-500/45 focus:shadow-[0_0_8px_rgba(59,130,246,0.15)]";
+    case "pink":
+    default:
+      return "focus:border-pink-500/45 focus:shadow-[0_0_8px_rgba(236,72,153,0.15)]";
+  }
+};
+
+const getPencilThemeClasses = (color: string) => {
+  switch (color) {
+    case "yellow": return "hover:bg-yellow-500 hover:text-black hover:border-yellow-400/50 hover:shadow-[0_0_15px_rgba(234,179,8,0.5)]";
+    case "blue": return "hover:bg-cyan-500 hover:text-black hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(6,182,212,0.5)]";
+    case "orchid": return "hover:bg-purple-600 hover:text-white hover:border-purple-400/50 hover:shadow-[0_0_15px_rgba(168,85,247,0.5)]";
+    case "peach": return "hover:bg-orange-500 hover:text-white hover:border-orange-400/50 hover:shadow-[0_0_15px_rgba(249,115,22,0.5)]";
+    case "beige": return "hover:bg-amber-600 hover:text-white hover:border-amber-400/50 hover:shadow-[0_0_15px_rgba(217,119,6,0.4)]";
+    case "maroon": return "hover:bg-red-600 hover:text-white hover:border-red-400/50 hover:shadow-[0_0_15px_rgba(220,38,38,0.5)]";
+    case "gemini": return "hover:bg-blue-600 hover:text-white hover:border-blue-400/50 hover:shadow-[0_0_15px_rgba(37,99,235,0.5)]";
+    case "pink":
+    default:
+      return "hover:bg-pink-500 hover:text-white hover:border-pink-400/50 hover:shadow-[0_0_15px_rgba(236,72,153,0.5)]";
+  }
+};
+
+const getMenuThemeBorderClass = (color: string) => {
+  switch (color) {
+    case "yellow": return "border-yellow-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(234,179,8,0.15)]";
+    case "blue": return "border-cyan-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(6,182,212,0.15)]";
+    case "orchid": return "border-purple-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(168,85,247,0.15)]";
+    case "peach": return "border-orange-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(249,115,22,0.15)]";
+    case "beige": return "border-amber-500/30 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(217,119,6,0.12)]";
+    case "maroon": return "border-red-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(220,38,38,0.15)]";
+    case "gemini": return "border-blue-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(37,99,235,0.15)]";
+    case "pink":
+    default:
+      return "border-pink-500/35 shadow-[0_18px_40px_rgba(0,0,0,0.55),0_0_20px_rgba(236,72,153,0.15)]";
+  }
+};
+
+const getMenuItemHoverClass = (color: string) => {
+  switch (color) {
+    case "yellow": return "hover:bg-yellow-500/10 hover:text-yellow-200";
+    case "blue": return "hover:bg-cyan-500/10 hover:text-cyan-200";
+    case "orchid": return "hover:bg-purple-500/10 hover:text-purple-200";
+    case "peach": return "hover:bg-orange-500/10 hover:text-orange-200";
+    case "beige": return "hover:bg-amber-500/10 hover:text-amber-200";
+    case "maroon": return "hover:bg-red-500/10 hover:text-red-200";
+    case "gemini": return "hover:bg-blue-500/10 hover:text-blue-200";
+    case "pink":
+    default:
+      return "hover:bg-pink-500/10 hover:text-pink-200";
+  }
+};
+
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -2505,6 +2565,7 @@ export default function SettingsPanel({
         return renderCustomizationView();
 
       case "profile":
+        const effectivePhotoUrl = profileImageUrl || originalPhotoUrl || "";
         return (
           <motion.div key="account-profile" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
             <input
@@ -2517,64 +2578,87 @@ export default function SettingsPanel({
             <div className="space-y-4">
               <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Profile</h3>
               <div className="flex flex-col items-center gap-2 pt-1">
-                <div className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => setIsPhotoMenuOpen((prev) => !prev)}
-                    className="h-20 w-20 rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_22px_rgba(255,0,120,0.14)] transition hover:border-pink-400/25"
-                  >
-                    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-400/20 to-purple-400/20">
-                      {profileImageUrl ? (
-                        <img src={profileImageUrl} alt={profileName} className="h-full w-full object-cover" />
-                      ) : (
-                        <UserCircle className="h-10 w-10 text-white/30" />
-                      )}
-                    </div>
-                  </button>
+                <div className={`relative ${isPhotoMenuOpen ? "z-30" : "z-0"}`}>
+                  <div className="relative h-20 w-20">
+                    <button
+                      type="button"
+                      onClick={() => setIsPhotoMenuOpen((prev) => !prev)}
+                      className="h-full w-full rounded-full border border-white/10 bg-white/5 p-1 shadow-[0_0_22px_rgba(255,0,120,0.14)] transition hover:border-pink-400/25 overflow-hidden"
+                    >
+                      <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-400/20 to-purple-400/20">
+                        {effectivePhotoUrl ? (
+                          <img src={effectivePhotoUrl} alt={profileName} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-2xl font-semibold text-white/70 select-none">
+                            {profileInitial}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                    {/* Small Edit Pencil Button on the bottom right of the DP circle */}
+                    <button
+                      type="button"
+                      onClick={() => setIsPhotoMenuOpen((prev) => !prev)}
+                      className={`absolute bottom-[-2px] right-[-2px] h-8 w-8 rounded-full border border-white/20 bg-[#160d24]/90 flex items-center justify-center text-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.5)] transition-all hover:scale-110 active:scale-95 cursor-pointer ${getPencilThemeClasses(selectedColor)}`}
+                      style={{
+                        backdropFilter: "blur(10px)",
+                        WebkitBackdropFilter: "blur(10px)"
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
 
                   {isPhotoMenuOpen && (
-                    <div className="absolute left-1/2 top-[88px] z-20 w-44 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#120b1b]/95 p-1.5 shadow-[0_18px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          accountFileRef.current?.removeAttribute("capture");
-                          accountFileRef.current?.click();
-                          setIsPhotoMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        Upload from Gallery
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (accountFileRef.current) {
-                            accountFileRef.current.setAttribute("capture", "user");
-                            accountFileRef.current.click();
-                            setTimeout(() => accountFileRef.current?.removeAttribute("capture"), 500);
-                          }
-                          setIsPhotoMenuOpen(false);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 hover:text-white"
-                      >
-                        <Camera className="h-3.5 w-3.5" />
-                        Capture with Camera
-                      </button>
-                      {profileImageUrl ? (
+                    <>
+                      {/* Fixed click-outside backdrop to dismiss the menu */}
+                      <div 
+                        className="fixed inset-0 z-10 pointer-events-auto" 
+                        onClick={() => setIsPhotoMenuOpen(false)} 
+                      />
+                      <div className={`absolute left-1/2 top-[88px] z-20 w-48 -translate-x-1/2 rounded-2xl border p-1.5 backdrop-blur-2xl bg-[#120a1c]/95 ${getMenuThemeBorderClass(selectedColor)}`}>
                         <button
                           type="button"
                           onClick={() => {
-                            onProfileImageDelete();
+                            accountFileRef.current?.removeAttribute("capture");
+                            accountFileRef.current?.click();
                             setIsPhotoMenuOpen(false);
                           }}
-                          className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-medium text-red-200/80 transition hover:bg-red-500/10 hover:text-red-100"
+                          className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-white/85 transition-all duration-200 ${getMenuItemHoverClass(selectedColor)}`}
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Delete Photo
+                          <Upload className="h-4 w-4 opacity-80" />
+                          Upload from Gallery
                         </button>
-                      ) : null}
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (accountFileRef.current) {
+                              accountFileRef.current.setAttribute("capture", "user");
+                              accountFileRef.current.click();
+                              setTimeout(() => accountFileRef.current?.removeAttribute("capture"), 500);
+                            }
+                            setIsPhotoMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-white/85 transition-all duration-200 ${getMenuItemHoverClass(selectedColor)}`}
+                        >
+                          <Camera className="h-4 w-4 opacity-80" />
+                          Capture with Camera
+                        </button>
+                        {profileImageUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onProfileImageDelete();
+                              setIsPhotoMenuOpen(false);
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-red-200/85 transition-all duration-200 hover:bg-red-500/15 hover:text-red-100"
+                          >
+                            <Trash2 className="h-4 w-4 opacity-80" />
+                            Delete Photo
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -2600,22 +2684,24 @@ export default function SettingsPanel({
                             }
                           }}
                           autoFocus
-                          className="w-full rounded-xl border border-pink-400/25 bg-white/[0.02] px-3 py-1.5 text-sm font-medium text-white outline-none transition focus:border-pink-300/45"
+                          className={`w-full rounded-xl border border-white/10 bg-white/[0.02] px-3 py-1.5 text-sm font-medium text-white outline-none transition ${getFocusBorderClass(selectedColor)}`}
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const trimmed = localName.trim();
-                            if (trimmed) {
-                              onProfileNameChange(trimmed);
-                              onSaveProfile(trimmed);
-                            }
-                            setIsEditingName(false);
-                          }}
-                          className="rounded-full border border-pink-400/25 bg-pink-500/10 px-3 py-1.5 text-xs font-semibold text-pink-100 transition hover:bg-pink-500/20"
-                        >
-                          OK
-                        </button>
+                        {localName.trim() !== "" && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const trimmed = localName.trim();
+                              if (trimmed) {
+                                onProfileNameChange(trimmed);
+                                onSaveProfile(trimmed);
+                              }
+                              setIsEditingName(false);
+                            }}
+                            className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${getThemeClasses(selectedColor, "switchActive")}`}
+                          >
+                            Done
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <button

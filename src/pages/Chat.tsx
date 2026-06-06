@@ -85,6 +85,7 @@ import SaheliLogo from "../components/SaheliLogo";
 import CinematicAtmosphere from "../components/CinematicAtmosphere";
 import Profile from "../components/Profile";
 import MemoryModal from "../components/memory/MemoryModal";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAppStore } from "@/store/app-store";
 import ThemeTransitionOverlay from "../components/ThemeTransitionOverlay";
 import {
@@ -1421,13 +1422,17 @@ export default function Chat() {
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSectionId>("character");
   const [weatherPanelOpen, setWeatherPanelOpen] = useState(false);
-  const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" | "night">("auto");
+const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" | "night">("auto");
   const [weatherPanelClockNow, setWeatherPanelClockNow] = useState(() => new Date());
   const [memoryModalOpen, setMemoryModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [replyLanguageMode, setReplyLanguageMode] = useState<ReplyLanguageMode>(() => getStoredReplyLanguageMode());
   const [profileStatus, setProfileStatus] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
   const [memoryEnabled, setMemoryEnabledState] = useState(true);
   const [memoryHydrated, setMemoryHydrated] = useState(false);
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
@@ -2399,32 +2404,44 @@ export default function Chat() {
     }
   };
 
-  const handleChangePassword = useCallback(async () => {
+  const handleChangePassword = useCallback(() => {
     if (!user) {
-      setMemoryStatus("Please log in to change password.");
+      toast.error("Please log in to change password. 🔒");
+      return;
+    }
+    setIsPasswordModalOpen(true);
+    setNewPassword("");
+    setPasswordChangeError(null);
+  }, [user]);
+
+  const handleSubmitPasswordChange = async () => {
+    if (!newPassword || newPassword.trim().length < 6) {
+      toast.error("Password must be at least 6 characters. 🔒");
       return;
     }
 
-    const nextPassword = window.prompt("Enter new password (minimum 6 characters):", "");
-    if (!nextPassword) {
+    // Check if user is logged in with social login providers (Google/GitHub)
+    const isSocialLogin = user?.providerData?.some(
+      (prov) => prov.providerId === "google.com" || prov.providerId === "github.com"
+    );
+
+    if (isSocialLogin) {
+      setPasswordChangeError("You can only update your password for accounts created with email credentials. Password changes are not supported for Google or GitHub authentication.");
       return;
     }
 
-    if (nextPassword.trim().length < 6) {
-      setMemoryStatus("Password must be at least 6 characters.");
-      return;
-    }
-
+    setIsUpdatingPassword(true);
     try {
-      await updatePassword(user, nextPassword.trim());
-      setMemoryStatus("Password updated.");
-      toast.success("Password updated.");
+      await updatePassword(user!, newPassword.trim());
+      toast.success("Password updated successfully! Key updated. 🔑");
+      setIsPasswordModalOpen(false);
     } catch (error) {
       console.error("Password update failed", error);
-      setMemoryStatus("Could not change password. Please re-login and try again.");
       toast.error("Could not change password. Please re-login and try again.");
+    } finally {
+      setIsUpdatingPassword(false);
     }
-  }, [user]);
+  };
 
   const handleSaveProfile = async (
     nameOverride?: string,
@@ -5405,8 +5422,147 @@ export default function Chat() {
           setIsThemeTransitioning(false);
         }}
       />
+
+      <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
+        <DialogContent 
+          overlayClassName="!bg-black/35 !backdrop-blur-md"
+          className="z-[100] w-[min(30rem,calc(100vw-2rem))] max-w-[30rem] overflow-hidden rounded-[48px] sm:rounded-[48px] border border-white/10 bg-[#0d0616]/60 p-6 text-white backdrop-blur-[30px] transition-all duration-300 shadow-[0_32px_90px_rgba(0,0,0,0.8)]"
+        >
+          <div className="space-y-5">
+            {passwordChangeError ? (
+              <div className="space-y-5 text-center py-3">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/30">
+                  <AlertTriangle className="h-6 w-6 text-amber-400 animate-pulse" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <h3 className="text-lg font-semibold text-white" style={{ fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+                    Authentication Warning
+                  </h3>
+                  <p className="text-xs leading-5 text-white/60 px-2" style={{ fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+                    {passwordChangeError}
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    className="w-full inline-flex items-center justify-center rounded-full border border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 px-5 py-3 text-xs font-bold text-amber-200 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    style={{ fontFamily: "'Outfit', 'Inter', sans-serif" }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="group inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white transition duration-200 mb-1 focus:outline-none cursor-pointer"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Back</span>
+                </button>
+
+                <DialogHeader className="space-y-1.5 text-left">
+                  <DialogTitle className="text-xl font-semibold tracking-[-0.03em] text-white">Change Password</DialogTitle>
+                  <DialogDescription className="text-xs leading-5 text-white/50">
+                    Password updates are only available for accounts using email and password credentials.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-medium uppercase tracking-[0.26em] text-white/35">New Password</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className={`w-full border-0 border-b border-white/15 bg-transparent px-0 py-2.5 text-sm text-white outline-none placeholder:text-white/30 transition focus:ring-0 ${getFocusBorderClassForModal(activeTheme)}`}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPasswordModalOpen(false)}
+                    className="inline-flex flex-1 items-center justify-center rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/80 transition duration-300 hover:border-white/20 hover:bg-white/[0.08]"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmitPasswordChange}
+                    disabled={isUpdatingPassword}
+                    className={`inline-flex flex-1 items-center justify-center rounded-[20px] border px-4 py-3 text-xs font-bold transition duration-300 disabled:opacity-60 ${getSubmitButtonThemeClasses(activeTheme)}`}
+                  >
+                    {isUpdatingPassword ? "Updating..." : "Done"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   </div>
   );
 }
+
+const getFocusBorderClassForModal = (color: string) => {
+  switch (color) {
+    case "yellow": return "focus:border-yellow-400/50 focus:shadow-[0_4px_0_rgba(250,204,21,0.05)]";
+    case "blue": return "focus:border-cyan-400/50 focus:shadow-[0_4px_0_rgba(34,211,238,0.05)]";
+    case "orchid": return "focus:border-purple-400/50 focus:shadow-[0_4px_0_rgba(168,85,247,0.05)]";
+    case "peach": return "focus:border-orange-400/50 focus:shadow-[0_4px_0_rgba(251,146,60,0.05)]";
+    case "beige": return "focus:border-amber-400/40 focus:shadow-[0_4px_0_rgba(245,158,11,0.03)]";
+    case "maroon": return "focus:border-red-400/50 focus:shadow-[0_4px_0_rgba(239,68,68,0.05)]";
+    case "gemini": return "focus:border-blue-400/50 focus:shadow-[0_4px_0_rgba(59,130,246,0.05)]";
+    case "pink":
+    default:
+      return "focus:border-pink-400/50 focus:shadow-[0_4px_0_rgba(236,72,153,0.05)]";
+  }
+};
+
+const getSubmitButtonThemeClasses = (color: string) => {
+  switch (color) {
+    case "yellow":
+      return "border-yellow-400/25 bg-gradient-to-r from-yellow-500/20 to-amber-500/15 hover:from-yellow-500/25 hover:to-amber-500/20 text-yellow-100 shadow-[0_0_15px_rgba(255,215,0,0.15)] hover:border-yellow-400/40";
+    case "blue":
+      return "border-cyan-400/25 bg-gradient-to-r from-cyan-500/20 to-blue-500/15 hover:from-cyan-500/25 hover:to-blue-500/20 text-cyan-100 shadow-[0_0_15px_rgba(0,229,255,0.15)] hover:border-cyan-400/40";
+    case "orchid":
+      return "border-purple-400/25 bg-gradient-to-r from-purple-500/20 to-pink-500/15 hover:from-purple-500/25 hover:to-pink-500/20 text-purple-100 shadow-[0_0_15px_rgba(213,0,249,0.15)] hover:border-purple-400/40";
+    case "peach":
+      return "border-orange-400/25 bg-gradient-to-r from-orange-500/20 to-red-500/15 hover:from-orange-500/25 hover:to-red-500/20 text-orange-100 shadow-[0_0_15px_rgba(255,158,125,0.15)] hover:border-orange-400/40";
+    case "beige":
+      return "border-amber-400/20 bg-gradient-to-r from-amber-500/15 to-amber-900/10 hover:from-amber-500/20 hover:to-amber-900/15 text-amber-200 shadow-[0_0_15px_rgba(212,184,149,0.1)] hover:border-amber-400/30";
+    case "maroon":
+      return "border-red-400/25 bg-gradient-to-r from-red-800/20 to-red-950/15 hover:from-red-800/25 hover:to-red-950/20 text-red-100 shadow-[0_0_15px_rgba(208,28,63,0.15)] hover:border-red-400/40";
+    case "gemini":
+      return "border-blue-400/25 bg-gradient-to-r from-blue-500/20 to-indigo-950/25 hover:from-blue-500/25 hover:to-indigo-950/30 text-blue-100 shadow-[0_0_15px_rgba(74,137,255,0.15)] hover:border-blue-400/40";
+    case "pink":
+    default:
+      return "border-pink-400/25 bg-gradient-to-r from-pink-500/20 to-purple-500/15 hover:from-pink-500/25 hover:to-purple-500/20 text-pink-100 shadow-[0_0_15px_rgba(255,105,180,0.15)] hover:border-pink-400/40";
+  }
+};
+
+const getModalThemeBorderClass = (color: string) => {
+  switch (color) {
+    case "yellow": return "border-yellow-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(255,215,0,0.08)]";
+    case "blue": return "border-cyan-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(0,229,255,0.08)]";
+    case "orchid": return "border-purple-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(213,0,249,0.08)]";
+    case "peach": return "border-orange-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(255,158,125,0.08)]";
+    case "beige": return "border-amber-500/20 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(212,184,149,0.05)]";
+    case "maroon": return "border-red-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(208,28,63,0.08)]";
+    case "gemini": return "border-blue-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(74,137,255,0.08)]";
+    case "pink":
+    default:
+      return "border-pink-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(255,105,180,0.08)]";
+  }
+};
 
