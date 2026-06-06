@@ -1438,6 +1438,19 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
   const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [dbStatus, setDbStatus] = useState<string | null>(null);
+  const [incognitoMode, setIncognitoMode] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_incognito_mode") === "true";
+    }
+    return false;
+  });
+
+  const handleIncognitoModeChange = useCallback((value: boolean) => {
+    setIncognitoMode(value);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("saheli_incognito_mode", String(value));
+    }
+  }, []);
   const {
     awareness,
     settings: awarenessSettings,
@@ -2094,7 +2107,25 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   }, [routeChatId, setStoreChats, user]);
 
   useEffect(() => {
-    if (!currentChatId || isGuest || !user?.uid) {
+    const chatId = currentChatIdRef.current;
+    const isCurrentIncognito = chatId?.startsWith("incognito-");
+    
+    if (incognitoMode && !isCurrentIncognito) {
+      const newIncognitoId = "incognito-" + Date.now();
+      setCurrentChatId(newIncognitoId);
+      currentChatIdRef.current = newIncognitoId;
+      setMessages([]);
+      messagesRef.current = [];
+    } else if (!incognitoMode && isCurrentIncognito) {
+      setCurrentChatId(null);
+      currentChatIdRef.current = null;
+      setMessages([]);
+      messagesRef.current = [];
+    }
+  }, [incognitoMode]);
+
+  useEffect(() => {
+    if (!currentChatId || isGuest || !user?.uid || incognitoMode || currentChatId.startsWith("incognito-")) {
       return;
     }
 
@@ -2664,6 +2695,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   // Helper function to save image and immediately refresh memory UI
   const saveImageAndRefreshMemory = useCallback(async (base64Image: string, userId?: string) => {
+    if (incognitoMode) {
+      console.log("👻 [MEMORY] Skipping image save in Incognito Mode");
+      return;
+    }
+
     if (!base64Image) {
       console.warn("⚠️ [MEMORY] No base64 image provided for save and refresh");
       return;
@@ -2712,7 +2748,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       // Release save lock to allow future saves
       imageSaveLockRef.current = false;
     }
-  }, [user, isGuest]);
+  }, [user, isGuest, incognitoMode]);
 
   const refreshChatSessions = useCallback(async (nextChatId?: string | null) => {
     const sessions = await loadChatSessions(user);
@@ -2758,6 +2794,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
     syncChatSessionsTitle(chatId, trimmedTitle);
 
+    if (incognitoMode || chatId.startsWith("incognito-")) {
+      return true;
+    }
+
     try {
       await updateChatSessionTitle(chatId, trimmedTitle, user);
       return true;
@@ -2766,10 +2806,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       await refreshChatSessions(chatId);
       throw error;
     }
-  }, [refreshChatSessions, syncChatSessionsTitle, user]);
+  }, [refreshChatSessions, syncChatSessionsTitle, user, incognitoMode]);
 
   useEffect(() => {
-    if (!currentChatId || isLoading || submitLockRef.current) {
+    if (!currentChatId || isLoading || submitLockRef.current || incognitoMode) {
       return;
     }
 
@@ -2840,6 +2880,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const handleSelectChat = async (chatId: string) => {
     if (submitLockRef.current && currentChatId === chatId) {
       return;
+    }
+
+    if (incognitoMode) {
+      handleIncognitoModeChange(false);
     }
 
     const storedMessages = await loadChatMessages(chatId, user);
@@ -2941,18 +2985,30 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   const ensureActiveChat = useCallback(async () => {
     let chatId = currentChatIdRef.current ?? routeChatId ?? null;
+    const isCurrentIncognito = chatId?.startsWith("incognito-");
 
-    if (!chatId) {
-      chatId = await createChatSession(user);
-      setCurrentChatId(chatId);
-      currentChatIdRef.current = chatId;
-      await refreshChatSessions(chatId);
+    if (!chatId || (incognitoMode && !isCurrentIncognito) || (!incognitoMode && isCurrentIncognito)) {
+      if (incognitoMode) {
+        chatId = "incognito-" + Date.now();
+        setCurrentChatId(chatId);
+        currentChatIdRef.current = chatId;
+      } else {
+        chatId = await createChatSession(user);
+        setCurrentChatId(chatId);
+        currentChatIdRef.current = chatId;
+        await refreshChatSessions(chatId);
+      }
     }
 
     return { chatId };
-  }, [refreshChatSessions, routeChatId, user]);
+  }, [refreshChatSessions, routeChatId, user, incognitoMode]);
 
   const persistChatMessage = useCallback(async (chatId: string, message: StoredChatMessage) => {
+    if (incognitoMode || chatId.startsWith("incognito-")) {
+      storeAddMessage(chatId, message);
+      return;
+    }
+
     try {
       await saveChatMessage(chatId, message, user);
       storeAddMessage(chatId, message);
@@ -2963,7 +3019,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       }
       throw error;
     }
-  }, [storeAddMessage, user]);
+  }, [storeAddMessage, user, incognitoMode]);
 
   const updateStreamingMessage = useCallback((chatId: string, newText: string) => {
     setMessages((prev) => {
@@ -3248,7 +3304,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     const userText = input.trim() || (selectedImageRef.current ? "Please analyze this image carefully." : "");
     setInput("");
     const mobile = isMobile();
-    if (!isGuest && user?.uid) {
+    if (!isGuest && user?.uid && !incognitoMode) {
       const memoryResult = detectMemory(userText);
       if (memoryResult.save && memoryResult.type && memoryResult.content) {
         void saveMemoryToDB(
@@ -3307,7 +3363,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
 
     let nextMemoryProfile = memoryProfile ?? createEmptyMemoryProfile();
-    if (memoryEnabled) {
+    if (memoryEnabled && !incognitoMode) {
       const nextMemoryFields = deriveMemoryFields(
         {
           preferences: nextMemoryProfile.preferences,
@@ -3354,7 +3410,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         base64Image = selectedImageRef.current;
         setSelectedImageValue(null);
         // Immediately save camera-selected image to Image Memory with real-time UI update
-        if (base64Image && !isGuest && user?.uid) {
+        if (base64Image && !isGuest && user?.uid && !incognitoMode) {
           console.log("🖼️ [DEBUG] Selected image detected, saving to Image Memory", {
             userId: user.uid,
             imageLength: base64Image.length,
@@ -3373,7 +3429,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           success: !!base64Image,
           imageLength: base64Image?.length || 0,
         });
-        if (base64Image) {
+        if (base64Image && !incognitoMode) {
           try {
             console.log("🖼️ [DEBUG] Saving captured image to Image Memory", {
               userId: user?.uid || "guest",
@@ -3466,6 +3522,16 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   const profilePreviewSource = profileImageSource ?? profileDraftPhotoUrl;
   const profileSubtext = user?.email || t.profileMenu.guestMode || "";
+  const ghostModeNoChatsText = useMemo(() => {
+    if (language === "hindi") {
+      return "घोस्ट मोड सक्रिय है। इतिहास छिपा हुआ है। 👻";
+    } else if (language === "hinglish") {
+      return "Ghost Mode active hai. History hidden hai. 👻";
+    } else {
+      return "Ghost Mode active. History hidden. 👻";
+    }
+  }, [language]);
+
   const floatingTimeWeatherLabel = useMemo(() => {
     const temperature = typeof awareness.weather?.temperatureC === "number"
       ? `${Math.round(awareness.weather.temperatureC)}°C`
@@ -3914,15 +3980,15 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       
       <Sidebar
         isOpen={isSidebarOpen}
-        chatSessions={chatSessions}
+        chatSessions={incognitoMode ? [] : chatSessions}
         currentChatId={currentChatId}
         isGuest={isGuest}
         isLightMode={isSidebarLightMode}
         isTtsMuted={isTtsMuted}
         newChatLabel={t.sidebar.newChat}
         recentChatsLabel={t.sidebar.recentChats}
-        noChatsGuestLabel={t.sidebar.noChatsGuest}
-        noChatsAccountLabel={t.sidebar.noChatsAccount}
+        noChatsGuestLabel={incognitoMode ? ghostModeNoChatsText : t.sidebar.noChatsGuest}
+        noChatsAccountLabel={incognitoMode ? ghostModeNoChatsText : t.sidebar.noChatsAccount}
         settingsLabel={t.settings.title}
         userName={effectiveUserName}
         userPhotoUrl={profileDraftPhotoUrl || profilePhotoUrl}
@@ -3978,6 +4044,29 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
             <div className="relative z-[9999] flex flex-col items-end gap-2">
               <div className="pointer-events-auto flex items-center gap-2">
+                <AnimatePresence>
+                  {incognitoMode && (
+                    <motion.button
+                      type="button"
+                      onClick={() => {
+                        handleIncognitoModeChange(false);
+                        toast.info("Ghost Mode deactivated! Chats will be saved. ✨");
+                      }}
+                      initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, x: 20 }}
+                      whileHover={{ scale: 1.05, y: -1 }}
+                      whileTap={{ scale: 0.95 }}
+                      title="Ghost Mode Active (Click to disable)"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-purple-500/30 bg-purple-950/45 px-3.5 text-[11px] font-semibold text-purple-200 shadow-[0_14px_30px_rgba(0,0,0,0.28),0_0_18px_rgba(168,85,247,0.15)] backdrop-blur-2xl transition duration-300 hover:border-purple-400/50 hover:bg-purple-900/60"
+                    >
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-500/20 text-purple-300 shadow-[0_0_14px_rgba(168,85,247,0.25)] animate-pulse">
+                        👻
+                      </span>
+                      <span className="whitespace-nowrap">Ghost Mode</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
                 <motion.button
                   type="button"
                   onClick={handleToggleWeatherPanel}
@@ -4940,6 +5029,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
             setIsMusicPanelOpen(true);
             setIsMusicMinimized(false);
           }}
+          incognitoMode={incognitoMode}
+          onIncognitoModeChange={handleIncognitoModeChange}
         />
 
         <MemoryModal

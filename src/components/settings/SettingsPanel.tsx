@@ -193,6 +193,8 @@ interface SettingsPanelProps {
   onAwarenessToggleDayDateVisibility: () => void;
   onAwarenessRefresh: () => void;
   onOpenMusicSystem?: () => void;
+  incognitoMode: boolean;
+  onIncognitoModeChange: (value: boolean) => void;
 }
 
 const characterCards = [
@@ -387,6 +389,8 @@ export default function SettingsPanel({
   onAwarenessToggleDayDateVisibility,
   onAwarenessRefresh,
   onOpenMusicSystem,
+  incognitoMode,
+  onIncognitoModeChange,
 }: SettingsPanelProps) {
   const t = getLang();
   const accountFileRef = useRef<HTMLInputElement>(null);
@@ -596,7 +600,7 @@ export default function SettingsPanel({
 
     return "personality";
   });
-  const [incognitoMode, setIncognitoMode] = useState(false);
+
   const [groqKey, setGroqKey] = useState("");
   const [personalizationChild, setPersonalizationChild] = useState<SettingsSectionId | null>(null);
   const [selectedColor, setSelectedColor] = useState<string>(() => {
@@ -2815,14 +2819,14 @@ export default function SettingsPanel({
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">Incognito Mode</p>
                 <p className="mt-1 text-[12px] leading-5 text-white/55">
-                  Keeps these settings local while it is on. Nothing from this panel is stored.
+                  Keeps your chats in ghost mode. No chat history, messages, or memories are saved.
                 </p>
               </div>
               <button
                 type="button"
                 role="switch"
                 aria-checked={incognitoMode}
-                onClick={() => setIncognitoMode(!incognitoMode)}
+                onClick={() => onIncognitoModeChange(!incognitoMode)}
                 className={`settings-toggle-track scale-90 origin-right ${incognitoMode ? "settings-toggle-track-on" : ""}`}
               >
                 <span className={`settings-toggle-thumb ${incognitoMode ? "settings-toggle-thumb-on" : ""}`} />
@@ -3157,7 +3161,7 @@ export default function SettingsPanel({
                                             <div>
                                               <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">{child.label}</p>
                                               <p className="mt-1 text-[12px] leading-5 text-white/55">
-                                                Keeps settings local while on. Nothing from this panel is stored.
+                                                Keeps your chats in ghost mode. No chat history, messages, or memories are saved.
                                               </p>
                                             </div>
                                           </div>
@@ -3165,7 +3169,7 @@ export default function SettingsPanel({
                                             type="button"
                                             role="switch"
                                             aria-checked={incognitoMode}
-                                            onClick={() => setIncognitoMode(!incognitoMode)}
+                                            onClick={() => onIncognitoModeChange(!incognitoMode)}
                                             className={`settings-toggle-track scale-90 origin-right ${incognitoMode ? "settings-toggle-track-on" : ""}`}
                                           >
                                             <span className={`settings-toggle-thumb ${incognitoMode ? "settings-toggle-thumb-on" : ""}`} />
