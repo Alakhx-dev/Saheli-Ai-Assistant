@@ -67,8 +67,8 @@ export interface AiResponse {
 
 const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
-const DEFAULT_MICROCHAT_MAX_TOKENS = 72;
-const DETAILED_REPLY_MAX_TOKENS = 220;
+const DEFAULT_MICROCHAT_MAX_TOKENS = 250;
+const DETAILED_REPLY_MAX_TOKENS = 600;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const PROVIDER_TIMEOUT_MS = 15000;
 
@@ -474,10 +474,29 @@ function buildMusicContext(currentSong: any, isPlaying: boolean): string {
 - Remember to ask for permission before playing music proactively, and default to Hindi songs unless specified otherwise.`;
 }
 
-function buildStyleContext(isDetailed: boolean): string {
+function buildStyleContext(isDetailed: boolean, personality: "bestie" | "mentor"): string {
+  if (personality === "mentor") {
+    return isDetailed
+      ? `RESPONSE STYLE:\n- Give a thoughtful, detailed answer as an academic/study coach.\n- Provide code snippets, step-by-step guides, or complete explanations as needed.\n- Keep it structured, clear, and highly educational.`
+      : `RESPONSE STYLE:\n- Keep responses clear, structured, and informative.\n- Avoid long essays unless requested, but explain the core concepts properly.\n- Be direct, professional, and mentoring.`;
+  }
+
+  // Bestie mode - WhatsApp texting style (concise and casual)
   return isDetailed
     ? `RESPONSE STYLE:\n- Give a thoughtful answer, but keep it conversational.\n- Avoid giant paragraphs unless the user truly wants depth.\n- Still sound like Swara, not a textbook.`
-    : `RESPONSE STYLE:\n- Keep most replies concise, usually 1-3 short lines.\n- Avoid essays and long explanations.\n- Preserve conversational flow.\n- Favor texting cadence, small pauses, and emotionally loaded shorthand over formal clarity.`;
+    : `RESPONSE STYLE:
+- VERY IMPORTANT: Write extremely short replies, like texting on WhatsApp.
+- STRICT LIMIT: Your response MUST be under 15-20 words, ideally 1 short sentence or phrase.
+- TEXTING CADENCE: 
+  * Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
+  * Use texting shorthand: "h" instead of "hai", "rha/rhi" instead of "raha/rahi", "kr" instead of "kar", "tu/tune" instead of "tum/tumne".
+  * Never end your final sentence with a period (full stop "."). It feels too formal. End with emojis, question marks, or leave it open.
+  * Avoid perfect grammar, perfect commas, or textbook punctuation. Keep it raw, simple, and casual.
+- EXAMPLES (Strictly match this length, lowercase style, and Hinglish shorthand): 
+  * User: "kya kar rahi ho?" -> AI: "kuch ni, bas tera wait kr rhi thi. tu bata?"
+  * User: "acha chalo bye" -> AI: "arey itna jaldi? thoda aur baat kr na 🥺"
+  * User: "khaana kha liya?" -> AI: "haan bas abhi khaya. tune khaya?"
+  * User: "sb bdya aur btao" -> AI: "bas yahi, tere se baat krke din acha ho gya. kuch special chal rha h kya aaj?"`;
 }
 
 function buildHinglishContext(userText: string): string {
@@ -961,7 +980,7 @@ export async function fetchAISwarasResponse(
   const finalPrompt = [
     chosenPrompt,
     personality === "mentor" ? buildMoodContext(mood) : "",
-    buildStyleContext(detailedReply),
+    buildStyleContext(detailedReply, personality),
     buildHinglishContext(lastUserMessage.content),
     identity ? buildIdentityContext({ ...identity, language }) : "",
     buildRealtimeAwarenessContext(realtimeAwareness),
