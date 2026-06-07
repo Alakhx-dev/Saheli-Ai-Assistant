@@ -1385,15 +1385,47 @@ export default function Chat() {
       setMusicDuration(audio.duration || 0);
     };
 
-    const handleEnded = () => {
+    const handleEnded = async () => {
       const queue = queueRef.current;
       const index = queueIndexRef.current;
-      if (queue.length > 1) {
-        const nextIndex = (index + 1) % queue.length;
+
+      // If there are more songs manually queued ahead of us, play the next one
+      if (index < queue.length - 1) {
+        const nextIndex = index + 1;
         void playSongAtIndex(nextIndex);
-      } else {
-        setIsMusicPlaying(false);
+        return;
       }
+
+      // Otherwise we reached the end of the queue. Trigger autoplay!
+      const currentSong = queue[index];
+      if (currentSong && !currentSong.id.startsWith("demo-")) {
+        try {
+          const artistQuery = currentSong.artist.split(",")[0].split("&")[0].trim();
+          if (artistQuery) {
+            const response = await fetch(`/api/music?action=search&query=${encodeURIComponent(artistQuery)}`);
+            const data = await response.json();
+
+            if (data.songs && data.songs.length > 0) {
+              const existingIds = new Set(queue.map(s => s.id));
+              const recommended = data.songs.filter((s: JioSaavnSong) => !existingIds.has(s.id));
+
+              if (recommended.length > 0) {
+                const nextSong = recommended[0];
+                const updatedQueue = [...queue, nextSong];
+                setMusicQueue(updatedQueue);
+                queueRef.current = updatedQueue;
+                void playSongAtIndex(updatedQueue.length - 1);
+                toast.info(`Autoplay: Playing related song "${nextSong.title}" by ${nextSong.artist} 🎵`);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Autoplay failed:", err);
+        }
+      }
+
+      setIsMusicPlaying(false);
     };
 
     audio.addEventListener("timeupdate", handleTimeUpdate);
@@ -2002,6 +2034,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
   }, [currentChatId]);
+
+
 
   useEffect(() => {
     chatSessionsRef.current = chatSessions;
