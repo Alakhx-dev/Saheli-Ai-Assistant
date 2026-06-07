@@ -3545,3 +3545,55 @@
   -ms-overflow-style: none !important; /* IE and Edge */
   scrollbar-width: none !important; /* Firefox */
 }
+
+/* Custom range input sliders for premium music experience */
+.timeline-slider, .volume-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 9999px;
+  height: 4px;
+  outline: none;
+  transition: background 0.2s ease;
+}
+
+.timeline-slider:hover, .volume-slider:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* Webkit Thumbs */
+.timeline-slider::-webkit-slider-thumb, .volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.timeline-slider::-webkit-slider-thumb:hover, .volume-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.35);
+  background: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Mozilla Thumbs */
+.timeline-slider::-moz-range-thumb, .volume-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.timeline-slider::-moz-range-thumb:hover, .volume-slider::-moz-range-thumb:hover {
+  transform: scale(1.35);
+  background: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
+}

@@ -26,14 +26,8 @@ export default async function handler(request: Request) {
 
   // Retrieve RapidAPI key from environment
   const apiKey = (process.env.VITE_RAPIDAPI_KEY || process.env.RAPIDAPI_KEY || "").trim();
+  // Public JioSaavn API is used, which does not require an API Key.
 
-  // If no API Key is set up yet, don't crash, return a descriptive error so UI handles it gracefully
-  if (!apiKey) {
-    return jsonResponse({
-      error: "RapidAPI Key is not configured on the server. Please add VITE_RAPIDAPI_KEY to your environment variables.",
-      code: "NO_API_KEY",
-    }, 400);
-  }
 
   const url = new URL(request.url);
 

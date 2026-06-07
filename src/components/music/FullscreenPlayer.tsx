@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Minimize2, Disc, Music, Heart } from "lucide-react";
+import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Minimize2, Disc, Music, Heart, ListMusic } from "lucide-react";
 import type { JioSaavnSong } from "../../../lib/musicService";
 
 interface FullscreenPlayerProps {
@@ -18,6 +18,7 @@ interface FullscreenPlayerProps {
   onPrevTrack: () => void;
   musicQueue: JioSaavnSong[];
   currentQueueIndex: number;
+  onPlaySongAtIndex?: (index: number) => void;
 }
 
 const getFullscreenThemeClasses = (color: string) => {
@@ -153,6 +154,7 @@ export default function FullscreenPlayer({
   onPrevTrack,
   musicQueue,
   currentQueueIndex,
+  onPlaySongAtIndex,
 }: FullscreenPlayerProps) {
   const [selectedColor, setSelectedColor] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -160,6 +162,8 @@ export default function FullscreenPlayer({
     }
     return "maroon";
   });
+
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
 
   useEffect(() => {
     const handleThemeChange = () => {
@@ -230,8 +234,17 @@ export default function FullscreenPlayer({
           {/* Ambient blurred backdrop using Album Art */}
           <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none scale-110">
             {currentSong.image && (
-              <div 
-                className="absolute inset-0 bg-cover bg-center filter blur-[120px] opacity-30 scale-105"
+              <motion.div 
+                animate={{
+                  scale: [1.05, 1.15, 1.05],
+                  rotate: [0, 1, 0]
+                }}
+                transition={{
+                  duration: 25,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                }}
+                className="absolute inset-0 bg-cover bg-center filter blur-[120px] opacity-30"
                 style={{ backgroundImage: `url(${currentSong.image})` }}
               />
             )}
@@ -275,13 +288,15 @@ export default function FullscreenPlayer({
               </span>
               <span className={`text-xs font-bold uppercase tracking-[0.25em] ${theme.textLight}`}>Saheli Immersive Vibe</span>
             </div>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onClose}
-              className={`flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 hover:${theme.text} hover:scale-105 active:scale-95 transition-all duration-200`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs text-white/70 hover:bg-white/10 hover:${theme.text} transition-all duration-200`}
             >
               <Minimize2 className="h-4 w-4" />
               <span>Back to Chat</span>
-            </button>
+            </motion.button>
           </header>
 
           {/* Main Visualizer Stage */}
@@ -299,18 +314,24 @@ export default function FullscreenPlayer({
               />
               
               {/* Actual Art Frame */}
-              <div className="relative w-[220px] h-[220px] md:w-[340px] md:h-[340px] rounded-full border-[6px] border-white/10 overflow-hidden shadow-[0_25px_60px_rgba(0,0,0,0.8)] bg-zinc-950">
+              <div className="relative w-[220px] h-[220px] md:w-[340px] md:h-[340px] rounded-full border-[8px] border-zinc-900/80 overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.9),0_0_30px_rgba(255,255,255,0.05)] bg-zinc-950">
                 {currentSong.image ? (
-                  <img 
-                    src={currentSong.image} 
-                    alt={currentSong.title} 
-                    className={`h-full w-full object-cover select-none pointer-events-none transition-transform ${isPlaying ? "rotate-360" : ""}`}
-                    style={{ 
-                      borderRadius: "50%",
-                      animation: isPlaying ? "spin 25s linear infinite" : "none",
-                      transitionDuration: "25000ms"
-                    }}
-                  />
+                  <>
+                    <img 
+                      src={currentSong.image} 
+                      alt={currentSong.title} 
+                      className={`h-full w-full object-cover select-none pointer-events-none transition-transform ${isPlaying ? "rotate-360" : ""}`}
+                      style={{ 
+                        borderRadius: "50%",
+                        animation: isPlaying ? "spin 25s linear infinite" : "none",
+                        transitionDuration: "25000ms"
+                      }}
+                    />
+                    {/* Concentric Vinyl Groove Rings overlay */}
+                    <div className="absolute inset-0 rounded-full pointer-events-none bg-[radial-gradient(circle,_transparent_30%,_rgba(0,0,0,0.35)_30.5%,_transparent_31%,_transparent_40%,_rgba(0,0,0,0.35)_40.5%,_transparent_41%,_transparent_50%,_rgba(0,0,0,0.35)_50.5%,_transparent_51%,_transparent_60%,_rgba(0,0,0,0.35)_60.5%,_transparent_61%,_transparent_70%,_rgba(0,0,0,0.35)_70.5%,_transparent_71%,_transparent_80%,_rgba(0,0,0,0.35)_80.5%,_transparent_81%,_transparent_90%,_rgba(0,0,0,0.35)_90.5%,_transparent_91%)] opacity-25" />
+                    {/* Vinyl Light Reflection Sheen overlay */}
+                    <div className="absolute inset-0 rounded-full pointer-events-none bg-gradient-to-tr from-transparent via-white/10 to-transparent rotate-45 transform origin-center opacity-60" />
+                  </>
                 ) : (
                   <div className="h-full w-full flex items-center justify-center bg-zinc-900">
                     <Music className="h-16 w-16 text-white/20" />
@@ -377,44 +398,126 @@ export default function FullscreenPlayer({
 
             {/* Panel Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
-              {/* Queue progress tag */}
-              <div className="text-xs text-white/45 font-semibold bg-white/5 border border-white/5 px-4 py-2 rounded-full hidden sm:block">
-                Track {currentQueueIndex + 1} of {musicQueue.length || 1}
+              {/* Queue progress button with Popover */}
+              <div className="relative hidden sm:block">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsQueueOpen(!isQueueOpen)}
+                  className="text-xs text-white/75 font-semibold bg-white/5 border border-white/10 px-4 py-2 rounded-full hover:bg-white/10 hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <ListMusic className="h-4 w-4 opacity-70" />
+                  <span>Track {currentQueueIndex + 1} of {musicQueue.length || 1}</span>
+                </motion.button>
+
+                <AnimatePresence>
+                  {isQueueOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 12, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                      transition={{ duration: 0.2, ease: "easeOut" }}
+                      className="absolute bottom-full left-0 mb-3.5 w-[310px] rounded-2xl border border-white/10 bg-zinc-950/90 backdrop-blur-xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.85)] z-50 flex flex-col select-none"
+                    >
+                      <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2 shrink-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-white/40 flex items-center gap-1.5">
+                          <ListMusic className="h-4 w-4 text-white/50" />
+                          Upcoming Queue
+                        </p>
+                        <button 
+                          onClick={() => setIsQueueOpen(false)}
+                          className="text-white/40 hover:text-white text-[9px] uppercase font-bold tracking-wider transition duration-150"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      
+                      <div className="space-y-1 max-h-[200px] overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                        {musicQueue.map((song, queueIdx) => {
+                          if (queueIdx < currentQueueIndex) return null;
+                          const isCurrent = queueIdx === currentQueueIndex;
+                          return (
+                            <motion.button
+                              whileHover={{ scale: 1.01, x: 2 }}
+                              whileTap={{ scale: 0.99 }}
+                              key={`${song.id}-queue-popover-${queueIdx}`}
+                              onClick={() => {
+                                onPlaySongAtIndex?.(queueIdx);
+                              }}
+                              className={`flex w-full items-center gap-2.5 rounded-xl p-1.5 text-left transition ${
+                                isCurrent 
+                                  ? "bg-white/10 text-white" 
+                                  : "bg-transparent hover:bg-white/[0.03] text-white/60 hover:text-white"
+                              }`}
+                            >
+                              <span className={`text-[10px] font-mono w-4 text-center shrink-0 ${isCurrent ? theme.text : "opacity-35"}`}>
+                                {queueIdx + 1}
+                              </span>
+                              
+                              <div className="h-7 w-7 rounded overflow-hidden shadow shrink-0 border border-white/10">
+                                <img src={song.image} alt="" className="h-full w-full object-cover select-none pointer-events-none" />
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-[10.5px] font-bold truncate ${isCurrent ? theme.text : ""}`}>{song.title}</p>
+                                <p className="text-[8.5px] opacity-50 truncate leading-none mt-0.5">{song.artist}</p>
+                              </div>
+                            </motion.button>
+                          );
+                        })}
+                        {musicQueue.length - 1 <= currentQueueIndex && (
+                          <p className="text-[9px] text-white/30 text-center py-4 italic leading-none">No upcoming songs in queue</p>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Main Playback Buttons */}
               <div className="flex items-center gap-4">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={onPrevTrack}
                   disabled={musicQueue.length <= 1}
                   className="p-3 rounded-full hover:bg-white/5 text-white/70 hover:text-white border border-transparent hover:border-white/10 active:scale-95 disabled:opacity-20 disabled:pointer-events-none transition duration-200"
                 >
                   <SkipBack className="h-5 w-5" />
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={onPlayPause}
-                  className={`p-5 rounded-full text-white hover:scale-105 active:scale-95 transition-all duration-300 border ${theme.accentBg} ${theme.accentText} hover:brightness-110`}
+                  className={`p-5 rounded-full text-white transition-all duration-300 border ${theme.accentBg} ${theme.accentText} hover:brightness-110`}
                 >
                   {isPlaying ? (
                     <Pause className="h-6 w-6 fill-current" />
                   ) : (
                     <Play className="h-6 w-6 fill-current translate-x-0.5" />
                   )}
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={onNextTrack}
                   disabled={musicQueue.length <= 1}
                   className="p-3 rounded-full hover:bg-white/5 text-white/70 hover:text-white border border-transparent hover:border-white/10 active:scale-95 disabled:opacity-20 disabled:pointer-events-none transition duration-200"
                 >
                   <SkipForward className="h-5 w-5" />
-                </button>
+                </motion.button>
               </div>
 
               {/* Volume */}
               <div className="flex items-center gap-3 w-36 text-white/50">
-                <button onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)} className="hover:text-white transition">
+                <motion.button 
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => onVolumeChange(volume === 0 ? 0.8 : 0)} 
+                  className="hover:text-white transition"
+                >
                   {volume === 0 ? <VolumeX className="h-4.5 w-4.5" /> : <Volume2 className="h-4.5 w-4.5" />}
-                </button>
+                </motion.button>
                 <input
                   type="range"
                   min={0}

@@ -207,16 +207,8 @@ export default defineConfig(({ mode }) => {
         }
 
         const apiKey = (env.VITE_RAPIDAPI_KEY || env.RAPIDAPI_KEY || "").trim();
-        if (!apiKey) {
-          res.statusCode = 400;
-          res.setHeader("Content-Type", "application/json");
-          res.setHeader("Access-Control-Allow-Origin", "*");
-          res.end(JSON.stringify({
-            error: "RapidAPI Key is not configured in .env. Please configure VITE_RAPIDAPI_KEY.",
-            code: "NO_API_KEY",
-          }));
-          return;
-        }
+        // Public JioSaavn API is used, which does not require an API Key.
+
 
         const parsedUrl = new URL(req.url, `http://${req.headers.host || "localhost"}`);
 

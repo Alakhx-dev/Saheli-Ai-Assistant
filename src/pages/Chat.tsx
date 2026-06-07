@@ -1210,7 +1210,7 @@ export default function Chat() {
     setCurrentMusicSong(song);
   };
 
-  const handlePlaySong = async (song: JioSaavnSong, addToQueue = true) => {
+  const handlePlaySong = async (song: JioSaavnSong, addToQueue: boolean | JioSaavnSong[] = true) => {
     if (currentSongRef.current?.id === song.id) {
       handlePlayPause();
       return;
@@ -1254,7 +1254,11 @@ export default function Chat() {
     }
     setCurrentMusicSong(song);
 
-    if (addToQueue) {
+    if (Array.isArray(addToQueue)) {
+      setMusicQueue(addToQueue);
+      const existingIdx = addToQueue.findIndex((s) => s.id === song.id);
+      setCurrentQueueIndex(existingIdx !== -1 ? existingIdx : 0);
+    } else if (addToQueue) {
       const existingIdx = queueRef.current.findIndex((s) => s.id === song.id);
       if (existingIdx !== -1) {
         setCurrentQueueIndex(existingIdx);
@@ -5183,7 +5187,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           onPlayPause={handlePlayPause}
           onSeek={handleSeek}
           onVolumeChange={handleVolumeChange}
-          onPlaySong={(song) => void handlePlaySong(song, true)}
+          onPlaySong={(song, customQueue) => void handlePlaySong(song, customQueue || true)}
           onNextTrack={handleNextTrack}
           onPrevTrack={handlePrevTrack}
           onToggleFullscreen={() => setIsFullscreenPlayerOpen(true)}
@@ -5191,6 +5195,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           currentQueueIndex={currentQueueIndex}
           isMinimized={isMusicMinimized}
           onMinimizeToggle={setIsMusicMinimized}
+          onPlaySongAtIndex={(idx) => void playSongAtIndex(idx)}
         />
 
         <FullscreenPlayer
@@ -5208,6 +5213,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           onPrevTrack={handlePrevTrack}
           musicQueue={musicQueue}
           currentQueueIndex={currentQueueIndex}
+          onPlaySongAtIndex={(idx) => void playSongAtIndex(idx)}
         />
 
         <Profile
