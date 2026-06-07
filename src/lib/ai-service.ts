@@ -1087,7 +1087,7 @@ async function executeVisionPipeline(
   debugLog("Vision Pipeline: Stage 1 successful. Parsed context length:", visionContext.length);
 
   // Stage 2 — Personality Synthesis
-  const synthesisPrompt = `${personalityPrompt}\n\n[VISUAL CONTEXT OF LATEST IMAGE SEEN]:\n${visionContext}\n\n[INSTRUCTION]: Behave as if you can see this image directly. Incorporate the visual context naturally into your reply. Do NOT mention that you received a "parsed visual context" text.`;
+  const synthesisPrompt = `${personalityPrompt}\n\n[VISUAL CONTEXT OF LATEST IMAGE SEEN]:\n${visionContext}\n\n[INSTRUCTION]:\n- Behave as if you can see this image directly. Incorporate the visual context naturally into your reply.\n- CRITICAL: If the user just agreed to open the camera (e.g. "haan dekho", "yes", "open it", "ok"), the camera has ALREADY captured the frame and you can see it now. Do NOT say "camera is on" or ask "what should I look at?" or "should I look?". React to and describe what you see (outfit, environment, expression, or notes) immediately in your reply!\n- Do NOT mention that you received a "parsed visual context" text.`;
 
   const synthesisPayload: ProviderRequestPayload = {
     systemPrompt: synthesisPrompt,
