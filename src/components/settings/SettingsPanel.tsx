@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -601,7 +601,7 @@ export default function SettingsPanel({
     return "personality";
   });
 
-  const [customKeys, setCustomKeys] = useState<Array<{ id: string; provider: "groq" | "gemini"; key: string; active: boolean }>>(() => {
+  const [customKeys, setCustomKeys] = useState<Array<{ id: string; provider: "groq" | "gemini" | "openrouter"; key: string; active: boolean }>>(() => {
     if (typeof window !== "undefined") {
       try {
         const saved = window.localStorage.getItem("saheli_custom_api_keys");
@@ -612,7 +612,7 @@ export default function SettingsPanel({
     }
     return [];
   });
-  const [keyProvider, setKeyProvider] = useState<"groq" | "gemini">("groq");
+  const [keyProvider, setKeyProvider] = useState<"groq" | "gemini" | "openrouter">("groq");
   const [keyInput, setKeyInput] = useState("");
   const [keyError, setKeyError] = useState("");
   const [showSavedKeys, setShowSavedKeys] = useState(false);
@@ -634,6 +634,10 @@ export default function SettingsPanel({
         setKeyError("This looks like a Google Gemini key! Please select Gemini provider above.");
         return;
       }
+      if (trimmed.startsWith("sk-or-v1-")) {
+        setKeyError("This looks like an OpenRouter key! Please select OpenRouter provider above.");
+        return;
+      }
       if (!trimmed.startsWith("gsk_")) {
         setKeyError("Groq API key must start with 'gsk_'.");
         return;
@@ -643,8 +647,25 @@ export default function SettingsPanel({
         setKeyError("This looks like a Groq key! Please select Groq provider above.");
         return;
       }
+      if (trimmed.startsWith("sk-or-v1-")) {
+        setKeyError("This looks like an OpenRouter key! Please select OpenRouter provider above.");
+        return;
+      }
       if (!trimmed.startsWith("AIzaSy")) {
         setKeyError("Gemini API key must start with 'AIzaSy'.");
+        return;
+      }
+    } else if (keyProvider === "openrouter") {
+      if (trimmed.startsWith("gsk_")) {
+        setKeyError("This looks like a Groq key! Please select Groq provider above.");
+        return;
+      }
+      if (trimmed.startsWith("AIzaSy")) {
+        setKeyError("This looks like a Google Gemini key! Please select Gemini provider above.");
+        return;
+      }
+      if (!trimmed.startsWith("sk-or-v1-")) {
+        setKeyError("OpenRouter API key must start with 'sk-or-v1-'.");
         return;
       }
     }
@@ -2943,7 +2964,7 @@ export default function SettingsPanel({
         );
 
       case "api_keys": {
-        const getProviderCardClasses = (providerName: "groq" | "gemini") => {
+        const getProviderCardClasses = (providerName: "groq" | "gemini" | "openrouter") => {
           const isActive = keyProvider === providerName;
           if (!isActive) {
             return "border-white/5 bg-white/[0.02] text-white/60 hover:border-white/10 hover:bg-white/[0.04] hover:text-white/80";
@@ -3025,10 +3046,11 @@ export default function SettingsPanel({
               </div>
 
               {/* Premium Provider Selection */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-2.5">
                 {[
                   { id: "groq", name: "Groq Cloud", sub: "Ultra-fast inference", icon: Cpu },
-                  { id: "gemini", name: "Google Gemini", sub: "Advanced models", icon: Sparkles }
+                  { id: "gemini", name: "Google Gemini", sub: "Advanced models", icon: Sparkles },
+                  { id: "openrouter", name: "OpenRouter", sub: "Diverse free tier", icon: Globe }
                 ].map((provider) => {
                   const IconComponent = provider.icon;
                   const isActive = keyProvider === provider.id;
@@ -3085,7 +3107,13 @@ export default function SettingsPanel({
                       if (keyError) setKeyError("");
                     }}
                     type="password"
-                    placeholder={keyProvider === "groq" ? "Enter Groq API Key (gsk_...)" : "Enter Gemini API Key (AIzaSy...)"}
+                    placeholder={
+                      keyProvider === "groq"
+                        ? "Enter Groq API Key (gsk_...)"
+                        : keyProvider === "openrouter"
+                        ? "Enter OpenRouter API Key (sk-or-v1-...)"
+                        : "Enter Gemini API Key (AIzaSy...)"
+                    }
                     className={`w-full py-3 px-4 text-xs font-mono rounded-xl bg-black/40 border border-white/10 outline-none text-white transition-all duration-300 focus:bg-black/60 focus:border-white/20 ${getInputFocusClass()}`}
                   />
                 </div>

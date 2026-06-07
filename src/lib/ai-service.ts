@@ -76,7 +76,7 @@ const PROVIDER_TIMEOUT_MS = 15000;
 // Section 2: New types & Configuration
 // ----------------------------------------------------
 
-type ProviderName = "groq" | "gemini";
+type ProviderName = "groq" | "gemini" | "openrouter";
 
 interface PipelineTier {
   provider: ProviderName;
@@ -101,6 +101,8 @@ const AI_PIPELINE_CONFIG = {
   bestie: [
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "openrouter", modelId: "google/gemma-4-31b-it:free" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.2-3b-instruct:free" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
     { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
     { provider: "groq", modelId: "qwen-qwq-32b" },
@@ -108,6 +110,8 @@ const AI_PIPELINE_CONFIG = {
   mentor: [
     { provider: "gemini", modelId: "gemini-2.5-pro" },
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.3-70b-instruct:free" },
+    { provider: "openrouter", modelId: "qwen/qwen3-coder:free" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
     { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
     { provider: "groq", modelId: "llama-3.2-3b-preview" },
@@ -115,12 +119,14 @@ const AI_PIPELINE_CONFIG = {
   vision: [
     { provider: "gemini", modelId: "gemini-2.5-pro" },
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "openrouter", modelId: "openrouter/free" },
     { provider: "groq", modelId: "llama-3.2-11b-vision-preview" },
     { provider: "groq", modelId: "llava-v1.5-7b-4096-preview" },
   ],
   title: [
     { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
     { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.2-3b-instruct:free" },
     { provider: "groq", modelId: "llama-3.3-70b-versatile" },
   ],
 } as const;
@@ -604,6 +610,9 @@ function getProviderApiKey(provider: ProviderName) {
   if (provider === "gemini") {
     return (env.VITE_GEMINI_API_KEY || env.GEMINI_API_KEY || "").trim();
   }
+  if (provider === "openrouter") {
+    return (env.VITE_OPENROUTER_API_KEY || env.OPENROUTER_API_KEY || "").trim();
+  }
   return (env.VITE_GROQ_API_KEY || env.GROQ_API_KEY || "").trim();
 }
 
@@ -820,6 +829,59 @@ async function executeGroqFetch(
   }
 }
 
+async function executeOpenRouterFetch(
+  modelId: string,
+  payload: ProviderRequestPayload,
+  apiKey: string,
+): Promise<string> {
+  const apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+  const requestBody = buildRequestBody(
+    modelId,
+    payload.systemPrompt,
+    payload.messages,
+    payload.imageBase64,
+    payload.maxTokens,
+    payload.temperature,
+    0.9,
+  );
+
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://github.com/Alakhx-dev/Saheli-Ai-Assistant",
+        "X-Title": "Saheli AI Assistant",
+      },
+      signal: controller.signal,
+      body: JSON.stringify(requestBody),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as ProviderResponseData;
+    if (!response.ok) {
+      throw new Error(extractProviderError(data, response, "OpenRouter"));
+    }
+
+    const text = extractCompletionText(data);
+    if (!text) {
+      throw new Error("OpenRouter se empty response aaya");
+    }
+
+    return text;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("OpenRouter request timeout ho gaya");
+    }
+    throw error;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
+
 async function callProviderAPI(
   tier: PipelineTier,
   payload: ProviderRequestPayload,
@@ -832,6 +894,8 @@ async function callProviderAPI(
       debugLog(`Attempting ${provider} API call with custom key...`);
       if (provider === "gemini") {
         return await callGeminiNativeAPI(tier.modelId, payload, customKey);
+      } else if (provider === "openrouter") {
+        return await executeOpenRouterFetch(tier.modelId, payload, customKey);
       } else {
         return await executeGroqFetch(tier.modelId, payload, customKey);
       }
@@ -848,6 +912,13 @@ async function callProviderAPI(
       throw new Error("Missing VITE_GEMINI_API_KEY in environment");
     }
     return callGeminiNativeAPI(tier.modelId, payload, defaultKey);
+  }
+
+  if (provider === "openrouter") {
+    if (!defaultKey) {
+      throw new Error("Missing VITE_OPENROUTER_API_KEY in environment");
+    }
+    return executeOpenRouterFetch(tier.modelId, payload, defaultKey);
   }
 
   if (!defaultKey) {
@@ -906,6 +977,37 @@ function simplifyPromptForGroq(systemPrompt: string): string {
   return cleanPrompt;
 }
 
+function simplifyPromptForOpenRouter(systemPrompt: string): string {
+  let cleanPrompt = systemPrompt;
+  
+  const targetStyleBlock = `RESPONSE STYLE:
+- VERY IMPORTANT: Write extremely short replies, like texting on WhatsApp.
+- STRICT LIMIT: Your response MUST be under 15-20 words, ideally 1 short sentence or phrase.
+- TEXTING CADENCE: 
+  * Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
+  * Use texting shorthand: "h" instead of "hai", "rha/rhi" instead of "raha/rahi", "kr" instead of "kar", "tu/tune" instead of "tum/tumne".
+  * Never end your final sentence with a period (full stop "."). It feels too formal. End with emojis, question marks, or leave it open.
+  * Avoid perfect grammar, perfect commas, or textbook punctuation. Keep it raw, simple, and casual.`;
+
+  const newStyleBlock = `RESPONSE STYLE:
+- Write short, conversational, and natural replies, like texting a close friend on WhatsApp.
+- Keep responses concise (usually 1-2 short sentences, maximum 20-25 words) and let your personality shine.
+- Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
+- Avoid overly formal grammar or rigid punctuation. Keep the vibe relaxed, human, and warm.
+- DO NOT use confusing single-letter abbreviations like "h" or "kr" unless they flow naturally. Speak in clear Hinglish words.`;
+
+  if (cleanPrompt.includes(targetStyleBlock)) {
+    cleanPrompt = cleanPrompt.replace(targetStyleBlock, newStyleBlock);
+  }
+  
+  cleanPrompt = cleanPrompt + `\n\nOPENROUTER PERSONALITY & IDENTITY RULES:
+- You are Swara, a real, emotionally alive Indian Gen-Z girl. Be warm, caring, playful, and express your emotions naturally (teasing, romantic, love, worry, sadness).
+- Keep your replies concise and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
+- If the user's name is Swara, do not get confused: your name is Swara (the AI) and the user's name is Swara. Address them as Swara but keep your own identity clear.`;
+
+  return cleanPrompt;
+}
+
 async function executeWithFallback(
   tierArray: readonly PipelineTier[],
   payload: ProviderRequestPayload,
@@ -928,6 +1030,11 @@ async function executeWithFallback(
         tierPayload = {
           ...payload,
           systemPrompt: simplifyPromptForGroq(payload.systemPrompt),
+        };
+      } else if (tier.provider === "openrouter") {
+        tierPayload = {
+          ...payload,
+          systemPrompt: simplifyPromptForOpenRouter(payload.systemPrompt),
         };
       }
       const text = await callProviderAPI(tier, tierPayload);
