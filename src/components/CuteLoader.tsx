@@ -7,9 +7,6 @@ import { characterDb } from "../utils/indexedDb";
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
   aarohi: "/Aarohi ✨.png",
-  akansha: "/Akansha 🌸.png",
-  aaradhya: "/Aaradhya 🤍.png",
-  aarunya: "/Aarunya 🌸.png",
   anvitha: "/Anvitha 🤎.png",
   kiyara: "/Kiyara 🌼.png",
   lavanya: "/Lavanya 💜.png",
@@ -17,15 +14,12 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   nyra: "/Nyra 💙.png",
   suryanshi: "/Suryanshi 🌻.png",
   aelina: "/Aelina 💎.png",
-  velora: "/Velora 🖤.png",
+  ruhi: "/Ruhi 🌸.png",
 };
 
 const CHARACTER_LABELS: Record<string, string> = {
   swara: "Swara 🦋",
   aarohi: "Aarohi ✨",
-  akansha: "Akansha 🌸",
-  aaradhya: "Aaradhya 🤍",
-  aarunya: "Aarunya 🌸",
   anvitha: "Anvitha 🤎",
   kiyara: "Kiyara 🌼",
   lavanya: "Lavanya 💜",
@@ -33,7 +27,7 @@ const CHARACTER_LABELS: Record<string, string> = {
   nyra: "Nyra 💙",
   suryanshi: "Suryanshi 🌻",
   aelina: "Aelina 💎",
-  velora: "Velora 🖤",
+  ruhi: "Ruhi 🌸",
 };
 
 export default function CuteLoader() {

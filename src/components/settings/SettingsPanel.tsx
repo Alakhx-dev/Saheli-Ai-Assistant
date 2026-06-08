@@ -200,9 +200,6 @@ interface SettingsPanelProps {
 const characterCards = [
   { id: "swara", label: "Swara 🦋", image: "/butterfly.png", accent: "from-pink-400/20 to-purple-400/10" },
   { id: "aarohi", label: "Aarohi ✨", image: "/Aarohi ✨.png", accent: "from-rose-600/20 to-red-900/10" },
-  { id: "akansha", label: "Akansha 🌸", image: "/Akansha 🌸.png", accent: "from-red-500/20 to-rose-400/10" },
-  { id: "aaradhya", label: "Aaradhya 🤍", image: "/Aaradhya 🤍.png", accent: "from-slate-400/20 to-zinc-400/10" },
-  { id: "aarunya", label: "Aarunya 🌸", image: "/Aarunya 🌸.png", accent: "from-pink-400/20 to-rose-300/10" },
   { id: "anvitha", label: "Anvitha 🤎", image: "/Anvitha 🤎.png", accent: "from-amber-600/20 to-amber-700/10" },
   { id: "kiyara", label: "Kiyara 🌼", image: "/Kiyara 🌼.png", accent: "from-yellow-400/20 to-amber-400/10" },
   { id: "lavanya", label: "Lavanya 💜", image: "/Lavanya 💜.png", accent: "from-purple-500/20 to-indigo-500/10" },
@@ -210,7 +207,7 @@ const characterCards = [
   { id: "nyra", label: "Nyra 💙", image: "/Nyra 💙.png", accent: "from-blue-400/20 to-cyan-400/10" },
   { id: "suryanshi", label: "Suryanshi 🌻", image: "/Suryanshi 🌻.png", accent: "from-yellow-500/20 to-amber-500/10" },
   { id: "aelina", label: "Aelina 💎", image: "/Aelina 💎.png", accent: "from-cyan-400/20 to-blue-400/10" },
-  { id: "velora", label: "Velora 🖤", image: "/Velora 🖤.png", accent: "from-slate-500/20 to-zinc-600/10" },
+  { id: "ruhi", label: "Ruhi 🌸", image: "/Ruhi 🌸.png", accent: "from-pink-500/20 to-rose-400/10" },
 ];
 
 export interface ConfigItem {
@@ -423,15 +420,15 @@ export default function SettingsPanel({
     let ideal = "swara";
     if (themeColor === "yellow") ideal = "kiyara";
     else if (themeColor === "peach") ideal = "anvitha";
-    else if (themeColor === "pink") ideal = "akansha";
+    else if (themeColor === "pink") ideal = "ruhi";
     else if (themeColor === "blue") ideal = "aelina";
     else if (themeColor === "orchid") ideal = "lavanya";
     else if (themeColor === "gemini") ideal = "nyra";
-    else if (themeColor === "beige") ideal = "aaradhya";
+    else if (themeColor === "beige") ideal = "swara";
     else if (themeColor === "maroon") ideal = "aarohi";
     
     if (!deletedDefaultIds.includes(ideal)) return ideal;
-    const order = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+    const order = ["swara", "aarohi", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "ruhi"];
     return order.find(id => !deletedDefaultIds.includes(id)) || "swara";
   };
 

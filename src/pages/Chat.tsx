@@ -367,9 +367,6 @@ type SettingsSectionId =
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
   swara: "/butterfly.png",
   aarohi: "/Aarohi ✨.png",
-  akansha: "/Akansha 🌸.png",
-  aaradhya: "/Aaradhya 🤍.png",
-  aarunya: "/Aarunya 🌸.png",
   anvitha: "/Anvitha 🤎.png",
   kiyara: "/Kiyara 🌼.png",
   lavanya: "/Lavanya 💜.png",
@@ -377,17 +374,14 @@ const CHARACTER_IMAGE_MAP: Record<string, string> = {
   nyra: "/Nyra 💙.png",
   suryanshi: "/Suryanshi 🌻.png",
   aelina: "/Aelina 💎.png",
-  velora: "/Velora 🖤.png",
+  ruhi: "/Ruhi 🌸.png",
 };
 
-const CHARACTER_KEYS = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+const CHARACTER_KEYS = ["swara", "aarohi", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "ruhi"];
 
 const CHARACTER_LABELS: Record<string, string> = {
   swara: "Swara 🦋",
   aarohi: "Aarohi ✨",
-  akansha: "Akansha 🌸",
-  aaradhya: "Aaradhya 🤍",
-  aarunya: "Aarunya 🌸",
   anvitha: "Anvitha 🤎",
   kiyara: "Kiyara 🌼",
   lavanya: "Lavanya 💜",
@@ -395,15 +389,12 @@ const CHARACTER_LABELS: Record<string, string> = {
   nyra: "Nyra 💙",
   suryanshi: "Suryanshi 🌻",
   aelina: "Aelina 💎",
-  velora: "Velora 🖤",
+  ruhi: "Ruhi 🌸",
 };
 
 const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number }> = {
   swara: { scale: 0.9, yOffset: 12 },
   aarohi: { scale: 1.0, yOffset: 0 },
-  akansha: { scale: 1.0, yOffset: 0 },
-  aaradhya: { scale: 0.98, yOffset: 8 },
-  aarunya: { scale: 0.98, yOffset: 6 },
   anvitha: { scale: 1.0, yOffset: 4 },
   kiyara: { scale: 1.02, yOffset: 0 },
   lavanya: { scale: 0.96, yOffset: 10 },
@@ -411,7 +402,7 @@ const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number
   nyra: { scale: 0.98, yOffset: 6 },
   suryanshi: { scale: 0.98, yOffset: 6 },
   aelina: { scale: 0.98, yOffset: 6 },
-  velora: { scale: 0.92, yOffset: 14 },
+  ruhi: { scale: 1.0, yOffset: 0 },
 };
 
 const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; text: string; buttonBg: string; buttonText: string }> = {
@@ -527,15 +518,15 @@ function getStoredCharacterId(themeColor: string) {
   let ideal = "swara";
   if (themeColor === "yellow") ideal = "kiyara";
   else if (themeColor === "peach") ideal = "anvitha";
-  else if (themeColor === "pink") ideal = "akansha";
+  else if (themeColor === "pink") ideal = "ruhi";
   else if (themeColor === "blue") ideal = "aelina";
   else if (themeColor === "orchid") ideal = "lavanya";
   else if (themeColor === "gemini") ideal = "nyra";
-  else if (themeColor === "beige") ideal = "aaradhya";
+  else if (themeColor === "beige") ideal = "swara";
   else if (themeColor === "maroon") ideal = "aarohi";
 
   if (!deletedIds.includes(ideal)) return ideal;
-  const order = ["swara", "aarohi", "akansha", "aaradhya", "aarunya", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "velora"];
+  const order = ["swara", "aarohi", "anvitha", "kiyara", "lavanya", "meher", "nyra", "suryanshi", "aelina", "ruhi"];
   return order.find(id => !deletedIds.includes(id)) || "swara";
 }
 
