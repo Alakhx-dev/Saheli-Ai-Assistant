@@ -391,7 +391,6 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const t = getLang();
   const accountFileRef = useRef<HTMLInputElement>(null);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showApplyConfirmChar, setShowApplyConfirmChar] = useState<{ id: string; name: string; url: string; timestamp: number } | null>(null);
   const [showNameInputModal, setShowNameInputModal] = useState(false);
@@ -1635,7 +1634,6 @@ export default function SettingsPanel({
               onClick={() => {
                 onCharacterChange(showApplyConfirmChar.id);
                 setShowApplyConfirmChar(null);
-                setIsUploadModalOpen(false);
                 toast.success(`Character "${showApplyConfirmChar.name || "Custom companion"}" applied successfully! 🎉`);
               }}
               className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition duration-200 cursor-pointer ${activeModalTheme.buttonBg}`}
@@ -1851,6 +1849,44 @@ export default function SettingsPanel({
     };
     const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
 
+    const getLocalAdjustments = (id: string, charObj?: any) => {
+      try {
+        const saved = localStorage.getItem(`saheli_char_adjustments_${id}`);
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      if (charObj && (charObj.scale !== undefined || charObj.xOffset !== undefined || charObj.yOffset !== undefined)) {
+        return {
+          scale: charObj.scale ?? 1.0,
+          xOffset: charObj.xOffset ?? 0,
+          yOffset: charObj.yOffset ?? 0,
+          brightness: charObj.brightness ?? 100,
+          saturation: charObj.saturation ?? 100,
+          contrast: charObj.contrast ?? 100
+        };
+      }
+      const overrides: Record<string, { scale: number; yOffset: number }> = {
+        swara: { scale: 0.9, yOffset: 12 },
+        aarohi: { scale: 1.0, yOffset: 0 },
+        anvitha: { scale: 1.0, yOffset: 4 },
+        kiyara: { scale: 1.02, yOffset: 0 },
+        lavanya: { scale: 0.96, yOffset: 10 },
+        meher: { scale: 0.97, yOffset: 8 },
+        nyra: { scale: 0.98, yOffset: 6 },
+        suryanshi: { scale: 0.98, yOffset: 6 },
+        aelina: { scale: 0.98, yOffset: 6 },
+        ruhi: { scale: 1.0, yOffset: 0 },
+      };
+      const over = overrides[id] || { scale: 1.0, yOffset: 0 };
+      return {
+        scale: over.scale,
+        xOffset: 0,
+        yOffset: over.yOffset,
+        brightness: id === "swara" ? 90 : 100,
+        saturation: id === "swara" ? 102 : 100,
+        contrast: id === "swara" ? 101 : 100
+      };
+    };
+
     const allChars = [
       ...characterCards.filter(c => !deletedDefaultIds.includes(c.id)).map(c => ({ id: c.id, name: c.label, url: c.image, isCustom: false })),
       ...uploadedCharacters.map(c => ({ id: c.id, name: c.name, url: c.url, isCustom: true }))
@@ -1886,17 +1922,26 @@ export default function SettingsPanel({
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ type: "spring", damping: 25, stiffness: 350 }}
           style={{
-            background: "rgba(15, 10, 20, 0.6)",
-            backdropFilter: "blur(30px)",
-            boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${activeModalTheme.glow}`
+            background: "rgba(12, 6, 20, 0.72)",
+            backdropFilter: "blur(40px)",
+            boxShadow: `0 30px 70px rgba(0, 0, 0, 0.8), 0 0 40px ${activeModalTheme.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.08)`
           }}
-          className={`w-full max-w-[450px] rounded-[28px] p-6 flex flex-col gap-4 text-white relative overflow-hidden border ${activeModalTheme.border}`}
+          className={`w-full max-w-[480px] rounded-[28px] p-6 flex flex-col gap-4 text-white relative overflow-hidden border ${activeModalTheme.border}`}
         >
+          {/* Hidden File Input for uploading */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            accept="image/png, image/webp, image/jpeg, image/jpg"
+            className="hidden"
+          />
+
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
             <h3 className={`text-base font-bold tracking-tight flex items-center gap-2 ${activeModalTheme.text}`}>
-              <Pencil className="h-5 w-5" />
-              Customize Companions
+              <Sparkles className="h-5 w-5 animate-pulse" />
+              Companion Studio 🌟
             </h3>
             <div className="flex items-center gap-2">
               {isSelectMode && (
@@ -1932,38 +1977,51 @@ export default function SettingsPanel({
           <p className="text-[11px] text-white/50 leading-relaxed text-left shrink-0">
             {isSelectMode 
               ? "Select companions to delete. Default companions will be hidden; custom uploads will be permanently removed."
-              : "View all standard and custom companions. Click Delete below to enter select-to-remove mode."
+              : "Choose a companion, click the adjust sliders (SlidersHorizontal) to customize zoom/offsets/filters, or upload your own PNG."
             }
           </p>
 
           {/* Character Grid */}
-          <div className="flex-1 max-h-[260px] overflow-y-auto pr-1 no-scrollbar grid grid-cols-3 gap-3">
+          <div className="flex-1 max-h-[300px] overflow-y-auto pr-1 no-scrollbar grid grid-cols-3 gap-3 py-1">
             {allChars.map((char) => {
+              const isActive = selectedCharacter === char.id;
               const isSelected = selectedForDelete.includes(char.id);
+              const adjustments = getLocalAdjustments(char.id, char);
               return (
                 <div
                   key={char.id}
-                  onClick={() => toggleSelect(char.id)}
+                  onClick={() => {
+                    if (isSelectMode) {
+                      toggleSelect(char.id);
+                    } else {
+                      onCharacterChange(char.id);
+                      toast.success(`${char.name} applied successfully! 🎉`);
+                    }
+                  }}
                   style={
-                    isSelected 
-                      ? { 
-                          borderColor: activeModalTheme.text.replace("text-", "rgba(var(--color-"), 
-                          boxShadow: `0 0 10px ${activeModalTheme.activeGlow}` 
-                        } 
-                      : {}
+                    isSelectMode
+                      ? (isSelected
+                          ? { borderColor: "rgba(239, 68, 68, 0.5)", boxShadow: "0 0 10px rgba(239, 68, 68, 0.2)" }
+                          : {})
+                      : (isActive 
+                          ? { 
+                              borderColor: activeModalTheme.text.replace("text-", "rgba(var(--color-"), 
+                              boxShadow: `0 0 10px ${activeModalTheme.activeGlow}` 
+                            } 
+                          : {})
                   }
-                  className={`relative flex flex-col rounded-2xl border p-2 bg-[#12091f]/40 transition-all duration-300 cursor-pointer select-none ${
-                    isSelected 
-                      ? `${activeModalTheme.activeBorder} ${activeModalTheme.activeBg}` 
-                      : "border-white/5 hover:border-white/10"
+                  className={`group relative flex flex-col rounded-2xl border p-2 bg-[#12091f]/40 transition-all duration-300 cursor-pointer select-none h-[120px] ${
+                    isSelectMode
+                      ? (isSelected ? "border-red-500/50 bg-red-500/5" : "border-white/5 hover:border-white/10")
+                      : (isActive ? `${activeModalTheme.activeBorder} ${activeModalTheme.activeBg}` : "border-white/5 hover:border-white/10")
                   }`}
                 >
-                  {/* Select Bubble */}
+                  {/* Select Bubble for Delete Mode */}
                   {isSelectMode && (
                     <div className="absolute top-1.5 right-1.5 z-10">
                       <div className={`h-4.5 w-4.5 rounded-full border flex items-center justify-center transition-all ${
                         isSelected 
-                          ? `${activeModalTheme.activeBorder} ${activeModalTheme.buttonBg.split(" ")[0]} text-white` 
+                          ? "border-red-500 bg-red-500 text-white" 
                           : "border-white/20 bg-black/40"
                       }`}>
                         {isSelected && <Check className="h-3 w-3" />}
@@ -1971,59 +2029,117 @@ export default function SettingsPanel({
                     </div>
                   )}
 
+                  {/* Active checkmark */}
+                  {!isSelectMode && isActive && (
+                    <div className="absolute top-1.5 right-1.5 z-10 bg-black/50 p-0.5 rounded-full border border-white/10">
+                      <Check className={`h-2.5 w-2.5 ${activeModalTheme.text}`} />
+                    </div>
+                  )}
+
+                  {/* Edit Sliders Icon */}
+                  {!isSelectMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsCustomizeModalOpen(false);
+                        if (onEditCharacterAdjustments) {
+                          onEditCharacterAdjustments({
+                            id: char.id,
+                            name: char.name,
+                            url: char.url,
+                            timestamp: char.timestamp || 0,
+                            scale: adjustments.scale,
+                            xOffset: adjustments.xOffset,
+                            yOffset: adjustments.yOffset,
+                            brightness: adjustments.brightness,
+                            saturation: adjustments.saturation,
+                            contrast: adjustments.contrast
+                          } as any);
+                        }
+                      }}
+                      className="absolute top-1.5 left-1.5 p-1 rounded-md bg-black/50 hover:bg-white/15 text-white/70 hover:text-white transition opacity-0 group-hover:opacity-100 duration-200 z-10"
+                      title="Adjust position, size & effects"
+                    >
+                      <SlidersHorizontal className="h-3 w-3" />
+                    </button>
+                  )}
+
                   {/* Character Image */}
-                  <div className="h-16 w-full flex items-center justify-center bg-black/20 rounded-lg overflow-hidden mb-1">
-                    <img src={char.url} alt={char.name} className="h-full max-w-full object-contain filter drop-shadow-md" />
+                  <div className="flex-1 flex items-center justify-center overflow-hidden mb-1 relative">
+                    <img 
+                      src={char.url} 
+                      alt={char.name} 
+                      className="h-14 max-w-full object-contain filter drop-shadow-md group-hover:scale-105 transition duration-300" 
+                      style={{
+                        filter: `brightness(${adjustments.brightness ?? (char.id === "swara" ? 90 : 100)}%) saturate(${adjustments.saturation ?? (char.id === "swara" ? 102 : 100)}%) contrast(${adjustments.contrast ?? (char.id === "swara" ? 101 : 100)}%) drop-shadow(0 4px 6px rgba(0,0,0,0.3))`
+                      }}
+                    />
                   </div>
 
                   {/* Name */}
-                  <p className="text-[10px] font-semibold text-center text-white/90 truncate px-0.5 mt-0.5">
+                  <p className="text-[10px] font-semibold text-center text-white/90 truncate px-0.5 mt-auto">
                     {char.name}
                   </p>
                 </div>
               );
             })}
+
+            {/* Special Upload Card in the Grid */}
+            {!isSelectMode && (
+              <div
+                onClick={() => {
+                  if (uploadedCharacters.length >= 5) {
+                    toast.error("You can only upload up to 5 custom characters. 🤨");
+                    return;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                className="relative flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/15 p-2 bg-white/[0.01] hover:bg-white/[0.03] hover:border-white/30 transition-all duration-300 cursor-pointer h-[120px]"
+              >
+                <Upload className="h-5 w-5 mb-1 text-white/40 group-hover:text-white/60" />
+                <p className="text-[9px] font-bold text-center text-white/50">Upload Custom</p>
+              </div>
+            )}
           </div>
 
           {/* Bottom Buttons */}
           <div className="flex flex-col gap-2 pt-3 border-t border-white/5 shrink-0">
             {!isSelectMode ? (
-              <>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSelectMode(true);
+                  }}
+                  className="py-2.5 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowRestoreConfirm(true);
+                  }}
+                  className="py-2.5 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Undo2 className="h-3.5 w-3.5" />
+                  Restore
+                </button>
+                <button
                   type="button"
                   onClick={() => {
                     setIsCustomizeModalOpen(false);
-                    setIsUploadModalOpen(true);
+                    window.dispatchEvent(new CustomEvent("saheli_open_live_character_selector"));
+                    onOpenChange(false);
                   }}
-                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${activeModalTheme.text}`}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-semibold border transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${activeModalTheme.buttonBg}`}
                 >
-                  <Upload className="h-4 w-4" />
-                  Upload Your Character
-                </motion.button>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsSelectMode(true);
-                    }}
-                    className="py-2 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowRestoreConfirm(true);
-                    }}
-                    className="py-2 px-3 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                    Restore
-                  </button>
-                </div>
-              </>
+                  <Maximize2 className="h-3.5 w-3.5" />
+                  Live View
+                </button>
+              </div>
             ) : (
               <div className="flex items-center gap-2 w-full">
                 <button
@@ -2199,326 +2315,6 @@ export default function SettingsPanel({
     );
   };
 
-  const renderUploadModal = () => {
-    const themeStyles = {
-      pink: {
-        border: "border-pink-500/20",
-        glow: "rgba(255, 105, 180, 0.08)",
-        activeGlow: "rgba(255, 105, 180, 0.15)",
-        activeBorder: "border-pink-500/40",
-        activeBg: "bg-pink-500/5",
-        text: "text-pink-400",
-        textLight: "text-pink-300",
-        progressBorder: "border-pink-500",
-        uploadBg: "bg-pink-500/10",
-        uploadBorder: "border-pink-500/20",
-        uploadText: "text-pink-400"
-      },
-      yellow: {
-        border: "border-yellow-400/25",
-        glow: "rgba(255, 215, 0, 0.08)",
-        activeGlow: "rgba(255, 215, 0, 0.15)",
-        activeBorder: "border-yellow-400/40",
-        activeBg: "bg-yellow-500/5",
-        text: "text-yellow-400",
-        textLight: "text-yellow-300",
-        progressBorder: "border-yellow-500",
-        uploadBg: "bg-yellow-500/10",
-        uploadBorder: "border-yellow-500/20",
-        uploadText: "text-yellow-400"
-      },
-      blue: {
-        border: "border-cyan-400/25",
-        glow: "rgba(0, 229, 255, 0.08)",
-        activeGlow: "rgba(0, 229, 255, 0.15)",
-        activeBorder: "border-cyan-400/40",
-        activeBg: "bg-cyan-500/5",
-        text: "text-cyan-400",
-        textLight: "text-cyan-300",
-        progressBorder: "border-cyan-500",
-        uploadBg: "bg-cyan-500/10",
-        uploadBorder: "border-cyan-500/20",
-        uploadText: "text-cyan-400"
-      },
-      orchid: {
-        border: "border-purple-500/25",
-        glow: "rgba(213, 0, 249, 0.08)",
-        activeGlow: "rgba(213, 0, 249, 0.15)",
-        activeBorder: "border-purple-500/40",
-        activeBg: "bg-purple-500/5",
-        text: "text-purple-400",
-        textLight: "text-purple-300",
-        progressBorder: "border-purple-500",
-        uploadBg: "bg-purple-500/10",
-        uploadBorder: "border-purple-500/20",
-        uploadText: "text-purple-400"
-      },
-      peach: {
-        border: "border-orange-400/25",
-        glow: "rgba(255, 158, 125, 0.08)",
-        activeGlow: "rgba(255, 158, 125, 0.15)",
-        activeBorder: "border-orange-400/40",
-        activeBg: "bg-orange-500/5",
-        text: "text-orange-400",
-        textLight: "text-orange-300",
-        progressBorder: "border-orange-500",
-        uploadBg: "bg-orange-500/10",
-        uploadBorder: "border-orange-500/20",
-        uploadText: "text-orange-400"
-      },
-      beige: {
-        border: "border-amber-400/20",
-        glow: "rgba(212, 184, 149, 0.08)",
-        activeGlow: "rgba(212, 184, 149, 0.15)",
-        activeBorder: "border-amber-400/35",
-        activeBg: "bg-amber-500/5",
-        text: "text-amber-300",
-        textLight: "text-amber-250",
-        progressBorder: "border-amber-500",
-        uploadBg: "bg-amber-500/10",
-        uploadBorder: "border-amber-500/20",
-        uploadText: "text-amber-300"
-      },
-      maroon: {
-        border: "border-red-500/25",
-        glow: "rgba(208, 28, 63, 0.08)",
-        activeGlow: "rgba(208, 28, 63, 0.15)",
-        activeBorder: "border-red-500/40",
-        activeBg: "bg-red-500/5",
-        text: "text-red-400",
-        textLight: "text-red-300",
-        progressBorder: "border-red-500",
-        uploadBg: "bg-red-500/10",
-        uploadBorder: "border-red-500/20",
-        uploadText: "text-red-400"
-      },
-      gemini: {
-        border: "border-blue-500/25",
-        glow: "rgba(74, 137, 255, 0.08)",
-        activeGlow: "rgba(74, 137, 255, 0.15)",
-        activeBorder: "border-blue-500/40",
-        activeBg: "bg-blue-500/5",
-        text: "text-blue-400",
-        textLight: "text-blue-300",
-        progressBorder: "border-blue-500",
-        uploadBg: "bg-blue-500/10",
-        uploadBorder: "border-blue-500/20",
-        uploadText: "text-blue-400"
-      }
-    };
-    const activeModalTheme = themeStyles[selectedColor as keyof typeof themeStyles] || themeStyles.pink;
-
-    const capsuleBtnClasses = {
-      pink: {
-        inactive: "border-pink-500/25 bg-pink-500/10 text-pink-300 hover:bg-pink-500/20 hover:border-pink-500/45",
-        active: "border-pink-500/35 bg-pink-500/25 text-pink-200"
-      },
-      yellow: {
-        inactive: "border-yellow-500/25 bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20 hover:border-yellow-500/45",
-        active: "border-yellow-500/35 bg-yellow-500/25 text-yellow-200"
-      },
-      blue: {
-        inactive: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/45",
-        active: "border-cyan-500/35 bg-cyan-500/25 text-cyan-200"
-      },
-      orchid: {
-        inactive: "border-purple-500/25 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 hover:border-purple-500/45",
-        active: "border-purple-500/35 bg-purple-500/25 text-purple-200"
-      },
-      peach: {
-        inactive: "border-orange-500/25 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 hover:border-orange-500/45",
-        active: "border-orange-500/35 bg-orange-500/25 text-orange-200"
-      },
-      beige: {
-        inactive: "border-amber-500/20 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 hover:border-amber-500/40",
-        active: "border-amber-500/30 bg-amber-500/25 text-amber-250"
-      },
-      maroon: {
-        inactive: "border-red-500/25 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/45",
-        active: "border-red-500/35 bg-red-500/25 text-red-200"
-      },
-      gemini: {
-        inactive: "border-blue-500/25 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 hover:border-blue-500/45",
-        active: "border-blue-500/35 bg-blue-500/25 text-blue-200"
-      }
-    };
-    const activeCapsuleTheme = capsuleBtnClasses[selectedColor as keyof typeof capsuleBtnClasses] || capsuleBtnClasses.pink;
-
-    return (
-      <motion.div
-        key="upload-character-modal-overlay"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 pointer-events-auto"
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          transition={{ type: "spring", damping: 25, stiffness: 350 }}
-          style={{
-            background: "rgba(15, 10, 20, 0.6)",
-            backdropFilter: "blur(30px)",
-            boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${activeModalTheme.glow}`
-          }}
-          className={`w-full max-w-[450px] rounded-[28px] p-6 flex flex-col gap-4 text-white relative overflow-hidden border ${activeModalTheme.border}`}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-            <h3 className={`text-lg font-bold tracking-tight flex items-center gap-2 ${activeModalTheme.text}`}>
-              <Upload className="h-5 w-5" />
-              Upload Custom Character
-            </h3>
-            <button
-              type="button"
-              onClick={() => setIsUploadModalOpen(false)}
-              className="p-1 rounded-full hover:bg-white/10 transition text-white/70 hover:text-white"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          {/* Warning Message */}
-          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200/90 leading-relaxed">
-            <p className="font-semibold mb-1 flex items-center gap-1.5">
-              ⚠️ Recommendation
-            </p>
-            For best cinematic results, upload a transparent/background-removed PNG image.
-          </div>
-
-          {/* Upload Button */}
-          <div className="flex flex-col items-center justify-center p-6 border border-dashed border-white/15 rounded-2xl bg-white/[0.01] hover:bg-white/[0.03] transition relative group">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              accept="image/png, image/webp, image/jpeg, image/jpg"
-              className="hidden"
-            />
-            {isUploading ? (
-              <div className="flex flex-col items-center gap-2 py-2">
-                <div className={`h-8 w-8 rounded-full border-2 border-t-transparent animate-spin ${activeModalTheme.progressBorder}`} />
-                <span className={`text-xs font-semibold animate-pulse ${activeModalTheme.textLight}`}>Uploading to Storage...</span>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!auth.currentUser) {
-                    toast.error("Please sign in to upload characters. ✨");
-                    return;
-                  }
-                  fileInputRef.current?.click();
-                }}
-                disabled={uploadedCharacters.length >= 5}
-                className={`flex flex-col items-center gap-2.5 cursor-pointer w-full h-full py-2 ${uploadedCharacters.length >= 5 ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <div className={`w-12 h-12 rounded-full border flex items-center justify-center group-hover:scale-105 transition-transform ${activeModalTheme.uploadBg} ${activeModalTheme.uploadBorder} ${activeModalTheme.uploadText}`}>
-                  <Upload className="h-6 w-6" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-white">Select character image file</p>
-                  <p className="text-[11px] text-white/40 mt-1">PNG, WEBP, or JPG (Max 5 images)</p>
-                </div>
-              </button>
-            )}
-          </div>
-
-          {/* Uploaded Characters Gallery */}
-          <div className="flex-1 flex flex-col min-h-0">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-white/40 mb-2.5">
-              Your Custom Characters ({uploadedCharacters.length}/5)
-            </h4>
-            
-            {uploadedCharacters.length === 0 ? (
-              <div className="flex-1 min-h-[140px] flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl p-4 text-center text-xs text-white/30 italic">
-                No custom characters uploaded yet.
-              </div>
-            ) : (
-              <div className="flex-1 max-h-[220px] overflow-y-auto pr-1 no-scrollbar grid grid-cols-2 gap-3.5">
-                {uploadedCharacters.map((char) => {
-                  const isActive = selectedCharacter === char.id;
-                  return (
-                    <div
-                      key={char.id}
-                      style={
-                        isActive 
-                          ? { 
-                              borderColor: activeModalTheme.text.replace("text-", "rgba(var(--color-"), 
-                              boxShadow: `0 0 12px ${activeModalTheme.activeGlow}` 
-                            } 
-                          : {}
-                      }
-                      className={`relative flex flex-col rounded-2xl border p-2 bg-[#12091f]/40 transition-all duration-300 ${
-                        isActive 
-                          ? `${activeModalTheme.activeBorder} ${activeModalTheme.activeBg}` 
-                          : "border-white/5 hover:border-white/10"
-                      }`}
-                    >
-                      {/* Delete button (absolute top-right) */}
-                      <button
-                        type="button"
-                        onClick={() => setShowDeleteConfirmChar(char)}
-                        className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/20 text-white/50 hover:text-red-400 transition z-10 cursor-pointer"
-                        title="Delete Character"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-
-                      {/* Edit Adjustments button (absolute top-left) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsUploadModalOpen(false);
-                          if (onEditCharacterAdjustments) {
-                            onEditCharacterAdjustments(char);
-                          }
-                        }}
-                        className="absolute top-2 left-2 p-1.5 rounded-lg bg-black/40 hover:bg-white/15 text-white/70 hover:text-white transition z-10 cursor-pointer"
-                        title="Adjust Image Position & Size"
-                      >
-                        <SlidersHorizontal className="h-3.5 w-3.5" />
-                      </button>
-
-                      {/* Image Preview */}
-                      <div className="h-24 w-full flex items-center justify-center bg-black/25 rounded-xl overflow-hidden mb-2 relative group">
-                        <img
-                          src={char.url}
-                          alt="Custom Character Preview"
-                          className="h-full max-w-full object-contain filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.3)] transition group-hover:scale-105"
-                        />
-                      </div>
-
-                      {/* Character Name */}
-                      <p className="text-[11px] font-semibold text-center text-white/90 mb-2 truncate px-1">
-                        {char.name || "Custom Companion"}
-                      </p>
-
-                      {/* Apply button */}
-                      <button
-                        type="button"
-                        onClick={() => setShowApplyConfirmChar(char)}
-                        disabled={isActive}
-                        className={`w-full py-1.5 rounded-full text-[10px] font-bold border transition ${
-                          isActive 
-                            ? `${activeCapsuleTheme.active} font-semibold cursor-default` 
-                            : `${activeCapsuleTheme.inactive} cursor-pointer`
-                        }`}
-                      >
-                        {isActive ? "Active companion" : "Apply in Chat"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      </motion.div>
-    );
-  };
-
   const renderItemContent = (itemId: string, isCompact: boolean) => {
     switch (itemId) {
       case "character": {
@@ -2587,20 +2383,9 @@ export default function SettingsPanel({
                 onClick={() => setIsCustomizeModalOpen(true)}
                 className={`mt-3 w-full py-2.5 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.03] hover:bg-white/[0.08] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer shadow-md backdrop-blur-md ${activeBtnTheme}`}
               >
-                <Pencil className="h-4 w-4" />
-                Customize Character
+                <SlidersHorizontal className="h-4 w-4" />
+                Customize Companion
               </motion.button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent("saheli_open_live_character_selector"));
-                  onOpenChange(false);
-                }}
-                className={`mt-2.5 w-full py-2.5 px-4 rounded-xl text-xs font-bold border hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${getThemeClasses(selectedColor, "switchActive")} shadow-lg`}
-              >
-                View in Chat Page
-              </button>
             </SectionShell>
           </motion.div>
         );
@@ -3826,7 +3611,6 @@ export default function SettingsPanel({
             <AnimatePresence>
               {isWidescreenCustomizerOpen && renderWidescreenCustomizer()}
               {showConfirmRestore && renderConfirmationModal()}
-              {isUploadModalOpen && renderUploadModal()}
               {showApplyConfirmChar && renderApplyConfirmationModal()}
               {showNameInputModal && pendingUploadFile && renderNameInputModal()}
               {showDeleteConfirmChar && renderDeleteConfirmationModal()}

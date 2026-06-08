@@ -7,6 +7,7 @@ import {
   Heart,
   X,
   Plus,
+  Minus,
   Upload,
   
   ChevronLeft,
@@ -44,7 +45,7 @@ import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "
 import { collection, doc, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
 import { useNavigate, useParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { toast } from "sonner";
 import { sendMessage, detectChatMode, extractMemoryAI, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
 import {
@@ -403,6 +404,46 @@ const CHARACTER_STYLE_OVERRIDES: Record<string, { scale: number; yOffset: number
   suryanshi: { scale: 0.98, yOffset: 6 },
   aelina: { scale: 0.98, yOffset: 6 },
   ruhi: { scale: 1.0, yOffset: 0 },
+};
+
+const getCharacterAdjustments = (id: string, customChar?: { scale?: number; xOffset?: number; yOffset?: number; brightness?: number; saturation?: number; contrast?: number }) => {
+  try {
+    const savedStr = window.localStorage.getItem(`saheli_char_adjustments_${id}`);
+    if (savedStr) {
+      const parsed = JSON.parse(savedStr);
+      return {
+        scale: parsed.scale ?? 1.0,
+        xOffset: parsed.xOffset ?? 0,
+        yOffset: parsed.yOffset ?? 0,
+        brightness: parsed.brightness ?? (id === "swara" ? 90 : 100),
+        saturation: parsed.saturation ?? (id === "swara" ? 102 : 100),
+        contrast: parsed.contrast ?? (id === "swara" ? 101 : 100),
+      };
+    }
+  } catch (e) {
+    console.error("Failed to load character adjustments from localStorage:", e);
+  }
+
+  if (customChar) {
+    return {
+      scale: customChar.scale ?? 1.0,
+      xOffset: customChar.xOffset ?? 0,
+      yOffset: customChar.yOffset ?? 0,
+      brightness: customChar.brightness ?? 100,
+      saturation: customChar.saturation ?? 100,
+      contrast: customChar.contrast ?? 100,
+    };
+  }
+
+  const defaultOverride = CHARACTER_STYLE_OVERRIDES[id] || { scale: 1.0, yOffset: 0 };
+  return {
+    scale: defaultOverride.scale,
+    xOffset: 0,
+    yOffset: defaultOverride.yOffset,
+    brightness: id === "swara" ? 90 : 100,
+    saturation: id === "swara" ? 102 : 100,
+    contrast: id === "swara" ? 101 : 100,
+  };
 };
 
 const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; text: string; buttonBg: string; buttonText: string }> = {
@@ -1124,20 +1165,6 @@ export default function Chat() {
   const [musicQueue, setMusicQueue] = useState<JioSaavnSong[]>([]);
   const [currentQueueIndex, setCurrentQueueIndex] = useState(0);
 
-  const wasSidebarOpenRef = useRef(false);
-
-  // Automatically hide sidebar when fullscreen music player is open
-  useEffect(() => {
-    if (isFullscreenPlayerOpen) {
-      wasSidebarOpenRef.current = isSidebarOpen;
-      setIsSidebarOpen(false);
-    } else {
-      if (wasSidebarOpenRef.current) {
-        setIsSidebarOpen(true);
-      }
-    }
-  }, [isFullscreenPlayerOpen]);
-
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentSongRef = useRef<JioSaavnSong | null>(null);
   const isPlayingRef = useRef<boolean>(false);
@@ -1640,10 +1667,32 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     scale: number;
     xOffset: number;
     yOffset: number;
+    brightness: number;
+    saturation: number;
+    contrast: number;
     originalScale: number;
     originalXOffset: number;
     originalYOffset: number;
+    originalBrightness: number;
+    originalSaturation: number;
+    originalContrast: number;
   } | null>(null);
+  const dragControls = useDragControls();
+
+  const wasSidebarOpenRef = useRef(false);
+
+  // Automatically hide sidebar when fullscreen music player or character adjustments panel is open
+  useEffect(() => {
+    if (isFullscreenPlayerOpen || adjustingCharacter) {
+      wasSidebarOpenRef.current = isSidebarOpen;
+      setIsSidebarOpen(false);
+    } else {
+      if (wasSidebarOpenRef.current) {
+        setIsSidebarOpen(true);
+      }
+    }
+  }, [isFullscreenPlayerOpen, adjustingCharacter]);
+
   const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -4000,19 +4049,26 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       });
     }
   }, [activeTheme, user]);
-  const handleEditCharacterAdjustments = useCallback((char: { id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number }) => {
+  const handleEditCharacterAdjustments = useCallback((char: { id: string; name: string; url: string; timestamp: number; scale?: number; xOffset?: number; yOffset?: number; brightness?: number; saturation?: number; contrast?: number }) => {
     handleCharacterChange(char.id);
     setSettingsPanelOpen(false);
+    const adjustments = getCharacterAdjustments(char.id, char);
     setAdjustingCharacter({
       id: char.id,
       name: char.name,
       url: char.url,
-      scale: char.scale ?? 1.0,
-      xOffset: char.xOffset ?? 0,
-      yOffset: char.yOffset ?? 0,
-      originalScale: char.scale ?? 1.0,
-      originalXOffset: char.xOffset ?? 0,
-      originalYOffset: char.yOffset ?? 0,
+      scale: adjustments.scale,
+      xOffset: adjustments.xOffset,
+      yOffset: adjustments.yOffset,
+      brightness: adjustments.brightness,
+      saturation: adjustments.saturation,
+      contrast: adjustments.contrast,
+      originalScale: adjustments.scale,
+      originalXOffset: adjustments.xOffset,
+      originalYOffset: adjustments.yOffset,
+      originalBrightness: adjustments.brightness,
+      originalSaturation: adjustments.saturation,
+      originalContrast: adjustments.contrast,
     });
   }, [handleCharacterChange]);
   const handleToggleWeatherPanel = useCallback(() => {
@@ -4724,15 +4780,18 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         const activeMascotKey = isLiveSelectorActive ? livePreviewCharacter : selectedCharacter;
                         const customChar = uploadedCharacters.find((c) => c.id === activeMascotKey);
                         const mascotSrc = customChar ? customChar.url : (CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png");
+                        
                         const mascotOverride = (adjustingCharacter && adjustingCharacter.id === activeMascotKey)
-                          ? { scale: adjustingCharacter.scale, xOffset: adjustingCharacter.xOffset, yOffset: adjustingCharacter.yOffset }
-                          : (customChar 
-                              ? { scale: customChar.scale ?? 1.0, xOffset: customChar.xOffset ?? 0, yOffset: customChar.yOffset ?? 0 }
-                              : (CHARACTER_STYLE_OVERRIDES[activeMascotKey] 
-                                  ? { scale: CHARACTER_STYLE_OVERRIDES[activeMascotKey].scale, yOffset: CHARACTER_STYLE_OVERRIDES[activeMascotKey].yOffset, xOffset: 0 }
-                                  : { scale: activeMascotKey.startsWith("char_") ? 0.98 : 1.0, yOffset: activeMascotKey.startsWith("char_") ? 6 : 0, xOffset: 0 }
-                                )
-                            );
+                          ? { 
+                              scale: adjustingCharacter.scale, 
+                              xOffset: adjustingCharacter.xOffset, 
+                              yOffset: adjustingCharacter.yOffset,
+                              brightness: adjustingCharacter.brightness ?? (activeMascotKey === "swara" ? 90 : 100),
+                              saturation: adjustingCharacter.saturation ?? (activeMascotKey === "swara" ? 102 : 100),
+                              contrast: adjustingCharacter.contrast ?? (activeMascotKey === "swara" ? 101 : 100),
+                            }
+                          : getCharacterAdjustments(activeMascotKey, customChar);
+
                         return (
                           <motion.img
                             key={activeMascotKey}
@@ -4742,16 +4801,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                             animate={{ opacity: 1, scale: mascotOverride.scale, y: -4 + mascotOverride.yOffset, x: mascotOverride.xOffset }}
                             exit={{ opacity: 0, scale: mascotOverride.scale * 0.95, y: 6 + mascotOverride.yOffset, x: mascotOverride.xOffset }}
                             transition={{ duration: 0.4, ease: "easeInOut" }}
-                            className={
-                              activeMascotKey === "swara"
-                                ? "w-full h-full brightness-[90%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
-                                : isPinkTheme
-                                  ? "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
-                                  : "w-full h-full brightness-[98%] contrast-[101%] saturate-[102%] drop-shadow-[0_10px_20px_rgba(0,0,0,0.22)]"
-                            }
+                            className="w-full h-full"
                             style={{
                               objectFit: "contain",
                               objectPosition: "bottom center",
+                              filter: `brightness(${mascotOverride.brightness}%) saturate(${mascotOverride.saturation}%) contrast(${mascotOverride.contrast}%) drop-shadow(0 10px 20px rgba(0,0,0,0.22))`
                             }}
                           />
                         );
@@ -5397,21 +5451,29 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           
           return (
             <motion.div
+              drag
+              dragControls={dragControls}
+              dragListener={false}
+              dragMomentum={false}
+              dragElastic={0.1}
               initial={{ opacity: 0, y: 50, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
               transition={{ type: "spring", damping: 22, stiffness: 220 }}
-              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-[480px] px-4 pointer-events-auto"
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-[100] w-full max-w-[540px] px-4 pointer-events-auto"
             >
               <div
-                className={`rounded-[28px] border ${themeStyles.border} bg-[#0c0616]/85 backdrop-blur-[35px] p-6 text-white flex flex-col gap-4 relative overflow-hidden`}
+                className={`rounded-[28px] border ${themeStyles.border} bg-[#0c0616]/92 backdrop-blur-[40px] p-6 text-white flex flex-col gap-4 relative overflow-hidden`}
                 style={{
                   fontFamily: "'Outfit', 'Inter', sans-serif",
-                  boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 35px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
+                  boxShadow: `0 24px 60px rgba(0,0,0,0.8), 0 0 40px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
                 }}
               >
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div 
+                  onPointerDown={(e) => dragControls.start(e)}
+                  className="flex items-center justify-between border-b border-white/10 pb-3 cursor-grab active:cursor-grabbing select-none"
+                >
                   <div className="flex items-center gap-2">
                     <Sliders className={`h-4.5 w-4.5 ${themeStyles.text.split(" ")[0]} animate-pulse`} />
                     <span className="text-sm font-bold tracking-tight">Adjust companion: {adjustingCharacter.name}</span>
@@ -5429,145 +5491,327 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 </div>
 
                 {/* Controls Layout */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
-                  {/* Visual D-Pad & Scale Controls */}
-                  <div className="sm:col-span-5 flex flex-col items-center gap-2.5">
-                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Position Control</span>
-                    {/* D-Pad Container */}
-                    <div className="relative w-28 h-28 bg-white/[0.02] rounded-full border border-white/5 p-1 flex items-center justify-center">
-                      {/* Up */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                  {/* Position Suite */}
+                  <div className="sm:col-span-5 flex flex-col items-center gap-4 border-r border-white/5 pr-4">
+                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
+                    
+                    {/* Joystick D-pad */}
+                    <div className="relative w-28 h-28 bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40">
+                      {/* Up Arrow */}
                       <button
                         type="button"
                         onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset - 5 } : null)}
-                        className="absolute top-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        className="absolute top-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                         title="Move Up"
                       >
                         <ArrowUp className="h-4 w-4" />
                       </button>
-                      {/* Left */}
+                      
+                      {/* Left Arrow */}
                       <button
                         type="button"
                         onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset - 5 } : null)}
-                        className="absolute left-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        className="absolute left-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                         title="Move Left"
                       >
                         <ArrowLeft className="h-4 w-4" />
                       </button>
-                      {/* Reset in Center */}
+                      
+                      {/* Reset Icon */}
                       <button
                         type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: 0, yOffset: 0, scale: 1.0 } : null)}
-                        className={`p-2 rounded-full bg-white/5 hover:bg-white/15 active:scale-90 transition border border-white/10 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
-                        title="Reset Position & Size"
+                        onClick={() => setAdjustingCharacter(prev => prev ? { 
+                          ...prev, 
+                          xOffset: 0, 
+                          yOffset: 0, 
+                          scale: 1.0, 
+                          brightness: prev.originalBrightness, 
+                          saturation: prev.originalSaturation, 
+                          contrast: prev.originalContrast 
+                        } : null)}
+                        className={`p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
+                        title="Reset All"
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
+                        <RotateCcw className="h-4 w-4" />
                       </button>
-                      {/* Right */}
+                      
+                      {/* Right Arrow */}
                       <button
                         type="button"
                         onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset + 5 } : null)}
-                        className="absolute right-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        className="absolute right-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                         title="Move Right"
                       >
                         <ArrowRight className="h-4 w-4" />
                       </button>
-                      {/* Down */}
+                      
+                      {/* Down Arrow */}
                       <button
                         type="button"
                         onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset + 5 } : null)}
-                        className="absolute bottom-1.5 p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white active:scale-95 transition cursor-pointer"
+                        className="absolute bottom-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                         title="Move Down"
                       >
                         <ArrowDown className="h-4 w-4" />
                       </button>
                     </div>
 
-                    {/* Zoom buttons */}
-                    <div className="flex gap-2 w-full justify-center">
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: Math.max(0.5, prev.scale - 0.05) } : null)}
-                        className="flex-1 py-1.5 px-2 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-white/10 transition active:scale-95 cursor-pointer text-white/80"
-                        title="Zoom Out"
-                      >
-                        <ZoomOut className="h-3.5 w-3.5" /> Out
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: Math.min(2.5, prev.scale + 0.05) } : null)}
-                        className="flex-1 py-1.5 px-2 rounded-lg border border-white/10 bg-white/5 text-[11px] font-semibold flex items-center justify-center gap-1 hover:bg-white/10 transition active:scale-95 cursor-pointer text-white/80"
-                        title="Zoom In"
-                      >
-                        <ZoomIn className="h-3.5 w-3.5" /> In
-                      </button>
+                    {/* Scale range */}
+                    <div className="w-full space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner">
+                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+                        <span>Scale</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{Math.round(adjustingCharacter.scale * 100)}%</span>
+                          {adjustingCharacter.scale !== adjustingCharacter.originalScale && (
+                            <button
+                              type="button"
+                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: prev.originalScale } : null)}
+                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+                              title="Restore Original Scale"
+                            >
+                              <RotateCcw className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const newScale = Math.max(0.5, Math.min(2.5, prev.scale - 0.02));
+                              return { ...prev, scale: Math.round(newScale * 100) / 100 };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Decrease Scale"
+                        >
+                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.5"
+                          step="0.01"
+                          value={adjustingCharacter.scale}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setAdjustingCharacter(prev => prev ? { ...prev, scale: val } : null);
+                          }}
+                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const newScale = Math.max(0.5, Math.min(2.5, prev.scale + 0.02));
+                              return { ...prev, scale: Math.round(newScale * 100) / 100 };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Increase Scale"
+                        >
+                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Fine-Tuning Sliders */}
-                  <div className="sm:col-span-7 flex flex-col gap-3.5">
-                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Fine-tuning Sliders</span>
+                  {/* Tuning Suite */}
+                  <div className="sm:col-span-7 flex flex-col gap-3.5 w-full">
+                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider text-center sm:text-left">Image Tuning Suite</span>
                     
-                    {/* Slider: Zoom */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-white/60">Zoom Scale</span>
-                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{Math.round(adjustingCharacter.scale * 100)}%</span>
+                    {/* Brightness */}
+                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
+                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+                        <span className="flex items-center gap-1"><Sun className="h-3.5 w-3.5" /> Brightness</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.brightness}%</span>
+                          {adjustingCharacter.brightness !== adjustingCharacter.originalBrightness && (
+                            <button
+                              type="button"
+                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, brightness: prev.originalBrightness } : null)}
+                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+                              title="Restore Original Brightness"
+                            >
+                              <RotateCcw className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.5"
-                        step="0.05"
-                        value={adjustingCharacter.scale}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          setAdjustingCharacter(prev => prev ? { ...prev, scale: val } : null);
-                        }}
-                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(50, Math.min(150, prev.brightness - 2));
+                              return { ...prev, brightness: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Decrease Brightness"
+                        >
+                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                        <input
+                          type="range"
+                          min="50"
+                          max="150"
+                          step="1"
+                          value={adjustingCharacter.brightness}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setAdjustingCharacter(prev => prev ? { ...prev, brightness: val } : null);
+                          }}
+                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(50, Math.min(150, prev.brightness + 2));
+                              return { ...prev, brightness: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Increase Brightness"
+                        >
+                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Slider: Horiz Position */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-white/60">Horizontal Offset</span>
-                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{adjustingCharacter.xOffset}px</span>
+                    {/* Saturation */}
+                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
+                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+                        <span className="flex items-center gap-1"><Droplets className="h-3.5 w-3.5" /> Saturation</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.saturation}%</span>
+                          {adjustingCharacter.saturation !== adjustingCharacter.originalSaturation && (
+                            <button
+                              type="button"
+                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, saturation: prev.originalSaturation } : null)}
+                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+                              title="Restore Original Saturation"
+                            >
+                              <RotateCcw className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <input
-                        type="range"
-                        min="-300"
-                        max="300"
-                        step="2"
-                        value={adjustingCharacter.xOffset}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          setAdjustingCharacter(prev => prev ? { ...prev, xOffset: val } : null);
-                        }}
-                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(0, Math.min(200, prev.saturation - 2));
+                              return { ...prev, saturation: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Decrease Saturation"
+                        >
+                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                        <input
+                          type="range"
+                          min="0"
+                          max="200"
+                          step="2"
+                          value={adjustingCharacter.saturation}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setAdjustingCharacter(prev => prev ? { ...prev, saturation: val } : null);
+                          }}
+                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(0, Math.min(200, prev.saturation + 2));
+                              return { ...prev, saturation: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Increase Saturation"
+                        >
+                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Slider: Vert Position */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-white/60">Vertical Offset</span>
-                        <span className={`font-semibold ${themeHoverClasses.split(" ")[2]}`}>{adjustingCharacter.yOffset}px</span>
+                    {/* Contrast */}
+                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
+                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+                        <span className="flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Contrast</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.contrast}%</span>
+                          {adjustingCharacter.contrast !== adjustingCharacter.originalContrast && (
+                            <button
+                              type="button"
+                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, contrast: prev.originalContrast } : null)}
+                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+                              title="Restore Original Contrast"
+                            >
+                              <RotateCcw className="h-2.5 w-2.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <input
-                        type="range"
-                        min="-300"
-                        max="300"
-                        step="2"
-                        value={adjustingCharacter.yOffset}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value, 10);
-                          setAdjustingCharacter(prev => prev ? { ...prev, yOffset: val } : null);
-                        }}
-                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                        style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(50, Math.min(150, prev.contrast - 2));
+                              return { ...prev, contrast: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Decrease Contrast"
+                        >
+                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                        <input
+                          type="range"
+                          min="50"
+                          max="150"
+                          step="1"
+                          value={adjustingCharacter.contrast}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            setAdjustingCharacter(prev => prev ? { ...prev, contrast: val } : null);
+                          }}
+                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAdjustingCharacter(prev => {
+                              if (!prev) return null;
+                              const val = Math.max(50, Math.min(150, prev.contrast + 2));
+                              return { ...prev, contrast: val };
+                            });
+                          }}
+                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+                          title="Increase Contrast"
+                        >
+                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -5587,16 +5831,30 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                   <button
                     type="button"
                     onClick={async () => {
-                      if (!user) return;
                       try {
-                        await characterDb.updateCharacterAdjustments(
-                          user.uid,
-                          adjustingCharacter.id,
-                          adjustingCharacter.scale,
-                          adjustingCharacter.xOffset,
-                          adjustingCharacter.yOffset
+                        localStorage.setItem(
+                          `saheli_char_adjustments_${adjustingCharacter.id}`,
+                          JSON.stringify({
+                            scale: adjustingCharacter.scale,
+                            xOffset: adjustingCharacter.xOffset,
+                            yOffset: adjustingCharacter.yOffset,
+                            brightness: adjustingCharacter.brightness,
+                            saturation: adjustingCharacter.saturation,
+                            contrast: adjustingCharacter.contrast
+                          })
                         );
-                        await refreshCustomCharacters();
+
+                        if (adjustingCharacter.id.startsWith("char_") && user) {
+                          await characterDb.updateCharacterAdjustments(
+                            user.uid,
+                            adjustingCharacter.id,
+                            adjustingCharacter.scale,
+                            adjustingCharacter.xOffset,
+                            adjustingCharacter.yOffset
+                          );
+                          await refreshCustomCharacters();
+                        }
+
                         setAdjustingCharacter(null);
                         toast.success("Companion image adjustments saved! ✨");
                       } catch (err) {
