@@ -39,6 +39,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  AlignCenter,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -98,7 +99,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import SettingsPanel from "../components/settings/SettingsPanel";
+import SettingsPanel, { CustomColorPicker } from "../components/settings/SettingsPanel";
 import MusicPlayerPanel from "../components/music/MusicPlayerPanel";
 import FullscreenPlayer from "../components/music/FullscreenPlayer";
 import type { JioSaavnSong } from "../../lib/musicService";
@@ -362,7 +363,8 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music";
+  | "incognito" | "api_keys" | "music" | "studio_light";
+
 
 // Canonical image map — single source of truth for character assets
 const CHARACTER_IMAGE_MAP: Record<string, string> = {
@@ -502,7 +504,79 @@ const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; 
     text: "text-blue-200",
     buttonBg: "bg-blue-600 hover:bg-blue-700 hover:shadow-[0_0_15px_rgba(74,137,255,0.4)]",
     buttonText: "text-white"
+  },
+  custom: {
+    border: "border-[rgba(var(--theme-primary-rgb),0.3)]",
+    glow: "rgba(var(--theme-primary-rgb),0.2)",
+    text: "text-[var(--theme-light)]",
+    buttonBg: "bg-[var(--theme-primary)] hover:bg-[rgba(var(--theme-primary-rgb),0.85)] hover:shadow-[0_0_15px_rgba(var(--theme-primary-rgb),0.4)]",
+    buttonText: "text-white"
   }
+};
+
+const renderSlider = (
+  label: string,
+  icon: React.ReactNode,
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  unit: string,
+  isChanged: boolean,
+  onReset: () => void,
+  onDecrease: () => void,
+  onIncrease: () => void,
+  onChange: (val: number) => void,
+  themeStyles: { border: string; glow: string; text: string; buttonBg: string; buttonText: string }
+) => {
+  return (
+    <div className="space-y-1.5 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
+      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+        <span className="flex items-center gap-1">{icon} {label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{value}{unit}</span>
+          {isChanged && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+              title={`Restore Original ${label}`}
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onDecrease}
+          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+          title={`Decrease ${label}`}
+        >
+          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+        </button>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+          style={{ accentColor: themeStyles.glow.includes("rgba") && !themeStyles.glow.includes("var") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : "var(--theme-primary)" }}
+        />
+        <button
+          type="button"
+          onClick={onIncrease}
+          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+          title={`Increase ${label}`}
+        >
+          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 const DEMO_TRACKS: JioSaavnSong[] = [
@@ -1148,6 +1222,72 @@ function isFirestoreConnectivityError(error: unknown) {
 
 const resolvedUrlCache = new Map<string, string>();
 
+const THEME_HEX_COLORS: Record<string, string> = {
+  pink: "#ff0078",
+  yellow: "#FFD700",
+  blue: "#00E5FF",
+  orchid: "#D500F9",
+  peach: "#FF9E7D",
+  beige: "#D4B895",
+  maroon: "#D01C3F",
+  gemini: "#4A89FF",
+};
+
+const getCustomThemeStyles = (hex: string) => {
+  const cleanHex = hex.replace("#", "");
+  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+
+  // Compute HSL to generate a beautifully lightened theme-light value
+  const rNormal = r / 255;
+  const gNormal = g / 255;
+  const bNormal = b / 255;
+  const max = Math.max(rNormal, gNormal, bNormal);
+  const min = Math.min(rNormal, gNormal, bNormal);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rNormal: h = (gNormal - bNormal) / d + (gNormal < bNormal ? 6 : 0); break;
+      case gNormal: h = (bNormal - rNormal) / d + 2; break;
+      case bNormal: h = (rNormal - gNormal) / d + 4; break;
+    }
+    h /= 6;
+  }
+  const hDeg = Math.round(h * 360);
+  const sPct = Math.round(s * 100);
+  const themeLight = `hsl(${hDeg}, ${sPct}%, 88%)`;
+
+  return {
+    "--theme-primary": `#${cleanHex}`,
+    "--theme-primary-rgb": `${r}, ${g}, ${b}`,
+    "--theme-glow": `rgba(${r}, ${g}, ${b}, 0.35)`,
+    "--theme-glow-rgb": `${r}, ${g}, ${b}`,
+    "--theme-border": `rgba(${r}, ${g}, ${b}, 0.22)`,
+    "--theme-soft": `rgba(${r}, ${g}, ${b}, 0.1)`,
+    "--theme-light": themeLight,
+  } as React.CSSProperties;
+};
+
+const getCustomStagePalette = (color: string) => {
+  const r = parseInt(color.slice(1, 3), 16) || 255;
+  const g = parseInt(color.slice(3, 5), 16) || 0;
+  const b = parseInt(color.slice(5, 7), 16) || 120;
+  const rgb = `${r}, ${g}, ${b}`;
+  return {
+    aura: `radial-gradient(circle, rgba(${rgb}, 0.15) 0%, rgba(${rgb}, 0.06) 45%, transparent 70%)`,
+    spotlight: `radial-gradient(ellipse at 50% 0%, rgba(${r}, ${g}, ${b === 120 && color === "#ff0078" ? 235 : b}, 0.28) 0%, rgba(${rgb}, 0.14) 25%, rgba(${rgb}, 0.02) 55%, transparent 75%)`,
+    groundLight: `radial-gradient(ellipse at center, rgba(${rgb}, 0.3) 0%, rgba(${rgb}, 0.1) 45%, transparent 70%)`,
+    ambient: `radial-gradient(ellipse at center, rgba(${rgb}, 0.05) 0%, rgba(${rgb}, 0.015) 50%, transparent 80%)`,
+    feetGlow: `rgba(${rgb}, 0.15)`,
+  };
+};
+
 export default function Chat() {
   const user = auth.currentUser;
   const isGuest = !user;
@@ -1678,6 +1818,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     originalContrast: number;
   } | null>(null);
   const dragControls = useDragControls();
+  const [adjustingStudioLightOnly, setAdjustingStudioLightOnly] = useState(false);
+  const [activeSlider, setActiveSlider] = useState<"left" | "right" | null>(null);
+
 
   const wasSidebarOpenRef = useRef(false);
 
@@ -1692,6 +1835,87 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       }
     }
   }, [isFullscreenPlayerOpen, adjustingCharacter]);
+
+  const [adjustmentTab, setAdjustmentTab] = useState<"companion" | "light">("companion");
+  const [spotlightSavedTrigger, setSpotlightSavedTrigger] = useState(false);
+  const [studioLightAdjustments, setStudioLightAdjustments] = useState<{
+    color: string;
+    opacity: number;
+    size: number;
+    width: number;
+    yOffset: number;
+    xOffset: number;
+    leftExpansion: number;
+    rightExpansion: number;
+    brightness: number;
+    saturation: number;
+    originalColor: string;
+    originalOpacity: number;
+    originalSize: number;
+    originalWidth: number;
+    originalYOffset: number;
+    originalXOffset: number;
+    originalLeftExpansion: number;
+    originalRightExpansion: number;
+    originalBrightness: number;
+    originalSaturation: number;
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_studio_light_adjustments");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return {
+            color: parsed.color ?? "#ff0078",
+            opacity: parsed.opacity ?? 100,
+            size: parsed.size ?? 100,
+            width: parsed.width ?? 100,
+            yOffset: parsed.yOffset ?? 0,
+            xOffset: parsed.xOffset ?? 0,
+            leftExpansion: parsed.leftExpansion ?? 44,
+            rightExpansion: parsed.rightExpansion ?? 44,
+            brightness: parsed.brightness ?? 100,
+            saturation: parsed.saturation ?? 100,
+            originalColor: parsed.originalColor ?? parsed.color ?? "#ff0078",
+            originalOpacity: parsed.originalOpacity ?? parsed.opacity ?? 100,
+            originalSize: parsed.originalSize ?? parsed.size ?? 100,
+            originalWidth: parsed.originalWidth ?? parsed.width ?? 100,
+            originalYOffset: parsed.originalYOffset ?? parsed.yOffset ?? 0,
+            originalXOffset: parsed.originalXOffset ?? parsed.xOffset ?? 0,
+            originalLeftExpansion: parsed.originalLeftExpansion ?? parsed.leftExpansion ?? 44,
+            originalRightExpansion: parsed.originalRightExpansion ?? parsed.rightExpansion ?? 44,
+            originalBrightness: parsed.originalBrightness ?? parsed.brightness ?? 100,
+            originalSaturation: parsed.originalSaturation ?? parsed.saturation ?? 100,
+          };
+        }
+      } catch (e) {
+        console.error("Error parsing studio light adjustments:", e);
+      }
+    }
+    return {
+      color: "#ff0078",
+      opacity: 100,
+      size: 100,
+      width: 100,
+      yOffset: 0,
+      xOffset: 0,
+      leftExpansion: 44,
+      rightExpansion: 44,
+      brightness: 100,
+      saturation: 100,
+      originalColor: "#ff0078",
+      originalOpacity: 100,
+      originalSize: 100,
+      originalWidth: 100,
+      originalYOffset: 0,
+      originalXOffset: 0,
+      originalLeftExpansion: 44,
+      originalRightExpansion: 44,
+      originalBrightness: 100,
+      originalSaturation: 100,
+    };
+  });
+
 
   const [deletedDefaultIds, setDeletedDefaultIds] = useState<string[]>(() => {
     if (typeof window !== "undefined") {
@@ -1761,6 +1985,24 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
     return "maroon";
   });
+  const [customColor, setCustomColor] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_custom_theme_color") || "#ff0078";
+    }
+    return "#ff0078";
+  });
+
+  useEffect(() => {
+    const isCustomized = typeof window !== "undefined" && window.localStorage.getItem("saheli_studio_light_customized") === "true";
+    if (!isCustomized) {
+      const defaultHex = THEME_HEX_COLORS[activeTheme] || (activeTheme === "custom" ? customColor : "#ff0078");
+      setStudioLightAdjustments(prev => ({
+        ...prev,
+        color: defaultHex,
+        originalColor: defaultHex,
+      }));
+    }
+  }, [activeTheme, customColor]);
   const [targetTheme, setTargetTheme] = useState<string | null>(null);
   const [isThemeTransitioning, setIsThemeTransitioning] = useState(false);
   const [isDefocusActive, setIsDefocusActive] = useState(false);
@@ -1768,6 +2010,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   useEffect(() => {
     const handleThemeChange = () => {
       const color = window.localStorage.getItem("saheli_theme_color") || "maroon";
+      if (color === "custom" && typeof window !== "undefined") {
+        setCustomColor(window.localStorage.getItem("saheli_custom_theme_color") || "#ff0078");
+      }
       if (color !== activeTheme && !isThemeTransitioning) {
         setTargetTheme(color);
         setIsThemeTransitioning(true);
@@ -1779,6 +2024,29 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       window.removeEventListener("saheli_theme_color_changed", handleThemeChange);
     };
   }, [activeTheme, isThemeTransitioning]);
+
+  useEffect(() => {
+    const handleLightChange = () => {
+      if (typeof window !== "undefined") {
+        try {
+          const saved = window.localStorage.getItem("saheli_studio_light_adjustments");
+          if (saved) {
+            setStudioLightAdjustments(JSON.parse(saved));
+            setSpotlightSavedTrigger(true);
+            setTimeout(() => {
+              setSpotlightSavedTrigger(false);
+            }, 1200);
+          }
+        } catch (e) {
+          console.error("Error syncing studio light adjustments:", e);
+        }
+      }
+    };
+    window.addEventListener("saheli_studio_light_changed", handleLightChange);
+    return () => {
+      window.removeEventListener("saheli_studio_light_changed", handleLightChange);
+    };
+  }, []);
 
   useEffect(() => {
     const isCustomActive = uploadedCharacters.some((c) => c.id === selectedCharacterRef.current);
@@ -1821,6 +2089,43 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       window.removeEventListener("saheli_open_live_character_selector", handleOpenLiveSelector);
     };
   }, [selectedCharacter]);
+
+  useEffect(() => {
+    const handleOpenStudioLightAdjustments = () => {
+      const activeMascotKey = selectedCharacter;
+      const customChar = uploadedCharacters.find((c) => c.id === activeMascotKey);
+      const name = customChar ? customChar.name : (CHARACTER_LABELS[activeMascotKey] || activeMascotKey);
+      const url = customChar ? customChar.url : (CHARACTER_IMAGE_MAP[activeMascotKey] || "/butterfly.png");
+      const adjustments = getCharacterAdjustments(activeMascotKey, customChar);
+      
+      setAdjustingCharacter({
+        id: activeMascotKey,
+        name,
+        url,
+        scale: adjustments.scale,
+        xOffset: adjustments.xOffset,
+        yOffset: adjustments.yOffset,
+        brightness: adjustments.brightness,
+        saturation: adjustments.saturation,
+        contrast: adjustments.contrast,
+        originalScale: adjustments.scale,
+        originalXOffset: adjustments.xOffset,
+        originalYOffset: adjustments.yOffset,
+        originalBrightness: adjustments.brightness,
+        originalSaturation: adjustments.saturation,
+        originalContrast: adjustments.contrast,
+      });
+      setAdjustmentTab("light");
+      setAdjustingStudioLightOnly(true);
+      setSettingsPanelOpen(false);
+    };
+
+    window.addEventListener("saheli_open_studio_light_adjustments", handleOpenStudioLightAdjustments);
+    return () => {
+      window.removeEventListener("saheli_open_studio_light_adjustments", handleOpenStudioLightAdjustments);
+    };
+  }, [selectedCharacter, uploadedCharacters]);
+
 
   const handleSlideCharacter = useCallback((direction: "next" | "prev") => {
     setLivePreviewCharacter((prev) => {
@@ -3882,6 +4187,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     : activeTheme === "peach" ? peachStagePalette
     : activeTheme === "beige" ? beigeStagePalette
     : activeTheme === "maroon" ? maroonStagePalette
+    : activeTheme === "custom" ? getCustomStagePalette(customColor)
     : geminiStagePalette;
 
   const weatherHourlyForecast = awareness.weather?.hourlyForecast ?? [];
@@ -4101,10 +4407,36 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
     return () => window.clearInterval(intervalId);
   }, [weatherPanelOpen]);
+  // Studio Light calculations
+  const flareScale = spotlightSavedTrigger ? 1.4 : 1.0;
+  const flareBrightness = spotlightSavedTrigger ? 2.5 : 1.0;
+  const opacityVal = (studioLightAdjustments.opacity / 100) * flareBrightness;
+  
+  const lightColor = studioLightAdjustments.color || "#ff0078";
+  const lightR = parseInt(lightColor.slice(1, 3), 16) || 255;
+  const lightG = parseInt(lightColor.slice(3, 5), 16) || 0;
+  const lightB = parseInt(lightColor.slice(5, 7), 16) || 120;
+  const lightRgb = `${lightR}, ${lightG}, ${lightB}`;
+
+  const customFeetShadow = `radial-gradient(ellipse at center, rgba(0, 0, 0, 0.95) 0%, rgba(${Math.round(lightR * 0.1)}, ${Math.round(lightG * 0.1)}, ${Math.round(lightB * 0.1)}, 0.08) 35%, transparent 80%)`;
+  const customGroundLight = `radial-gradient(ellipse at center, rgba(${lightRgb}, ${0.3 * opacityVal}) 0%, rgba(${lightRgb}, ${0.1 * opacityVal}) 45%, transparent 70%)`;
+  const customSpotlight = `radial-gradient(ellipse at 50% 0%, rgba(${lightR}, ${lightG}, ${lightB}, ${0.28 * opacityVal}) 0%, rgba(${lightRgb}, ${0.14 * opacityVal}) 25%, rgba(${lightRgb}, ${0.02 * opacityVal}) 55%, transparent 75%)`;
+  const customAmbient = `radial-gradient(ellipse at center, rgba(${lightRgb}, ${0.05 * opacityVal}) 0%, rgba(${lightRgb}, ${0.015 * opacityVal}) 50%, transparent 80%)`;
+  const customFeetGlow = `rgba(${lightRgb}, ${0.15 * opacityVal})`;
+
   const profileInitial = (profileName.trim() || effectiveUserName || "S").charAt(0).toUpperCase();
 
+  const leftExpansionVal = studioLightAdjustments.leftExpansion ?? 44;
+  const rightExpansionVal = studioLightAdjustments.rightExpansion ?? 44;
+  const bottomWidthVal = leftExpansionVal + rightExpansionVal;
+  const bottomCenterOffsetVal = (rightExpansionVal - leftExpansionVal) / 2;
+  const coneHeightVal = 98 + (studioLightAdjustments.yOffset ?? 0);
+
   return (
-    <div className={`saheli-app-wrapper theme-${activeTheme} ${isDefocusActive ? "theme-transitioning" : ""} h-full w-full`}>
+    <div 
+      className={`saheli-app-wrapper theme-${activeTheme} ${isDefocusActive ? "theme-transitioning" : ""} h-full w-full`}
+      style={activeTheme === "custom" ? getCustomThemeStyles(customColor) : undefined}
+    >
       <div
         className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
         data-mood={mood}
@@ -4832,27 +5164,54 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
                 {/* 3. Soft realistic shadow under feet (Darker, more grounded) */}
                 <div className="girl-ground-shadow" style={{ 
-                  background: stagePalette.feetShadow,
+                  background: customFeetShadow,
                   width: "55%", height: "16px", filter: "blur(5px)", bottom: "2%",
                   opacity: 0.9,
+                  transition: "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
                 }} />
 
                 {/* 2. Ground light — cinematic pink oval patch (softened) */}
                 <div className="girl-ground-light" style={{
-                  background: stagePalette.groundLight,
-                  width: "70%", height: "48px", filter: "blur(14px)", mixBlendMode: "screen", bottom: "-4%"
+                  background: customGroundLight,
+                  width: `${70 * (bottomWidthVal / 88) * flareScale}%`,
+                  height: `${48 * (coneHeightVal / 100) * flareScale}px`,
+                  filter: `blur(14px) brightness(${studioLightAdjustments.brightness ?? 100}%) saturate(${studioLightAdjustments.saturation ?? 100}%)`,
+                  mixBlendMode: "screen", bottom: "-4%",
+                  transform: `translateX(calc(-50% + ${bottomCenterOffsetVal * 4.2}px))`,
+                  transition: adjustingStudioLightOnly ? "none" : "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
                 }} />
 
                 {/* 1. Spotlight — bright top-center cinematic cone on girl (softened) */}
                 <div className="girl-spotlight" style={{
-                  background: stagePalette.spotlight,
-                  width: "88%", height: "98%", filter: "blur(20px)", mixBlendMode: "screen", top: "-24%"
-                }} />
+                  background: "none",
+                  width: `${100 * flareScale}%`,
+                  height: `${100 * flareScale}%`,
+                  filter: `blur(20px) brightness(${studioLightAdjustments.brightness ?? 100}%) saturate(${studioLightAdjustments.saturation ?? 100}%)`,
+                  mixBlendMode: "screen", 
+                  top: `calc(-24% + 0px)`,
+                  transformOrigin: "top center",
+                  transform: `translateX(-50%)`,
+                  borderRadius: 0,
+                  transition: adjustingStudioLightOnly ? "none" : "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
+                }}>
+                  <div style={{
+                    width: "100%",
+                    height: "100%",
+                    background: customSpotlight,
+                    clipPath: `polygon(calc(50% - 12%) 0%, calc(50% + 12%) 0%, calc(50% + ${rightExpansionVal}%) ${coneHeightVal}%, calc(50% - ${leftExpansionVal}%) ${coneHeightVal}%)`,
+                    transition: adjustingStudioLightOnly ? "none" : "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
+                  }} />
+                </div>
 
                 {/* 4. Ambient glow — cinematic depth around character (softened) */}
                 <div className="girl-ambient-glow" style={{
-                  background: stagePalette.ambient,
-                  filter: "blur(30px)", mixBlendMode: "screen", width: "75%", height: "75%"
+                  background: customAmbient,
+                  filter: `blur(30px) brightness(${studioLightAdjustments.brightness ?? 100}%) saturate(${studioLightAdjustments.saturation ?? 100}%)`,
+                  mixBlendMode: "screen", 
+                  width: `${75 * (bottomWidthVal / 88) * flareScale}%`,
+                  height: `${75 * (coneHeightVal / 100) * flareScale}%`,
+                  transform: `translateX(calc(-50% + ${bottomCenterOffsetVal * 2}px))`,
+                  transition: adjustingStudioLightOnly ? "none" : "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
                 }} />
               </div>
 
@@ -4864,7 +5223,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                   height: '36px',
                   background: 'rgba(0,0,0,0.72)',
                   filter: 'blur(9px)',
-                  boxShadow: `0 0 16px rgba(0,0,0,0.8), 0 0 24px ${stagePalette.feetGlow}`,
+                  boxShadow: `0 0 16px rgba(0,0,0,0.8), 0 0 24px ${customFeetGlow}`,
+                  transition: "all 1.0s cubic-bezier(0.19, 1, 0.22, 1)",
                 }}
                 animate={{ 
                   scale: [1.08, 0.95, 1.08], 
@@ -5446,6 +5806,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
             beige: "hover:bg-amber-500/10 hover:border-amber-500/30 text-amber-300",
             maroon: "hover:bg-red-500/10 hover:border-red-500/30 text-red-300",
             gemini: "hover:bg-blue-500/10 hover:border-blue-500/30 text-blue-300",
+            custom: "hover:bg-[rgba(var(--theme-primary-rgb),0.1)] hover:border-[rgba(var(--theme-primary-rgb),0.3)] text-[var(--theme-light)]",
           };
           const themeHoverClasses = hoverBgMap[activeTheme as keyof typeof hoverBgMap] || hoverBgMap.pink;
           
@@ -5476,12 +5837,25 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 >
                   <div className="flex items-center gap-2">
                     <Sliders className={`h-4.5 w-4.5 ${themeStyles.text.split(" ")[0]} animate-pulse`} />
-                    <span className="text-sm font-bold tracking-tight">Adjust companion: {adjustingCharacter.name}</span>
+                    <span className="text-sm font-bold tracking-tight">
+                      {adjustingStudioLightOnly ? "Studio Light Adjustments" : `Adjust companion: ${adjustingCharacter.name}`}
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
+                      setStudioLightAdjustments(prev => ({
+                        ...prev,
+                        color: prev.originalColor,
+                        opacity: prev.originalOpacity,
+                        size: prev.originalSize,
+                        leftExpansion: prev.originalLeftExpansion,
+                        rightExpansion: prev.originalRightExpansion,
+                        yOffset: prev.originalYOffset,
+                      }));
                       setAdjustingCharacter(null);
+                      setAdjustingStudioLightOnly(false);
+                      setActiveSlider(null);
                       toast.info("Adjustments discarded.");
                     }}
                     className="p-1 rounded-full hover:bg-white/10 transition text-white/50 hover:text-white cursor-pointer"
@@ -5491,337 +5865,406 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 </div>
 
                 {/* Controls Layout */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
-                  {/* Position Suite */}
-                  <div className="sm:col-span-5 flex flex-col items-center gap-4 border-r border-white/5 pr-4">
-                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
-                    
-                    {/* Joystick D-pad */}
-                    <div className="relative w-28 h-28 bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40">
-                      {/* Up Arrow */}
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset - 5 } : null)}
-                        className="absolute top-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
-                        title="Move Up"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Left Arrow */}
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset - 5 } : null)}
-                        className="absolute left-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
-                        title="Move Left"
-                      >
-                        <ArrowLeft className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Reset Icon */}
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { 
-                          ...prev, 
-                          xOffset: 0, 
-                          yOffset: 0, 
-                          scale: 1.0, 
-                          brightness: prev.originalBrightness, 
-                          saturation: prev.originalSaturation, 
-                          contrast: prev.originalContrast 
-                        } : null)}
-                        className={`p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
-                        title="Reset All"
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Right Arrow */}
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset + 5 } : null)}
-                        className="absolute right-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
-                        title="Move Right"
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Down Arrow */}
-                      <button
-                        type="button"
-                        onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset + 5 } : null)}
-                        className="absolute bottom-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
-                        title="Move Down"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </button>
-                    </div>
+                {adjustingStudioLightOnly ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                    {/* Position Suite for Studio Light */}
+                    <div className="sm:col-span-5 flex flex-col border-r border-white/5 pr-4 min-h-[260px]">
+                      <div className="flex justify-between items-center w-full mb-1">
+                        <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
+                        {(studioLightAdjustments.leftExpansion !== studioLightAdjustments.originalLeftExpansion ||
+                          studioLightAdjustments.rightExpansion !== studioLightAdjustments.originalRightExpansion ||
+                          studioLightAdjustments.yOffset !== studioLightAdjustments.originalYOffset) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudioLightAdjustments(prev => ({
+                                ...prev,
+                                leftExpansion: prev.originalLeftExpansion,
+                                rightExpansion: prev.originalRightExpansion,
+                                yOffset: prev.originalYOffset,
+                              }));
+                              toast.info("Position adjustments reset.");
+                            }}
+                            className="flex items-center gap-1 text-[9px] font-bold text-white/60 hover:text-white transition duration-200 cursor-pointer"
+                          >
+                            <RotateCcw className="h-2.5 w-2.5" /> Reset
+                          </button>
+                        )}
+                      </div>
 
-                    {/* Scale range */}
-                    <div className="w-full space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner">
-                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
-                        <span>Scale</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{Math.round(adjustingCharacter.scale * 100)}%</span>
-                          {adjustingCharacter.scale !== adjustingCharacter.originalScale && (
+                      {/* Centered Controls Area */}
+                      <div className="flex-grow flex flex-col items-center justify-center gap-3 w-full py-1.5 my-auto">
+                        {/* Joystick D-pad */}
+                        <div className={`relative ${activeSlider ? "w-24 h-24" : "w-36 h-36"} bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40 transition-all duration-300`}>
+                          {/* Up Arrow - Shrink Bottom (Moves Bottom Up, reduces height) */}
+                          <button
+                            type="button"
+                            onClick={() => setStudioLightAdjustments(prev => ({ ...prev, yOffset: Math.max(-100, prev.yOffset - 5) }))}
+                            className={`absolute ${activeSlider ? "top-0.5 p-1.5" : "top-1.5 p-2.5"} rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 cursor-pointer active:scale-90`}
+                            title="Shrink Height (Move Up)"
+                          >
+                            <ArrowUp className={activeSlider ? "h-4 w-4" : "h-5 w-5"} />
+                          </button>
+                          
+                          {/* Left Arrow - Adjust Left Expansion */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveSlider("left")}
+                            className={`absolute ${activeSlider ? "left-0.5 p-1.5" : "left-1.5 p-2.5"} rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 cursor-pointer active:scale-90`}
+                            title="Stretch Bottom Left"
+                          >
+                            <ArrowLeft className={activeSlider ? "h-4 w-4" : "h-5 w-5"} />
+                          </button>
+                          
+                          {/* Center Alignment Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudioLightAdjustments(prev => {
+                                const maxVal = Math.max(prev.leftExpansion ?? 44, prev.rightExpansion ?? 44);
+                                return {
+                                  ...prev,
+                                  leftExpansion: maxVal,
+                                  rightExpansion: maxVal
+                                };
+                              });
+                              toast.info("Studio light aligned to matching width.");
+                            }}
+                            className={`${activeSlider ? "p-2" : "p-3"} rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition-all duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
+                            title="Align Sides Equally"
+                          >
+                            <AlignCenter className={activeSlider ? "h-4 w-4" : "h-5 w-5"} />
+                          </button>
+                          
+                          {/* Right Arrow - Adjust Right Expansion */}
+                          <button
+                            type="button"
+                            onClick={() => setActiveSlider("right")}
+                            className={`absolute ${activeSlider ? "right-0.5 p-1.5" : "right-1.5 p-2.5"} rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 cursor-pointer active:scale-90`}
+                            title="Stretch Bottom Right"
+                          >
+                            <ArrowRight className={activeSlider ? "h-4 w-4" : "h-5 w-5"} />
+                          </button>
+                          
+                          {/* Down Arrow - Grow Bottom (Moves Bottom Down, increases height) */}
+                          <button
+                            type="button"
+                            onClick={() => setStudioLightAdjustments(prev => ({ ...prev, yOffset: Math.min(100, prev.yOffset + 5) }))}
+                            className={`absolute ${activeSlider ? "bottom-0.5 p-1.5" : "bottom-1.5 p-2.5"} rounded-full hover:bg-white/10 text-white/70 hover:text-white transition-all duration-200 cursor-pointer active:scale-90`}
+                            title="Grow Height (Move Down)"
+                          >
+                            <ArrowDown className={activeSlider ? "h-4 w-4" : "h-5 w-5"} />
+                          </button>
+                        </div>
+
+                        {/* Slidebar section */}
+                        {activeSlider === "left" && (
+                          <div className="w-full flex flex-col gap-1 transition-all duration-300 animate-in fade-in duration-200">
+                            {renderSlider(
+                              "Left Width",
+                              <ArrowLeft className="h-3.5 w-3.5" />,
+                              studioLightAdjustments.leftExpansion,
+                              10,
+                              150,
+                              1,
+                              "%",
+                              studioLightAdjustments.leftExpansion !== studioLightAdjustments.originalLeftExpansion,
+                              () => setStudioLightAdjustments(prev => ({ ...prev, leftExpansion: prev.originalLeftExpansion })),
+                              () => setStudioLightAdjustments(prev => ({ ...prev, leftExpansion: Math.max(10, prev.leftExpansion - 2) })),
+                              () => setStudioLightAdjustments(prev => ({ ...prev, leftExpansion: Math.min(150, prev.leftExpansion + 2) })),
+                              (val) => setStudioLightAdjustments(prev => ({ ...prev, leftExpansion: val })),
+                              themeStyles
+                            )}
                             <button
                               type="button"
-                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, scale: prev.originalScale } : null)}
-                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
-                              title="Restore Original Scale"
+                              onClick={() => setActiveSlider(null)}
+                              className="w-full py-1 px-3 mt-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[9px] font-bold text-white/80 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1 shadow-sm active:scale-95"
                             >
-                              <RotateCcw className="h-2.5 w-2.5" />
+                              Show D-pad Joystick
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
+
+                        {activeSlider === "right" && (
+                          <div className="w-full flex flex-col gap-1 transition-all duration-300 animate-in fade-in duration-200">
+                            {renderSlider(
+                              "Right Width",
+                              <ArrowRight className="h-3.5 w-3.5" />,
+                              studioLightAdjustments.rightExpansion,
+                              10,
+                              150,
+                              1,
+                              "%",
+                              studioLightAdjustments.rightExpansion !== studioLightAdjustments.originalRightExpansion,
+                              () => setStudioLightAdjustments(prev => ({ ...prev, rightExpansion: prev.originalRightExpansion })),
+                              () => setStudioLightAdjustments(prev => ({ ...prev, rightExpansion: Math.max(10, prev.rightExpansion - 2) })),
+                              () => setStudioLightAdjustments(prev => ({ ...prev, rightExpansion: Math.min(150, prev.rightExpansion + 2) })),
+                              (val) => setStudioLightAdjustments(prev => ({ ...prev, rightExpansion: val })),
+                              themeStyles
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setActiveSlider(null)}
+                              className="w-full py-1 px-3 mt-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[9px] font-bold text-white/80 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                            >
+                              Show D-pad Joystick
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const newScale = Math.max(0.5, Math.min(2.5, prev.scale - 0.02));
-                              return { ...prev, scale: Math.round(newScale * 100) / 100 };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Decrease Scale"
-                        >
-                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                        <input
-                          type="range"
-                          min="0.5"
-                          max="2.5"
-                          step="0.01"
-                          value={adjustingCharacter.scale}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            setAdjustingCharacter(prev => prev ? { ...prev, scale: val } : null);
-                          }}
-                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
-                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const newScale = Math.max(0.5, Math.min(2.5, prev.scale + 0.02));
-                              return { ...prev, scale: Math.round(newScale * 100) / 100 };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Increase Scale"
-                        >
-                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
+                    </div>
+
+                    {/* Tuning Suite for Studio Light */}
+                    <div className="sm:col-span-7 flex flex-col gap-3.5 w-full">
+                      <div className="flex justify-between items-center w-full">
+                        <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Image Tuning Suite</span>
+                        {(studioLightAdjustments.opacity !== studioLightAdjustments.originalOpacity ||
+                          studioLightAdjustments.brightness !== studioLightAdjustments.originalBrightness ||
+                          studioLightAdjustments.saturation !== studioLightAdjustments.originalSaturation) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudioLightAdjustments(prev => ({
+                                ...prev,
+                                opacity: prev.originalOpacity,
+                                brightness: prev.originalBrightness,
+                                saturation: prev.originalSaturation,
+                              }));
+                              toast.info("Tuning adjustments reset.");
+                            }}
+                            className="flex items-center gap-1 text-[9px] font-bold text-white/60 hover:text-white transition duration-200 cursor-pointer"
+                          >
+                            <RotateCcw className="h-2.5 w-2.5" /> Reset
+                          </button>
+                        )}
                       </div>
+
+                      {/* Opacity */}
+                      {renderSlider(
+                        "Opacity",
+                        <Sun className="h-3.5 w-3.5" />,
+                        studioLightAdjustments.opacity,
+                        0,
+                        100,
+                        1,
+                        "%",
+                        studioLightAdjustments.opacity !== studioLightAdjustments.originalOpacity,
+                        () => setStudioLightAdjustments(prev => ({ ...prev, opacity: prev.originalOpacity })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, opacity: Math.max(0, prev.opacity - 2) })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, opacity: Math.min(100, prev.opacity + 2) })),
+                        (val) => setStudioLightAdjustments(prev => ({ ...prev, opacity: val })),
+                        themeStyles
+                      )}
+
+                      {/* Brightness */}
+                      {renderSlider(
+                        "Brightness",
+                        <Sun className="h-3.5 w-3.5" />,
+                        studioLightAdjustments.brightness ?? 100,
+                        10,
+                        200,
+                        2,
+                        "%",
+                        studioLightAdjustments.brightness !== studioLightAdjustments.originalBrightness,
+                        () => setStudioLightAdjustments(prev => ({ ...prev, brightness: prev.originalBrightness })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, brightness: Math.max(10, prev.brightness - 4) })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, brightness: Math.min(200, prev.brightness + 4) })),
+                        (val) => setStudioLightAdjustments(prev => ({ ...prev, brightness: val })),
+                        themeStyles
+                      )}
+
+                      {/* Saturation */}
+                      {renderSlider(
+                        "Saturation",
+                        <Droplets className="h-3.5 w-3.5" />,
+                        studioLightAdjustments.saturation ?? 100,
+                        0,
+                        200,
+                        2,
+                        "%",
+                        studioLightAdjustments.saturation !== studioLightAdjustments.originalSaturation,
+                        () => setStudioLightAdjustments(prev => ({ ...prev, saturation: prev.originalSaturation })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, saturation: Math.max(0, prev.saturation - 4) })),
+                        () => setStudioLightAdjustments(prev => ({ ...prev, saturation: Math.min(200, prev.saturation + 4) })),
+                        (val) => setStudioLightAdjustments(prev => ({ ...prev, saturation: val })),
+                        themeStyles
+                      )}
                     </div>
                   </div>
-
-                  {/* Tuning Suite */}
-                  <div className="sm:col-span-7 flex flex-col gap-3.5 w-full">
-                    <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider text-center sm:text-left">Image Tuning Suite</span>
-                    
-                    {/* Brightness */}
-                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
-                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
-                        <span className="flex items-center gap-1"><Sun className="h-3.5 w-3.5" /> Brightness</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.brightness}%</span>
-                          {adjustingCharacter.brightness !== adjustingCharacter.originalBrightness && (
-                            <button
-                              type="button"
-                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, brightness: prev.originalBrightness } : null)}
-                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
-                              title="Restore Original Brightness"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                            </button>
-                          )}
-                        </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                    {/* Position Suite */}
+                    <div className="sm:col-span-5 flex flex-col items-center gap-4 border-r border-white/5 pr-4">
+                      <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
+                      
+                      {/* Joystick D-pad */}
+                      <div className="relative w-28 h-28 bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40">
+                        {/* Up Arrow */}
+                        <button
+                          type="button"
+                          onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset - 5 } : null)}
+                          className="absolute top-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          title="Move Up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Left Arrow */}
+                        <button
+                          type="button"
+                          onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset - 5 } : null)}
+                          className="absolute left-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          title="Move Left"
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Reset Icon */}
+                        <button
+                          type="button"
+                          onClick={() => setAdjustingCharacter(prev => prev ? { 
+                            ...prev, 
+                            xOffset: 0, 
+                            yOffset: 0, 
+                            scale: 1.0, 
+                            brightness: prev.originalBrightness, 
+                            saturation: prev.originalSaturation, 
+                            contrast: prev.originalContrast 
+                          } : null)}
+                          className={`p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
+                          title="Reset All"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Right Arrow */}
+                        <button
+                          type="button"
+                          onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset + 5 } : null)}
+                          className="absolute right-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          title="Move Right"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Down Arrow */}
+                        <button
+                          type="button"
+                          onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset + 5 } : null)}
+                          className="absolute bottom-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          title="Move Down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(50, Math.min(150, prev.brightness - 2));
-                              return { ...prev, brightness: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Decrease Brightness"
-                        >
-                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                        <input
-                          type="range"
-                          min="50"
-                          max="150"
-                          step="1"
-                          value={adjustingCharacter.brightness}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            setAdjustingCharacter(prev => prev ? { ...prev, brightness: val } : null);
-                          }}
-                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
-                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(50, Math.min(150, prev.brightness + 2));
-                              return { ...prev, brightness: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Increase Brightness"
-                        >
-                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
+
+                      {/* Scale range */}
+                      <div className="w-full">
+                        {renderSlider(
+                          "Scale",
+                          <ZoomIn className="h-3.5 w-3.5" />,
+                          Math.round(adjustingCharacter.scale * 100),
+                          50,
+                          250,
+                          1,
+                          "%",
+                          adjustingCharacter.scale !== adjustingCharacter.originalScale,
+                          () => setAdjustingCharacter(prev => prev ? { ...prev, scale: prev.originalScale } : null),
+                          () => setAdjustingCharacter(prev => {
+                            if (!prev) return null;
+                            const newScale = Math.max(0.5, Math.min(2.5, prev.scale - 0.02));
+                            return { ...prev, scale: Math.round(newScale * 100) / 100 };
+                          }),
+                          () => setAdjustingCharacter(prev => {
+                            if (!prev) return null;
+                            const newScale = Math.max(0.5, Math.min(2.5, prev.scale + 0.02));
+                            return { ...prev, scale: Math.round(newScale * 100) / 100 };
+                          }),
+                          (val) => setAdjustingCharacter(prev => prev ? { ...prev, scale: val / 100 } : null),
+                          themeStyles
+                        )}
                       </div>
                     </div>
 
-                    {/* Saturation */}
-                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
-                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
-                        <span className="flex items-center gap-1"><Droplets className="h-3.5 w-3.5" /> Saturation</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.saturation}%</span>
-                          {adjustingCharacter.saturation !== adjustingCharacter.originalSaturation && (
-                            <button
-                              type="button"
-                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, saturation: prev.originalSaturation } : null)}
-                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
-                              title="Restore Original Saturation"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(0, Math.min(200, prev.saturation - 2));
-                              return { ...prev, saturation: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Decrease Saturation"
-                        >
-                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                        <input
-                          type="range"
-                          min="0"
-                          max="200"
-                          step="2"
-                          value={adjustingCharacter.saturation}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            setAdjustingCharacter(prev => prev ? { ...prev, saturation: val } : null);
-                          }}
-                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
-                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(0, Math.min(200, prev.saturation + 2));
-                              return { ...prev, saturation: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Increase Saturation"
-                        >
-                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                      </div>
-                    </div>
+                    {/* Tuning Suite */}
+                    <div className="sm:col-span-7 flex flex-col gap-3.5 w-full">
+                      <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider text-center sm:text-left">Image Tuning Suite</span>
+                      
+                      {/* Brightness */}
+                      {renderSlider(
+                        "Brightness",
+                        <Sun className="h-3.5 w-3.5" />,
+                        adjustingCharacter.brightness,
+                        50,
+                        150,
+                        1,
+                        "%",
+                        adjustingCharacter.brightness !== adjustingCharacter.originalBrightness,
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, brightness: prev.originalBrightness } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, brightness: Math.max(50, prev.brightness - 2) } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, brightness: Math.min(150, prev.brightness + 2) } : null),
+                        (val) => setAdjustingCharacter(prev => prev ? { ...prev, brightness: val } : null),
+                        themeStyles
+                      )}
 
-                    {/* Contrast */}
-                    <div className="space-y-1 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
-                      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
-                        <span className="flex items-center gap-1"><Sparkles className="h-3.5 w-3.5" /> Contrast</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold ${themeStyles.text.split(" ")[0]}`}>{adjustingCharacter.contrast}%</span>
-                          {adjustingCharacter.contrast !== adjustingCharacter.originalContrast && (
-                            <button
-                              type="button"
-                              onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, contrast: prev.originalContrast } : null)}
-                              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
-                              title="Restore Original Contrast"
-                            >
-                              <RotateCcw className="h-2.5 w-2.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(50, Math.min(150, prev.contrast - 2));
-                              return { ...prev, contrast: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Decrease Contrast"
-                        >
-                          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                        <input
-                          type="range"
-                          min="50"
-                          max="150"
-                          step="1"
-                          value={adjustingCharacter.contrast}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            setAdjustingCharacter(prev => prev ? { ...prev, contrast: val } : null);
-                          }}
-                          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
-                          style={{ accentColor: themeStyles.glow.includes("rgba") ? themeStyles.glow.replace(/,[^,]+\)$/, ", 1)") : undefined }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAdjustingCharacter(prev => {
-                              if (!prev) return null;
-                              const val = Math.max(50, Math.min(150, prev.contrast + 2));
-                              return { ...prev, contrast: val };
-                            });
-                          }}
-                          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
-                          title="Increase Contrast"
-                        >
-                          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
-                        </button>
-                      </div>
+                      {/* Saturation */}
+                      {renderSlider(
+                        "Saturation",
+                        <Droplets className="h-3.5 w-3.5" />,
+                        adjustingCharacter.saturation,
+                        0,
+                        200,
+                        2,
+                        "%",
+                        adjustingCharacter.saturation !== adjustingCharacter.originalSaturation,
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, saturation: prev.originalSaturation } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, saturation: Math.max(0, prev.saturation - 2) } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, saturation: Math.min(200, prev.saturation + 2) } : null),
+                        (val) => setAdjustingCharacter(prev => prev ? { ...prev, saturation: val } : null),
+                        themeStyles
+                      )}
+
+                      {/* Contrast */}
+                      {renderSlider(
+                        "Contrast",
+                        <Sparkles className="h-3.5 w-3.5" />,
+                        adjustingCharacter.contrast,
+                        50,
+                        150,
+                        1,
+                        "%",
+                        adjustingCharacter.contrast !== adjustingCharacter.originalContrast,
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, contrast: prev.originalContrast } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, contrast: Math.max(50, prev.contrast - 2) } : null),
+                        () => setAdjustingCharacter(prev => prev ? { ...prev, contrast: Math.min(150, prev.contrast + 2) } : null),
+                        (val) => setAdjustingCharacter(prev => prev ? { ...prev, contrast: val } : null),
+                        themeStyles
+                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
-                {/* Action Buttons */}
                 <div className="flex items-center gap-2 pt-2.5 border-t border-white/5">
                   <button
                     type="button"
                     onClick={() => {
+                      // Discard studio light adjustments
+                      setStudioLightAdjustments(prev => ({
+                        ...prev,
+                        color: prev.originalColor,
+                        opacity: prev.originalOpacity,
+                        size: prev.originalSize,
+                        width: prev.originalWidth,
+                        yOffset: prev.originalYOffset,
+                        xOffset: prev.originalXOffset,
+                        leftExpansion: prev.originalLeftExpansion,
+                        rightExpansion: prev.originalRightExpansion,
+                        brightness: prev.originalBrightness,
+                        saturation: prev.originalSaturation,
+                      }));
                       setAdjustingCharacter(null);
+                      setAdjustingStudioLightOnly(false);
+                      setActiveSlider(null);
                       toast.info("Adjustments discarded.");
                     }}
                     className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer text-center"
@@ -5832,8 +6275,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     type="button"
                     onClick={async () => {
                       try {
+                        // 1. Save companion adjustments
                         localStorage.setItem(
-                          `saheli_char_adjustments_${adjustingCharacter.id}`,
+                           `saheli_char_adjustments_${adjustingCharacter.id}`,
                           JSON.stringify({
                             scale: adjustingCharacter.scale,
                             xOffset: adjustingCharacter.xOffset,
@@ -5855,8 +6299,43 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                           await refreshCustomCharacters();
                         }
 
+                        // 2. Save studio light adjustments
+                        const updatedLight = {
+                          color: studioLightAdjustments.color,
+                          opacity: studioLightAdjustments.opacity,
+                          size: studioLightAdjustments.size,
+                          width: studioLightAdjustments.width,
+                          yOffset: studioLightAdjustments.yOffset,
+                          xOffset: studioLightAdjustments.xOffset,
+                          leftExpansion: studioLightAdjustments.leftExpansion,
+                          rightExpansion: studioLightAdjustments.rightExpansion,
+                          brightness: studioLightAdjustments.brightness,
+                          saturation: studioLightAdjustments.saturation,
+                          originalColor: studioLightAdjustments.color,
+                          originalOpacity: studioLightAdjustments.opacity,
+                          originalSize: studioLightAdjustments.size,
+                          originalWidth: studioLightAdjustments.width,
+                          originalYOffset: studioLightAdjustments.yOffset,
+                          originalXOffset: studioLightAdjustments.xOffset,
+                          originalLeftExpansion: studioLightAdjustments.leftExpansion,
+                          originalRightExpansion: studioLightAdjustments.rightExpansion,
+                          originalBrightness: studioLightAdjustments.brightness,
+                          originalSaturation: studioLightAdjustments.saturation,
+                        };
+                        setStudioLightAdjustments(updatedLight);
+                        localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(updatedLight));
+                        localStorage.setItem("saheli_studio_light_customized", "true");
+
+                        // 3. Trigger 1.2s flaring transition animation
+                        setSpotlightSavedTrigger(true);
+                        setTimeout(() => {
+                          setSpotlightSavedTrigger(false);
+                        }, 1200);
+
                         setAdjustingCharacter(null);
-                        toast.success("Companion image adjustments saved! ✨");
+                        setAdjustingStudioLightOnly(false);
+                        setActiveSlider(null);
+                        toast.success("Adjustments saved successfully! ✨");
                       } catch (err) {
                         console.error("Failed to save adjustments:", err);
                         toast.error("Failed to save adjustments.");

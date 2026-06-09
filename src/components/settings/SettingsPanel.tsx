@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -15,8 +15,284 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music";
+  | "incognito" | "api_keys" | "music" | "studio_light";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
+
+// Helper to convert hex string (#RRGGBB) to HSV
+function hexToHsv(hex: string): { h: number; s: number; v: number } {
+  let cleanHex = hex.replace(/^#/, "");
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex.split("").map(c => c + c).join("");
+  }
+  const r = parseInt(cleanHex.substring(0, 2), 16) / 255 || 0;
+  const g = parseInt(cleanHex.substring(2, 4), 16) / 255 || 0;
+  const b = parseInt(cleanHex.substring(4, 6), 16) / 255 || 0;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  
+  let h = 0;
+  const s = max === 0 ? 0 : d / max;
+  const v = max;
+
+  if (max !== min) {
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    v: Math.round(v * 100)
+  };
+}
+
+// Helper to convert HSV to Hex string
+function hsvToHex(h: number, s: number, v: number): string {
+  s /= 100;
+  v /= 100;
+  const hi = Math.floor(h / 60) % 6;
+  const f = h / 60 - Math.floor(h / 60);
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+
+  let r = 0, g = 0, b = 0;
+  switch (hi) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+
+  const toHex = (n: number) => {
+    const hexStr = Math.round(n * 255).toString(16);
+    return hexStr.length === 1 ? "0" + hexStr : hexStr;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+interface CustomColorPickerProps {
+  value: string;
+  onChange: (hex: string) => void;
+}
+
+export const CustomColorPicker: React.FC<CustomColorPickerProps> = ({ value, onChange }) => {
+  const [hsv, setHsv] = useState(() => hexToHsv(value));
+
+  useEffect(() => {
+    const nextHsv = hexToHsv(value);
+    const currentHex = hsvToHex(hsv.h, hsv.s, hsv.v);
+    if (currentHex.toLowerCase() !== value.toLowerCase()) {
+      setHsv(nextHsv);
+    }
+  }, [value]);
+
+  const svContainerRef = useRef<HTMLDivElement>(null);
+  const hueTrackRef = useRef<HTMLDivElement>(null);
+
+  const handleSvDrag = (clientX: number, clientY: number) => {
+    const rect = svContainerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+
+    const s = Math.round(x * 100);
+    const v = Math.round((1 - y) * 100);
+
+    const nextHsv = { ...hsv, s, v };
+    setHsv(nextHsv);
+    onChange(hsvToHex(nextHsv.h, nextHsv.s, nextHsv.v));
+  };
+
+  const handleHueDrag = (clientX: number) => {
+    const rect = hueTrackRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const h = Math.round(x * 360);
+
+    const nextHsv = { ...hsv, h };
+    setHsv(nextHsv);
+    onChange(hsvToHex(nextHsv.h, nextHsv.s, nextHsv.v));
+  };
+
+  const initSvDrag = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const isTouch = "touches" in e;
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+    handleSvDrag(clientX, clientY);
+
+    const onMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const moveX = "touches" in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const moveY = "touches" in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
+      handleSvDrag(moveX, moveY);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onMouseMove);
+      window.removeEventListener("touchend", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onMouseMove, { passive: false });
+    window.addEventListener("touchend", onMouseUp);
+  };
+
+  const initHueDrag = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const isTouch = "touches" in e;
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    handleHueDrag(clientX);
+
+    const onMouseMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const moveX = "touches" in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      handleHueDrag(moveX);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onMouseMove);
+      window.removeEventListener("touchend", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onMouseMove, { passive: false });
+    window.addEventListener("touchend", onMouseUp);
+  };
+
+  const baseColorHex = hsvToHex(hsv.h, 100, 100);
+
+  return (
+    <div className="w-full flex flex-col gap-3">
+      {/* 2D SV Canvas */}
+      <div
+        ref={svContainerRef}
+        onMouseDown={initSvDrag}
+        onTouchStart={initSvDrag}
+        className="w-full aspect-[1.7] rounded-2xl relative cursor-crosshair overflow-hidden border border-white/10 select-none shadow-inner"
+        style={{ backgroundColor: baseColorHex }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-r from-white to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
+        
+        {/* Selector Handle */}
+        <div
+          className="absolute w-5 h-5 rounded-full border-2 border-white shadow-[0_2px_8px_rgba(0,0,0,0.6)] -ml-2.5 -mt-2.5 pointer-events-none"
+          style={{
+            left: `${hsv.s}%`,
+            top: `${100 - hsv.v}%`,
+            backgroundColor: value,
+            boxShadow: `0 0 10px ${value}, 0 2px 8px rgba(0,0,0,0.6)`
+          }}
+        />
+      </div>
+
+      {/* Hue Slider */}
+      <div className="space-y-1">
+        <div
+          ref={hueTrackRef}
+          onMouseDown={initHueDrag}
+          onTouchStart={initHueDrag}
+          className="w-full h-4 rounded-full relative cursor-ew-resize border border-white/10 select-none"
+          style={{
+            background: "linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)"
+          }}
+        >
+          {/* Handle */}
+          <div
+            className="absolute w-4 h-4 rounded-full border border-white/60 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.5)] top-0 -ml-2 pointer-events-none"
+            style={{
+              left: `${(hsv.h / 360) * 100}%`
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const renderSlider = (
+  label: string,
+  icon: React.ReactNode,
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  unit: string,
+  isChanged: boolean,
+  onReset: () => void,
+  onDecrease: () => void,
+  onIncrease: () => void,
+  onChange: (val: number) => void,
+  themeColor: string
+) => {
+  // Extract first class name for the active text style
+  const activeTextClass = getThemeClasses(themeColor, "text").split(" ")[0];
+  return (
+    <div className="space-y-1.5 bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 shadow-inner hover:border-white/10 transition duration-300">
+      <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-white/50">
+        <span className="flex items-center gap-1">{icon} {label}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`font-extrabold ${activeTextClass}`}>{value}{unit}</span>
+          {isChanged && (
+            <button
+              type="button"
+              onClick={onReset}
+              className="p-0.5 rounded-full hover:bg-white/10 text-white/50 hover:text-white transition duration-150 cursor-pointer flex items-center justify-center"
+              title={`Restore Original ${label}`}
+            >
+              <RotateCcw className="h-2.5 w-2.5" />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onDecrease}
+          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+          title={`Decrease ${label}`}
+        >
+          <Minus className="h-2.5 w-2.5 flex-shrink-0" />
+        </button>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="flex-grow w-full min-w-0 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer hover:bg-white/15 transition-all"
+          style={{ accentColor: "var(--theme-primary)" }}
+        />
+        <button
+          type="button"
+          onClick={onIncrease}
+          className="w-5 h-5 rounded-full bg-white/5 border border-white/10 hover:bg-white/12 text-white/70 hover:text-white hover:border-white/20 active:scale-90 flex items-center justify-center flex-shrink-0 transition-all duration-200 cursor-pointer shadow-sm"
+          title={`Increase ${label}`}
+        >
+          <Plus className="h-2.5 w-2.5 flex-shrink-0" />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const getThemeClasses = (color: string, type: "active" | "inactive" | "text" | "badge" | "hoverBorder" | "textLight" | "switchActive") => {
   switch (color) {
@@ -222,6 +498,7 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "character", label: "Character Selection", type: "item", parentId: "personalization" },
   { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "personalization" },
   { id: "color", label: "Theme Color", type: "item", parentId: "personalization" },
+  { id: "studio_light", label: "Studio Light", type: "item", parentId: "personalization" },
   { id: "customization", label: "Customization", type: "item", parentId: "personalization" },
   { id: "music", label: "Music System", type: "item", parentId: null },
 
@@ -255,6 +532,10 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
     cleaned.push({ id: "music", label: "Music System", type: "item", parentId: null });
   } else if (musicItem.parentId === "personalization") {
     musicItem.parentId = null;
+  }
+  const studioLightItem = cleaned.find(item => item.id === "studio_light");
+  if (!studioLightItem) {
+    cleaned.push({ id: "studio_light", label: "Studio Light", type: "item", parentId: "personalization" });
   }
   return cleaned;
 };
@@ -740,12 +1021,331 @@ export default function SettingsPanel({
     }
     return "maroon";
   });
+  const [customColorVal, setCustomColorVal] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_custom_theme_color") || "#a855f7";
+    }
+    return "#a855f7";
+  });
+
+  const [colorBeforeCustomizing, setColorBeforeCustomizing] = useState<string>("maroon");
+  const [isCustomColorPickerOpen, setIsCustomColorPickerOpen] = useState(false);
+  const [draftCustomColor, setDraftCustomColor] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_custom_theme_color") || "#a855f7";
+    }
+    return "#a855f7";
+  });
+
+  const [draftStudioLightColor, setDraftStudioLightColor] = useState<string>("#ff0078");
+  const [isStudioLightColorPickerOpen, setIsStudioLightColorPickerOpen] = useState(false);
+  const [studioLightColorBeforeCustomizing, setStudioLightColorBeforeCustomizing] = useState<string>("#ff0078");
+  const [hasPreviousAdjustments, setHasPreviousAdjustments] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && personalizationChild === "studio_light") {
+      const saved = window.localStorage.getItem("saheli_previous_studio_light_adjustments");
+      setHasPreviousAdjustments(!!saved);
+    }
+  }, [personalizationChild]);
+
+  const [localStudioLight, setLocalStudioLight] = useState<{
+    color: string;
+    opacity: number;
+    size: number;
+    width: number;
+    yOffset: number;
+    xOffset: number;
+    leftExpansion: number;
+    rightExpansion: number;
+    brightness: number;
+    saturation: number;
+    originalColor: string;
+    originalOpacity: number;
+    originalSize: number;
+    originalWidth: number;
+    originalYOffset: number;
+    originalXOffset: number;
+    originalLeftExpansion: number;
+    originalRightExpansion: number;
+    originalBrightness: number;
+    originalSaturation: number;
+  }>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_studio_light_adjustments");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return {
+            color: parsed.color ?? "#ff0078",
+            opacity: parsed.opacity ?? 100,
+            size: parsed.size ?? 100,
+            width: parsed.width ?? 100,
+            yOffset: parsed.yOffset ?? 0,
+            xOffset: parsed.xOffset ?? 0,
+            leftExpansion: parsed.leftExpansion ?? 44,
+            rightExpansion: parsed.rightExpansion ?? 44,
+            brightness: parsed.brightness ?? 100,
+            saturation: parsed.saturation ?? 100,
+            originalColor: parsed.originalColor ?? parsed.color ?? "#ff0078",
+            originalOpacity: parsed.originalOpacity ?? parsed.opacity ?? 100,
+            originalSize: parsed.originalSize ?? parsed.size ?? 100,
+            originalWidth: parsed.originalWidth ?? parsed.width ?? 100,
+            originalYOffset: parsed.originalYOffset ?? parsed.yOffset ?? 0,
+            originalXOffset: parsed.originalXOffset ?? parsed.xOffset ?? 0,
+            originalLeftExpansion: parsed.originalLeftExpansion ?? parsed.leftExpansion ?? 44,
+            originalRightExpansion: parsed.originalRightExpansion ?? parsed.rightExpansion ?? 44,
+            originalBrightness: parsed.originalBrightness ?? parsed.brightness ?? 100,
+            originalSaturation: parsed.originalSaturation ?? parsed.saturation ?? 100,
+          };
+        }
+      } catch {}
+    }
+    return {
+      color: "#ff0078",
+      opacity: 100,
+      size: 100,
+      width: 100,
+      yOffset: 0,
+      xOffset: 0,
+      leftExpansion: 44,
+      rightExpansion: 44,
+      brightness: 100,
+      saturation: 100,
+      originalColor: "#ff0078",
+      originalOpacity: 100,
+      originalSize: 100,
+      originalWidth: 100,
+      originalYOffset: 0,
+      originalXOffset: 0,
+      originalLeftExpansion: 44,
+      originalRightExpansion: 44,
+      originalBrightness: 100,
+      originalSaturation: 100,
+    };
+  });
+
+  const backupAndResetStudioLight = (themeColor: string, customThemeHex?: string) => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_studio_light_adjustments");
+        if (saved) {
+          window.localStorage.setItem("saheli_previous_studio_light_adjustments", saved);
+          setHasPreviousAdjustments(true);
+        }
+
+        let nextColor = "#ff0078";
+        if (themeColor === "custom") {
+          nextColor = customThemeHex || draftCustomColor || "#ff0078";
+        } else {
+          const THEME_HEX_COLORS: Record<string, string> = {
+            pink: "#ff0078",
+            yellow: "#FFD700",
+            blue: "#00E5FF",
+            orchid: "#D500F9",
+            peach: "#FF9E7D",
+            maroon: "#D01C3F",
+            gemini: "#4A89FF",
+          };
+          nextColor = THEME_HEX_COLORS[themeColor] || "#ff0078";
+        }
+
+        const newLight = {
+          color: nextColor,
+          opacity: 100,
+          size: 100,
+          width: 100,
+          yOffset: 0,
+          xOffset: 0,
+          leftExpansion: 44,
+          rightExpansion: 44,
+          brightness: 100,
+          saturation: 100,
+          originalColor: nextColor,
+          originalOpacity: 100,
+          originalSize: 100,
+          originalWidth: 100,
+          originalYOffset: 0,
+          originalXOffset: 0,
+          originalLeftExpansion: 44,
+          originalRightExpansion: 44,
+          originalBrightness: 100,
+          originalSaturation: 100,
+        };
+
+        window.localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(newLight));
+        window.localStorage.setItem("saheli_studio_light_customized", "false");
+        setLocalStudioLight(newLight);
+        window.dispatchEvent(new Event("saheli_studio_light_changed"));
+      } catch (e) {
+        console.error("Error backing up and resetting studio light:", e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (personalizationChild === "studio_light" && typeof window !== "undefined") {
+      try {
+        const THEME_HEX_COLORS: Record<string, string> = {
+          pink: "#ff0078",
+          yellow: "#FFD700",
+          blue: "#00E5FF",
+          orchid: "#D500F9",
+          peach: "#FF9E7D",
+          maroon: "#D01C3F",
+          gemini: "#4A89FF",
+        };
+        const defaultColor = selectedColor === "custom" 
+          ? customColorVal 
+          : (THEME_HEX_COLORS[selectedColor] || "#ff0078");
+
+        const saved = window.localStorage.getItem("saheli_studio_light_adjustments");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const currentColor = parsed.color ?? defaultColor;
+          setLocalStudioLight({
+            color: currentColor,
+            opacity: parsed.opacity ?? 100,
+            size: parsed.size ?? 100,
+            width: parsed.width ?? 100,
+            yOffset: parsed.yOffset ?? 0,
+            xOffset: parsed.xOffset ?? 0,
+            leftExpansion: parsed.leftExpansion ?? 44,
+            rightExpansion: parsed.rightExpansion ?? 44,
+            brightness: parsed.brightness ?? 100,
+            saturation: parsed.saturation ?? 100,
+            originalColor: parsed.originalColor ?? currentColor,
+            originalOpacity: parsed.originalOpacity ?? parsed.opacity ?? 100,
+            originalSize: parsed.originalSize ?? parsed.size ?? 100,
+            originalWidth: parsed.originalWidth ?? parsed.width ?? 100,
+            originalYOffset: parsed.originalYOffset ?? parsed.yOffset ?? 0,
+            originalXOffset: parsed.originalXOffset ?? parsed.xOffset ?? 0,
+            originalLeftExpansion: parsed.originalLeftExpansion ?? parsed.leftExpansion ?? 44,
+            originalRightExpansion: parsed.originalRightExpansion ?? parsed.rightExpansion ?? 44,
+            originalBrightness: parsed.originalBrightness ?? parsed.brightness ?? 100,
+            originalSaturation: parsed.originalSaturation ?? parsed.saturation ?? 100,
+          });
+          setDraftStudioLightColor(currentColor);
+          setStudioLightColorBeforeCustomizing(currentColor);
+        } else {
+          setDraftStudioLightColor(defaultColor);
+          setStudioLightColorBeforeCustomizing(defaultColor);
+        }
+      } catch (e) {
+        console.error("Error loading studio light adjustments:", e);
+      }
+    }
+  }, [personalizationChild, selectedColor, customColorVal]);
 
   const handleColorChange = (color: string) => {
-    setSelectedColor(color);
+    if (color === "custom") {
+      if (selectedColor !== "custom") {
+        setColorBeforeCustomizing(selectedColor);
+      }
+      setDraftCustomColor(customColorVal);
+      setIsCustomColorPickerOpen(true);
+      setSelectedColor("custom");
+    } else {
+      backupAndResetStudioLight(color);
+      setSelectedColor(color);
+      setIsCustomColorPickerOpen(false);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("saheli_theme_color", color);
+        window.dispatchEvent(new Event("saheli_theme_color_changed"));
+      }
+    }
+  };
+
+  const handleRestoreThemeDefault = () => {
+    let nextColor = "#ff0078";
+    if (selectedColor === "custom") {
+      nextColor = customColorVal || "#ff0078";
+    } else {
+      const THEME_HEX_COLORS: Record<string, string> = {
+        pink: "#ff0078",
+        yellow: "#FFD700",
+        blue: "#00E5FF",
+        orchid: "#D500F9",
+        peach: "#FF9E7D",
+        maroon: "#D01C3F",
+        gemini: "#4A89FF",
+      };
+      nextColor = THEME_HEX_COLORS[selectedColor] || "#ff0078";
+    }
+    
+    const newLight = {
+      color: nextColor,
+      opacity: 100,
+      size: 100,
+      width: 100,
+      yOffset: 0,
+      xOffset: 0,
+      leftExpansion: 44,
+      rightExpansion: 44,
+      brightness: 100,
+      saturation: 100,
+      originalColor: nextColor,
+      originalOpacity: 100,
+      originalSize: 100,
+      originalWidth: 100,
+      originalYOffset: 0,
+      originalXOffset: 0,
+      originalLeftExpansion: 44,
+      originalRightExpansion: 44,
+      originalBrightness: 100,
+      originalSaturation: 100,
+    };
+    
+    setLocalStudioLight(newLight);
+    setDraftStudioLightColor(nextColor);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("saheli_theme_color", color);
-      window.dispatchEvent(new Event("saheli_theme_color_changed"));
+      window.localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(newLight));
+      window.localStorage.setItem("saheli_studio_light_customized", "false");
+      window.dispatchEvent(new Event("saheli_studio_light_changed"));
+    }
+    toast.success("Studio light reset to theme default! 💡");
+  };
+
+  const handleRestorePreviousCustom = () => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = window.localStorage.getItem("saheli_previous_studio_light_adjustments");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const restoredLight = {
+            color: parsed.color ?? "#ff0078",
+            opacity: parsed.opacity ?? 100,
+            size: parsed.size ?? 100,
+            width: parsed.width ?? 100,
+            yOffset: parsed.yOffset ?? 0,
+            xOffset: parsed.xOffset ?? 0,
+            leftExpansion: parsed.leftExpansion ?? 44,
+            rightExpansion: parsed.rightExpansion ?? 44,
+            brightness: parsed.brightness ?? 100,
+            saturation: parsed.saturation ?? 100,
+            originalColor: parsed.originalColor ?? parsed.color ?? "#ff0078",
+            originalOpacity: parsed.originalOpacity ?? parsed.opacity ?? 100,
+            originalSize: parsed.originalSize ?? parsed.size ?? 100,
+            originalWidth: parsed.originalWidth ?? parsed.width ?? 100,
+            originalYOffset: parsed.originalYOffset ?? parsed.yOffset ?? 0,
+            originalXOffset: parsed.originalXOffset ?? parsed.xOffset ?? 0,
+            originalLeftExpansion: parsed.originalLeftExpansion ?? parsed.leftExpansion ?? 44,
+            originalRightExpansion: parsed.originalRightExpansion ?? parsed.rightExpansion ?? 44,
+            originalBrightness: parsed.originalBrightness ?? parsed.brightness ?? 100,
+            originalSaturation: parsed.originalSaturation ?? parsed.saturation ?? 100,
+          };
+          setLocalStudioLight(restoredLight);
+          setDraftStudioLightColor(restoredLight.color);
+          window.localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(restoredLight));
+          window.localStorage.setItem("saheli_studio_light_customized", "true");
+          window.dispatchEvent(new Event("saheli_studio_light_changed"));
+          toast.success("Previous custom light settings restored! ✨");
+        } else {
+          toast.error("No previous custom settings found.");
+        }
+      } catch (e) {
+        console.error("Error restoring previous studio light:", e);
+      }
     }
   };
 
@@ -1888,8 +2488,8 @@ export default function SettingsPanel({
     };
 
     const allChars = [
-      ...characterCards.filter(c => !deletedDefaultIds.includes(c.id)).map(c => ({ id: c.id, name: c.label, url: c.image, isCustom: false })),
-      ...uploadedCharacters.map(c => ({ id: c.id, name: c.name, url: c.url, isCustom: true }))
+      ...characterCards.filter(c => !deletedDefaultIds.includes(c.id)).map(c => ({ id: c.id, name: c.label, url: c.image, isCustom: false, timestamp: 0 })),
+      ...uploadedCharacters.map(c => ({ id: c.id, name: c.name, url: c.url, isCustom: true, timestamp: c.timestamp }))
     ];
 
     const toggleSelect = (id: string) => {
@@ -2406,9 +3006,9 @@ export default function SettingsPanel({
                   { id: "blue", label: "Ocean Breeze", gradientBg: "linear-gradient(135deg, #87CEEB 0%, #00E5FF 100%)", flower: "🪻", glowColor: "rgba(0, 229, 255, 0.35)" },
                   { id: "orchid", label: "Lilac Fantasy", gradientBg: "linear-gradient(135deg, #D500F9 0%, #FF66CC 100%)", flower: "🪷", glowColor: "rgba(213, 0, 249, 0.35)" },
                   { id: "peach", label: "Peach Sorbet", gradientBg: "linear-gradient(135deg, #FF9E7D 0%, #FF6B6B 100%)", flower: "🏵️", glowColor: "rgba(255, 158, 125, 0.35)" },
-                  { id: "beige", label: "Vanilla Latte", gradientBg: "linear-gradient(135deg, #EADBC8 0%, #8D7B68 100%)", flower: "🌾", glowColor: "rgba(212, 184, 149, 0.35)" },
                   { id: "maroon", label: "Midnight Rose", gradientBg: "linear-gradient(135deg, #D01C3F 0%, #6E0016 100%)", flower: "🌹", glowColor: "rgba(208, 28, 63, 0.35)" },
                   { id: "gemini", label: "Cosmic Aurora", gradientBg: "linear-gradient(135deg, #4A89FF 0%, #1A365D 100%)", flower: "💙", glowColor: "rgba(74, 137, 255, 0.35)" },
+                  { id: "custom", label: "Custom Color", gradientBg: `linear-gradient(135deg, ${customColorVal} 0%, ${customColorVal}cc 100%)`, flower: "🎨", glowColor: `${customColorVal}59` },
                 ].map((item) => {
                   const active = selectedColor === item.id;
                   return (
@@ -2425,8 +3025,8 @@ export default function SettingsPanel({
                       style={
                         active 
                           ? { 
-                              borderColor: item.glowColor.replace("0.35", "0.5"), 
-                              boxShadow: `0 8px 20px rgba(0, 0, 0, 0.4), 0 0 12px ${item.glowColor}` 
+                              borderColor: item.id === "custom" ? customColorVal : item.glowColor.replace("0.35", "0.5"), 
+                              boxShadow: `0 8px 20px rgba(0, 0, 0, 0.4), 0 0 12px ${item.id === "custom" ? customColorVal : item.glowColor}` 
                             } 
                           : {}
                       }
@@ -2447,6 +3047,138 @@ export default function SettingsPanel({
                     </motion.button>
                   );
                 })}
+              </div>
+              {/* Custom color picker panel has been moved to Level 4 */}
+            </div>
+          </motion.div>
+        );
+
+      case "studio_light":
+        return (
+          <motion.div key="personalization-studio_light" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white">Studio Light</h3>
+                <p className="text-[11.5px] text-white/50 leading-relaxed">Choose a signature color for Saheli's backdrop spotlight.</p>
+              </div>
+
+              {/* Restore / Previous Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleRestoreThemeDefault}
+                  className="flex-1 py-1.5 px-2.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.06] text-[10px] font-bold text-white/70 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                  title="Reset studio light to default color and properties for this theme."
+                >
+                  <RotateCcw className="h-3 w-3" /> Default Light
+                </button>
+                {hasPreviousAdjustments && (
+                  <button
+                    type="button"
+                    onClick={handleRestorePreviousCustom}
+                    className="flex-1 py-1.5 px-2.5 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/[0.06] text-[10px] font-bold text-white/70 hover:text-white transition duration-200 cursor-pointer flex items-center justify-center gap-1 shadow-sm"
+                    title="Restore your previously customized light settings."
+                  >
+                    <Undo2 className="h-3 w-3" /> Previous Custom
+                  </button>
+                )}
+              </div>
+
+              {/* Custom Color Picker directly inline by default */}
+              <div className="space-y-3 bg-white/[0.02] border border-white/5 rounded-2xl p-3 shadow-inner mt-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Custom Light Palette</span>
+                
+                <CustomColorPicker value={draftStudioLightColor} onChange={setDraftStudioLightColor} />
+                
+                {/* Hidden native input */}
+                <input
+                  id="custom-light-color-input"
+                  type="color"
+                  value={draftStudioLightColor}
+                  onChange={(e) => setDraftStudioLightColor(e.target.value)}
+                  className="hidden"
+                />
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-white/50">Hex:</span>
+                  <input
+                    type="text"
+                    value={draftStudioLightColor.toUpperCase()}
+                    maxLength={7}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.startsWith("#") && val.length <= 7) {
+                        setDraftStudioLightColor(val);
+                      } else if (!val.startsWith("#") && val.length <= 6) {
+                        setDraftStudioLightColor(`#${val}`);
+                      }
+                    }}
+                    className="flex-grow text-center py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-white/20"
+                    placeholder="#HEX"
+                  />
+                </div>
+              </div>
+
+              {/* Actions Footer */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-white/5">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftStudioLightColor(studioLightColorBeforeCustomizing);
+                      setPersonalizationChild(null);
+                    }}
+                    className="flex-1 py-2 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer text-center"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        const updatedLight = {
+                          ...localStudioLight,
+                          color: draftStudioLightColor,
+                          originalColor: draftStudioLightColor,
+                        };
+                        setLocalStudioLight(updatedLight);
+                        window.localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(updatedLight));
+                        window.localStorage.setItem("saheli_studio_light_customized", "true");
+                        window.dispatchEvent(new Event("saheli_studio_light_changed"));
+                        setPersonalizationChild(null);
+                        toast.success("Studio Light color applied! ✨");
+                      }
+                    }}
+                    className="flex-1 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer shadow-md text-center text-white bg-gradient-to-r from-pink-500 to-purple-500 hover:brightness-110"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, ${draftStudioLightColor} 0%, ${draftStudioLightColor}cc 100%)`,
+                      boxShadow: `0 4px 12px ${draftStudioLightColor}44`
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      const updatedLight = {
+                        ...localStudioLight,
+                        color: draftStudioLightColor,
+                        originalColor: draftStudioLightColor,
+                      };
+                      setLocalStudioLight(updatedLight);
+                      window.localStorage.setItem("saheli_studio_light_adjustments", JSON.stringify(updatedLight));
+                      window.localStorage.setItem("saheli_studio_light_customized", "true");
+                      window.dispatchEvent(new Event("saheli_studio_light_changed"));
+                      window.dispatchEvent(new Event("saheli_open_studio_light_adjustments"));
+                      setPersonalizationChild(null);
+                    }
+                  }}
+                  className="w-full py-2 rounded-xl text-xs font-bold border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08] active:scale-[0.98] transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 shadow-inner"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" /> Edit Adjustments
+                </button>
               </div>
             </div>
           </motion.div>
@@ -3588,12 +4320,14 @@ export default function SettingsPanel({
                     }}
                     className={`settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] flex-col rounded-[28px] overflow-hidden transition-[width] duration-150 ${
                       personalizationChild === "color" 
-                        ? "w-[245px]" 
-                        : personalizationChild === "character" 
-                          ? "w-[280px]" 
-                          : personalizationChild === "customization" 
-                            ? "w-[350px]" 
-                            : "w-[340px]"
+                        ? "w-[245px]"
+                        : personalizationChild === "studio_light"
+                          ? "w-[290px]"
+                          : personalizationChild === "character" 
+                            ? "w-[280px]" 
+                            : personalizationChild === "customization" 
+                              ? "w-[350px]" 
+                              : "w-[340px]"
                     }`}
                   >
                     <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar">
@@ -3604,6 +4338,100 @@ export default function SettingsPanel({
                   </motion.div>
                 ) : null}
               </AnimatePresence>
+
+              {/* Level 4: Theme Custom Color Picker Popout */}
+              <AnimatePresence>
+                {showContentPanel && activeItem?.type === "tab" && personalizationChild === "color" && isCustomColorPickerOpen ? (
+                  <motion.div
+                    key="theme-custom-color-picker-panel"
+                    initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -20, scale: 0.95 }}
+                    transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.03)",
+                      backdropFilter: "blur(40px) saturate(160%)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      boxShadow: getChildPanelShadow(selectedColor)
+                    }}
+                    className="settings-child-panel relative pointer-events-auto ml-4 mb-6 flex max-h-[calc(100vh-100px)] w-[280px] flex-col rounded-[28px] overflow-hidden"
+                  >
+                    <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar flex flex-col gap-4">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Custom Palette</span>
+                      </div>
+                      
+                      <CustomColorPicker value={draftCustomColor} onChange={setDraftCustomColor} />
+                      
+                      {/* Hidden native input for circular preview click support */}
+                      <input
+                        id="custom-theme-color-input"
+                        type="color"
+                        value={draftCustomColor}
+                        onChange={(e) => setDraftCustomColor(e.target.value)}
+                        className="hidden"
+                      />
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-white/50">Hex:</span>
+                        <input
+                          type="text"
+                          value={draftCustomColor.toUpperCase()}
+                          maxLength={7}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.startsWith("#") && val.length <= 7) {
+                              setDraftCustomColor(val);
+                            } else if (!val.startsWith("#") && val.length <= 6) {
+                              setDraftCustomColor(`#${val}`);
+                            }
+                          }}
+                          className="flex-grow text-center py-1.5 bg-white/5 border border-white/10 rounded-xl text-xs font-mono text-white focus:outline-none focus:border-white/20"
+                          placeholder="#HEX"
+                        />
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-white/5 mt-auto">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedColor(colorBeforeCustomizing);
+                            setIsCustomColorPickerOpen(false);
+                          }}
+                          className="flex-1 py-2 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer text-center"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            backupAndResetStudioLight("custom", draftCustomColor);
+                            setCustomColorVal(draftCustomColor);
+                            setSelectedColor("custom");
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem("saheli_custom_theme_color", draftCustomColor);
+                              window.localStorage.setItem("saheli_theme_color", "custom");
+                              window.dispatchEvent(new Event("saheli_theme_color_changed"));
+                            }
+                            setIsCustomColorPickerOpen(false);
+                            toast.success("Custom theme color applied! 🎨");
+                          }}
+                          className="flex-1 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer shadow-md text-center text-white"
+                          style={{
+                            backgroundImage: `linear-gradient(135deg, ${draftCustomColor} 0%, ${draftCustomColor}cc 100%)`,
+                            boxShadow: `0 4px 12px ${draftCustomColor}44`
+                          }}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+
             </div>
           </div>
 

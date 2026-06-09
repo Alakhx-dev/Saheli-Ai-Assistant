@@ -215,8 +215,6 @@ const CinematicAtmosphere = memo(function CinematicAtmosphere({
 
   return (
     <div className="cinematic-atmosphere-root" aria-hidden="true">
-      <div className="cinematic-fog cinematic-fog--violet" />
-      <div className="cinematic-fog cinematic-fog--rose" />
       <div className="cinematic-depth-vignette" />
       <div className="cinematic-particle-field">
         {ambientParticles.map((particle) => (

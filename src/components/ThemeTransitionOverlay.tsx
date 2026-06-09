@@ -28,7 +28,16 @@ export default function ThemeTransitionOverlay({
 
   useEffect(() => {
     if (targetTheme) {
-      const nextRgb = THEME_RGBS[targetTheme] || THEME_RGBS.pink;
+      let nextRgb = THEME_RGBS[targetTheme] || THEME_RGBS.pink;
+      if (targetTheme === "custom" && typeof window !== "undefined") {
+        const customHex = window.localStorage.getItem("saheli_custom_theme_color") || "#ff0078";
+        const r = parseInt(customHex.slice(1, 3), 16);
+        const g = parseInt(customHex.slice(3, 5), 16);
+        const b = parseInt(customHex.slice(5, 7), 16);
+        if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+          nextRgb = `${r}, ${g}, ${b}`;
+        }
+      }
       setActiveRgb(nextRgb);
       setShow(true);
 

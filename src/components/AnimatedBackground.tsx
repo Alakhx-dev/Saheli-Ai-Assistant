@@ -51,6 +51,39 @@ const THEME_BLOBS: Record<string, number[][]> = {
   ],
 };
 
+const getThemeBlobs = (theme: string) => {
+  if (theme === "custom" && typeof window !== "undefined") {
+    const customHex = window.localStorage.getItem("saheli_custom_theme_color") || "#ff0078";
+    let r = parseInt(customHex.slice(1, 3), 16) / 255;
+    let g = parseInt(customHex.slice(3, 5), 16) / 255;
+    let b = parseInt(customHex.slice(5, 7), 16) / 255;
+    let max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      let d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    const hDeg = Math.round(h * 360);
+    const sPct = Math.round(s * 100);
+    const lPct = Math.round(l * 100);
+
+    return [
+      [hDeg, sPct, lPct],
+      [(hDeg + 30) % 360, Math.max(10, sPct - 10), Math.max(10, lPct - 5)],
+      [(hDeg + 330) % 360, Math.max(10, sPct - 5), Math.max(10, lPct - 10)],
+      [(hDeg + 60) % 360, Math.max(10, sPct - 15), Math.max(10, lPct - 15)],
+    ];
+  }
+  return THEME_BLOBS[theme] || THEME_BLOBS.pink;
+};
+
 const AnimatedBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [activeTheme, setActiveTheme] = useState(() => {
@@ -86,7 +119,7 @@ const AnimatedBackground = () => {
     window.addEventListener("resize", resize);
 
     // Initial HSL colors from the starting theme
-    const initialColors = THEME_BLOBS[activeTheme] || THEME_BLOBS.pink;
+    const initialColors = getThemeBlobs(activeTheme);
     const blobs = [
       { x: 0.3, y: 0.3, r: 350, color: [...initialColors[0]] },
       { x: 0.7, y: 0.6, r: 300, color: [...initialColors[1]] },
@@ -101,10 +134,8 @@ const AnimatedBackground = () => {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Access latest target colors ref or active state value inside draw loop
-      // Reading from window localstorage is safe here too, but reading from our state is clean.
-      // We will read activeTheme from a local variable captured at draw start or window storage.
       const currentTheme = window.localStorage.getItem("saheli_theme_color") || "maroon";
-      const targetColors = THEME_BLOBS[currentTheme] || THEME_BLOBS.pink;
+      const targetColors = getThemeBlobs(currentTheme);
 
       blobs.forEach((b, i) => {
         const target = targetColors[i] || targetColors[0];

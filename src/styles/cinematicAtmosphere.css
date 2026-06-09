@@ -28,15 +28,15 @@
 
 .cinematic-fog--violet {
   background:
-    linear-gradient(115deg, transparent 6%, rgba(109, 73, 173, 0.12) 30%, transparent 58%),
-    radial-gradient(ellipse 70% 55% at 48% 42%, rgba(167, 96, 255, 0.08), transparent 68%);
+    linear-gradient(115deg, transparent 6%, rgba(var(--theme-primary-rgb), 0.12) 30%, transparent 58%),
+    radial-gradient(ellipse 70% 55% at 48% 42%, rgba(var(--theme-primary-rgb), 0.08), transparent 68%);
   animation: cinematicFogViolet 34s ease-in-out infinite;
 }
 
 .cinematic-fog--rose {
   background:
-    linear-gradient(235deg, transparent 8%, rgba(255, 132, 190, 0.1) 38%, transparent 66%),
-    radial-gradient(ellipse 62% 46% at 54% 58%, rgba(255, 180, 210, 0.07), transparent 72%);
+    linear-gradient(235deg, transparent 8%, rgba(var(--theme-primary-rgb), 0.1) 38%, transparent 66%),
+    radial-gradient(ellipse 62% 46% at 54% 58%, rgba(var(--theme-primary-rgb), 0.07), transparent 72%);
   opacity: 0.48;
   animation: cinematicFogRose 41s ease-in-out infinite;
 }
