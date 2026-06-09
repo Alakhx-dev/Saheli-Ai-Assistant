@@ -63,10 +63,10 @@ const flyingButterflies = [
   {
     id: "fly-1",
     tone: "pink",
-    loopClass: "cinematic-hero-butterfly--loop1",
+    loopClass: "cinematic-hero-butterfly--loop3",
     size: "clamp(22px, 3.0vw, 34px)",
-    duration: "44s",
-    delay: "-1s",
+    duration: "80s",
+    delay: "-20s",
     flapDuration: "2.4s",
     opacity: 0.58
   },
@@ -75,7 +75,7 @@ const flyingButterflies = [
     tone: "lavender",
     loopClass: "cinematic-hero-butterfly--loop2",
     size: "clamp(20px, 2.8vw, 30px)",
-    duration: "52s",
+    duration: "104s",
     delay: "-1.5s",
     flapDuration: "3.0s",
     opacity: 0.54
@@ -83,19 +83,19 @@ const flyingButterflies = [
   {
     id: "fly-3",
     tone: "cyan",
-    loopClass: "cinematic-hero-butterfly--loop3",
+    loopClass: "cinematic-hero-butterfly--loop4",
     size: "clamp(22px, 3.0vw, 32px)",
-    duration: "40s",
-    delay: "-20s",
+    duration: "92s",
+    delay: "-10s",
     flapDuration: "2.1s",
     opacity: 0.52
   },
   {
     id: "fly-4",
     tone: "gold",
-    loopClass: "cinematic-hero-butterfly--loop4",
+    loopClass: "cinematic-hero-butterfly--loop7",
     size: "clamp(24px, 3.2vw, 36px)",
-    duration: "46s",
+    duration: "90s",
     delay: "-23s",
     flapDuration: "2.6s",
     opacity: 0.56
@@ -103,22 +103,72 @@ const flyingButterflies = [
   {
     id: "fly-5",
     tone: "emerald",
-    loopClass: "cinematic-hero-butterfly--loop5",
+    loopClass: "cinematic-hero-butterfly--loop8",
     size: "clamp(20px, 2.8vw, 30px)",
-    duration: "48s",
-    delay: "-0.8s",
+    duration: "100s",
+    delay: "-45s",
     flapDuration: "2.8s",
     opacity: 0.5
   },
   {
     id: "fly-6",
     tone: "cyan",
-    loopClass: "cinematic-hero-butterfly--loop6",
+    loopClass: "cinematic-hero-butterfly--loop9",
     size: "clamp(18px, 2.4vw, 28px)",
-    duration: "38s",
-    delay: "-1.2s",
+    duration: "84s",
+    delay: "-0.8s",
     flapDuration: "2.2s",
     opacity: 0.48
+  },
+  {
+    id: "fly-7",
+    tone: "gold",
+    loopClass: "cinematic-hero-butterfly--loop5",
+    size: "clamp(21px, 2.9vw, 31px)",
+    duration: "96s",
+    delay: "-15s",
+    flapDuration: "2.5s",
+    opacity: 0.52
+  },
+  {
+    id: "fly-8",
+    tone: "lavender",
+    loopClass: "cinematic-hero-butterfly--loop6",
+    size: "clamp(19px, 2.6vw, 29px)",
+    duration: "76s",
+    delay: "-30s",
+    flapDuration: "2.8s",
+    opacity: 0.5
+  },
+  {
+    id: "fly-9",
+    tone: "gold",
+    loopClass: "cinematic-hero-butterfly--loop13",
+    size: "clamp(18px, 2.5vw, 28px)",
+    duration: "84s",
+    delay: "-12s",
+    flapDuration: "2.3s",
+    opacity: 0.6
+  },
+  {
+    id: "fly-10",
+    tone: "emerald",
+    loopClass: "cinematic-hero-butterfly--loop14",
+    size: "clamp(18px, 2.5vw, 28px)",
+    duration: "88s",
+    delay: "-24s",
+    flapDuration: "2.5s",
+    opacity: 0.58
+  },
+  {
+    id: "fly-11",
+    tone: "pink",
+    loopClass: "cinematic-hero-butterfly--loop15",
+    size: "clamp(20px, 2.8vw, 30px)",
+    duration: "80s",
+    delay: "-6s",
+    flapDuration: "2.1s",
+    opacity: 0.62
   }
 ] as const;
 
