@@ -3597,3 +3597,17 @@
   background: #ffffff;
   box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* ===== AUDIO WAVEFORM ANIMATION ===== */
+@keyframes mic-wave-bounce {
+  0%, 100% {
+    transform: scaleY(0.7);
+  }
+  50% {
+    transform: scaleY(1.8);
+  }
+}
+
+.animate-mic-wave-bar {
+  animation: mic-wave-bounce 0.85s ease-in-out infinite;
+}

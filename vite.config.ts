@@ -300,7 +300,7 @@ export default defineConfig(({ mode }) => {
             })
               .then(async (autoResponse) => {
                 if (autoResponse.ok) {
-                  const autoData = await autoResponse.json();
+                  const autoData = (await autoResponse.json()) as any;
                   const rawSuggestions = autoData?.songs?.data || autoData?.songs || [];
                   const suggestions = rawSuggestions.map((s: any) => s.title || s.query || s.song).filter(Boolean);
                   res.statusCode = 200;

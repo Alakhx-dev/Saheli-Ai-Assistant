@@ -4,6 +4,7 @@ import { CREATOR_NAME } from "@/lib/memory";
 export interface ChatMessage {
   role: "user" | "model";
   content: string;
+  image?: string;
 }
 
 export type EmotionLabel = "happy" | "sad" | "neutral" | "angry";

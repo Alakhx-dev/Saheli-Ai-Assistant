@@ -288,10 +288,10 @@ export async function loadChatMessages(chatId: string, user: User | null): Promi
       role: data.role === "user" ? "user" : "model",
       content: typeof data.content === "string" ? data.content : "",
       createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
+      image: typeof data.image === "string" ? data.image : undefined,
     };
   });
 }
-
 export async function deleteChatSession(chatId: string, user: User | null) {
   if (isGuestMode(user)) {
     const chats = readLocalChats();

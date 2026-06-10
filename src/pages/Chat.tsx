@@ -751,7 +751,7 @@ interface SpeechRecognitionLike {
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: any) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -909,7 +909,7 @@ function detectChatLanguage(text: string): AppLanguage | null {
   return "hinglish"; // default
 }
 
-function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
+function useSpeechToText(onResult: (text: string, isFinal: boolean) => void, appLanguage: string = "hinglish"): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const onResultRef = useRef(onResult);
@@ -937,11 +937,22 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
       speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.error("SpeechRecognition not supported");
+      toast.error("Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.");
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "hi-IN";
+    
+    // Choose appropriate language locale
+    if (appLanguage === "english") {
+      recognition.lang = "en-US";
+    } else if (appLanguage === "hindi") {
+      recognition.lang = "hi-IN";
+    } else {
+      // Default / Hinglish
+      recognition.lang = "hi-IN";
+    }
+
     recognition.continuous = false;
     recognition.interimResults = true;
 
@@ -949,25 +960,48 @@ function useSpeechToText(onResult: (text: string) => void): SpeechToTextResult {
 
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let interim = "";
+      let hasFinal = false;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
           finalTranscript += transcript;
+          hasFinal = true;
         } else {
           interim = transcript;
         }
       }
       // Show interim text while speaking, replace with final when done
-      onResultRef.current(finalTranscript || interim);
+      onResultRef.current(finalTranscript || interim, hasFinal);
     };
 
-    recognition.onerror = () => setIsListening(false);
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error:", event);
+      if (event && event.error) {
+        if (event.error === "not-allowed") {
+          toast.error("Microphone access blocked. Please allow microphone permission in your browser settings.");
+        } else if (event.error === "no-speech") {
+          console.warn("No speech detected.");
+        } else {
+          toast.error(`Speech recognition error: ${event.error}`);
+        }
+      } else {
+        toast.error("Speech recognition failed.");
+      }
+      setIsListening(false);
+    };
+
     recognition.onend = () => setIsListening(false);
 
     recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
-  }, [isListening, stopListening]);
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err: any) {
+      console.error("Speech recognition start failed:", err);
+      toast.error("Could not start speech recognition.");
+      setIsListening(false);
+    }
+  }, [isListening, stopListening, appLanguage]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1022,9 +1056,8 @@ function getMessageKey(msg: ChatMessage, index: number) {
   }
   return `${msg.role}-${index}`;
 }
-
-const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean }>(
-  function ScrollFadeMessageItem({ msg, isNew }, ref) {
+const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean; onImageClick?: (url: string) => void }>(
+  function ScrollFadeMessageItem({ msg, isNew, onImageClick }, ref) {
     const isUser = msg.role === "user";
     return (
       <motion.div
@@ -1052,7 +1085,26 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
           letterSpacing: "0.01em",
         }}
       >
-        {msg.content}
+        {msg.image && (
+          <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 shadow-lg relative group cursor-pointer max-w-[320px]">
+            <img
+              src={msg.image}
+              alt="Attached content"
+              className="w-full h-auto object-cover max-h-[220px] transition-transform duration-500 ease-out group-hover:scale-105"
+              onClick={() => {
+                if (typeof onImageClick === "function") {
+                  onImageClick(msg.image!);
+                }
+              }}
+            />
+            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+              <span className="text-white/80 text-[11px] font-medium bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">
+                Click to view
+              </span>
+            </div>
+          </div>
+        )}
+        {msg.content && msg.content.trim() !== "Please analyze this image carefully." && msg.content}
       </div>
     </motion.div>
     );
@@ -1066,12 +1118,14 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   messagesEndRef,
   lastMsgCount,
   typingLabel,
+  onImageClick,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
   lastMsgCount: number;
   typingLabel: string;
+  onImageClick?: (url: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1089,11 +1143,14 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
       <div className="h-16 md:h-20" />
       <AnimatePresence initial={false} mode="sync">
         {messages.map((msg, idx) => (
-          <ScrollFadeMessageItem key={getMessageKey(msg, idx)} msg={msg} isNew={idx >= lastMsgCount} />
+          <ScrollFadeMessageItem 
+            key={getMessageKey(msg, idx)} 
+            msg={msg} 
+            isNew={idx >= lastMsgCount} 
+            onImageClick={onImageClick}
+          />
         ))}
-
       </AnimatePresence>
-
       <div className="min-h-[76px]">
         <AnimatePresence initial={false} mode="wait">
           {isLoading ? (
@@ -1793,7 +1850,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const selectedImageRef = useRef<string | null>(null);
+  const [isDraggingActive, setIsDraggingActive] = useState(false);
   const [isIdle, setIsIdle] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
   const [selectedCharacter, setSelectedCharacter] = useState(() => getStoredCharacterId(getStoredThemeColor()));
   const [isLiveSelectorActive, setIsLiveSelectorActive] = useState(false);
   const [livePreviewCharacter, setLivePreviewCharacter] = useState<string>("");
@@ -2165,15 +2225,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const setSelectedImageValue = useCallback((value: string | null) => {
     selectedImageRef.current = value;
     setSelectedImage(value);
-    // Immediately persist any newly selected/captured image to image memory (falls back to 'guest')
-    if (value) {
-      try {
-        void saveVisionImageMemory(value, user?.uid || "guest");
-      } catch (err) {
-        console.error("Failed to auto-save selected image to memory:", err);
-      }
-    }
-  }, [user?.uid]);
+  }, []);
 
   useEffect(() => {
     const moveCursor = (event: MouseEvent) => {
@@ -2332,10 +2384,106 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     };
   }, []);
 
+  // Ref to store input value at the moment the mic button is clicked
+  const initialInputRef = useRef("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [audioVolume, setAudioVolume] = useState(0);
+
   // Speech-to-text: appends recognized speech to current input
   const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
-    useCallback((text: string) => setInput(text), [])
+    useCallback((speechText: string, isFinal: boolean) => {
+      if (!isFinal) {
+        setInterimTranscript(speechText);
+      } else {
+        setInterimTranscript(speechText);
+        setInput(() => {
+          const base = initialInputRef.current;
+          if (!base) return speechText;
+          const separator = base.endsWith(" ") ? "" : " ";
+          return base + separator + speechText;
+        });
+      }
+    }, []),
+    language
   );
+
+  const handleMicClick = () => {
+    if (!isListening) {
+      initialInputRef.current = input;
+    }
+    toggleMic();
+  };
+
+  // Web Audio API volume analyzer
+  useEffect(() => {
+    if (!isListening) {
+      setAudioVolume(0);
+      return;
+    }
+
+    let audioContext: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let microphone: MediaStreamAudioSourceNode | null = null;
+    let stream: MediaStream | null = null;
+    let animationFrameId = 0;
+
+    const startAnalyser = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        audioContext = new AudioContextClass();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 64;
+        
+        microphone = audioContext.createMediaStreamSource(stream);
+        microphone.connect(analyser);
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+
+        const checkVolume = () => {
+          if (!analyser) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / bufferLength;
+          setAudioVolume(Math.min(1, average / 120));
+          animationFrameId = requestAnimationFrame(checkVolume);
+        };
+
+        checkVolume();
+      } catch (err) {
+        console.warn("Could not start audio analyser for volume animation:", err);
+      }
+    };
+
+    void startAnalyser();
+
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      if (microphone) {
+        microphone.disconnect();
+      }
+      if (audioContext && audioContext.state !== "closed") {
+        void audioContext.close();
+      }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [isListening]);
+
+  useEffect(() => {
+    if (!isListening) {
+      setInterimTranscript("");
+    }
+  }, [isListening]);
 
 
 
@@ -2550,6 +2698,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           return {
             role: data.role === "user" ? "user" : "model",
             content: typeof data.content === "string" ? data.content : "",
+            image: typeof data.image === "string" ? data.image : undefined,
           } as ChatMessage;
         });
 
@@ -3694,17 +3843,111 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       event.target.value = "";
     }
   };
+  const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.75): Promise<File> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: "image/jpeg",
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                resolve(file);
+              }
+            },
+            "image/jpeg",
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+      };
+      reader.onerror = () => resolve(file);
+    });
+  };
 
   const handleImageFileSelection = async (file: File) => {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
-      reader.readAsDataURL(file);
-    });
+    try {
+      const compressedFile = await compressImage(file);
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+        reader.readAsDataURL(compressedFile);
+      });
+      setSelectedImageValue(dataUrl);
+    } catch (error) {
+      console.error("Compression failed, using original file:", error);
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error ?? new Error("Unable to read image"));
+        reader.readAsDataURL(file);
+      });
+      setSelectedImageValue(dataUrl);
+    }
+  };
 
-    setSelectedImageValue(dataUrl);
-    void handleSubmit();
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDraggingActive(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingActive(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith("image/")) {
+      await handleImageFileSelection(file);
+    }
   };
 
   const handleAIMemoryExtraction = useCallback(async (chatId: string, history: ChatMessage[]) => {
@@ -3825,15 +4068,23 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
     const requestIdentity = getRequestIdentityContext(detectedLang);
 
+    const attachedImageBase64 = selectedImageRef.current || undefined;
+
     const userMessage: StoredChatMessage = {
       role: "user",
       content: userText,
       createdAt: Date.now(),
+      image: attachedImageBase64,
     };
-    const optimisticUserMessage: ChatMessage = { role: userMessage.role, content: userMessage.content };
+    const optimisticUserMessage: ChatMessage = { 
+      role: userMessage.role, 
+      content: userMessage.content,
+      image: attachedImageBase64,
+    };
     const nextHistory: ChatMessage[] = [...messagesRef.current, optimisticUserMessage];
     setMessages((prev) => [...prev, optimisticUserMessage]);
     messagesRef.current = nextHistory;
+
     setIsLoading(true);
     void persistChatMessage(chatId, userMessage).catch((error) => {
       console.error("Failed to persist user message", error);
@@ -3871,22 +4122,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       lastMsgCountRef.current = nextHistory.length;
       let base64Image: string | undefined;
 
-      if (selectedImageRef.current) {
-        base64Image = selectedImageRef.current;
+      if (attachedImageBase64) {
+        base64Image = attachedImageBase64;
         setSelectedImageValue(null);
-        // Immediately save camera-selected image to Image Memory with real-time UI update
-        if (base64Image && !isGuest && user?.uid && !incognitoMode) {
-          console.log("🖼️ [DEBUG] Selected image detected, saving to Image Memory", {
-            userId: user.uid,
-            imageLength: base64Image.length,
-            isGuest,
-          });
-          try {
-            await saveImageAndRefreshMemory(base64Image, user.uid);
-          } catch (err) {
-            console.error("❌ [DEBUG] Failed to auto-save selected image to memory:", err);
-          }
-        }
       } else if (shouldUseVision) {
         console.log("🎥 [DEBUG] Vision intent detected, capturing frame...");
         base64Image = await captureVisionFrame();
@@ -4441,10 +4679,47 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         className="chat-page-wrapper chat-screen-bg relative h-screen w-full overflow-hidden bg-[#000000] text-white selection:bg-pink-500/30"
         data-mood={mood}
         style={{ contain: "paint", backfaceVisibility: "hidden", transform: "translateZ(0)" }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
       >
       <div ref={cursorRef} className="cursor-glow" />
       <CinematicAtmosphere layer="ambient" />
       
+      <AnimatePresence>
+        {isDraggingActive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md p-6"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="relative flex flex-col items-center justify-center max-w-md w-full aspect-[4/3] rounded-[32px] border-2 border-dashed border-pink-500/50 bg-[#160d2b]/85 backdrop-blur-xl p-8 text-center shadow-[0_0_50px_rgba(236,72,153,0.35),inset_0_1px_2px_rgba(255,255,255,0.15)]"
+            >
+              <div className="absolute inset-0 -z-10 rounded-[32px] bg-gradient-to-tr from-pink-500/10 to-purple-500/10 blur-2xl animate-pulse" />
+              
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-pink-500/10 text-pink-300 shadow-[0_0_20px_rgba(236,72,153,0.25)] mb-5">
+                <Upload className="h-8 w-8 animate-bounce" />
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-2" style={{ fontFamily: "'Sour Gummy', cursive" }}>
+                Drop image here! ✨
+              </h3>
+              
+              <p className="text-sm text-white/60 leading-relaxed max-w-[280px]">
+                Saheli will attach this image to your chat preview
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>      
       {/* ── Garden Floor with Rising Dust ── */}
       <div className="garden-floor-container">
         <div className="garden-petals-blur" />
@@ -5237,7 +5512,6 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         </div>
 
         <CinematicAtmosphere layer="foreground" />
-
         <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6 relative z-20">
           {messages.length === 0 && !isLoading && !submitLockRef.current ? (
             <div className="h-full" />
@@ -5248,6 +5522,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               messagesEndRef={messagesEndRef}
               lastMsgCount={lastMsgCountRef.current}
               typingLabel={thinkingLabel}
+              onImageClick={(imgUrl) => setLightboxImage(imgUrl)}
             />
           )}
         </div>
@@ -5260,13 +5535,19 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           ) : null}
           <form
             onSubmit={handleSubmit}
-            className={`saheli-composer-container relative mx-auto flex h-[68px] items-center gap-2.5 px-4 transition-all duration-300 ${
+            className={`saheli-composer-container relative mx-auto flex flex-col justify-end transition-all duration-300 ${
               input.trim() ? "scale-[1.01]" : ""
             }`}
             style={{
               width: "min(100%, 860px)",
               transform: "translateY(-28px)",
               borderRadius: "24px",
+              minHeight: "68px",
+              height: "auto",
+              paddingTop: selectedImage ? "12px" : "10px",
+              paddingBottom: "10px",
+              paddingLeft: "16px",
+              paddingRight: "16px",
             }}
           >
             {/* Pop-up inside the form to guarantee perfect centering above the text box */}
@@ -5275,9 +5556,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 const isMentor = modeSwitchNotification.toLowerCase().includes("mentor");
                 return (
                   <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95, filter: "blur(3px)" }}
-                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                    exit={{ opacity: 0, y: -5, scale: 0.95, filter: "blur(3px)" }}
+                    initial={{ opacity: 0, y: 10, scale: 0.95, x: "-50%", filter: "blur(3px)" }}
+                    animate={{ opacity: 1, y: 0, scale: 1, x: "-50%", filter: "blur(0px)" }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95, x: "-50%", filter: "blur(3px)" }}
                     transition={{ 
                       type: "spring",
                       stiffness: 350,
@@ -5340,16 +5621,62 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 <span className="cinematic-hero-butterfly__wing cinematic-hero-butterfly__wing--right" />
               </div>
             </div>
+            <AnimatePresence>
+              {isListening && (
+                <motion.div
+                  initial={{ opacity: 0, y: 15, scale: 0.95, x: "-50%", filter: "blur(4px)" }}
+                  animate={{ opacity: 1, y: 0, scale: 1, x: "-50%", filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95, x: "-50%", filter: "blur(4px)" }}
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  className="absolute -top-[52px] left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 backdrop-blur-2xl border border-white/15 shadow-[0_12px_32px_rgba(0,0,0,0.5),0_0_20px_rgba(var(--theme-primary-rgb),0.15)] z-50 whitespace-nowrap w-auto max-w-[90%]"
+                >
+                  {/* Visual Audio Waveform */}
+                  <div className="flex items-center gap-1 h-5">
+                    {[...Array(6)].map((_, i) => (
+                      <span
+                        key={i}
+                        className="w-[3px] rounded-full bg-gradient-to-t from-[var(--theme-primary)] to-[var(--theme-light)] shadow-[0_0_8px_rgba(var(--theme-primary-rgb),0.6)] animate-mic-wave-bar"
+                        style={{
+                          height: "6px",
+                          animationDelay: `${i * 0.12}s`,
+                          animationDuration: audioVolume > 0.05 ? `${0.45 / (audioVolume + 0.1)}s` : "1.2s",
+                          transform: `scaleY(${1 + audioVolume * (4.5 + Math.sin(i * 1.5) * 2)})`,
+                          transformOrigin: "center",
+                          transition: "transform 0.075s ease-out",
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Live Transcribing Text / Interim Preview */}
+                  <div className="text-xs text-white/90 font-medium overflow-hidden text-ellipsis max-w-[240px] italic tracking-wide">
+                    {interimTranscript || "Sun rahi hu..."}
+                  </div>
+                  
+                  {/* Subtle red recording dot */}
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Premium Gemini/ChatGPT-style Image Preview block inside the form */}
             {selectedImage && (
-              <div className="absolute -top-24 left-4 p-2 bg-[#1a0b2e]/80 backdrop-blur-xl border border-pink-500/30 rounded-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="relative group">
-                  <img src={selectedImage} alt="Preview" className="w-16 h-16 object-cover rounded-xl border border-pink-500/20" />
+              <div className="w-full flex items-center justify-start mb-2.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="relative group p-1 bg-[#1b0a2d]/80 backdrop-blur-xl border border-pink-500/20 rounded-full flex items-center gap-3 pr-4 shadow-lg pl-1.5">
+                  <div className="relative w-9 h-9 rounded-full overflow-hidden border border-pink-500/30">
+                    <img src={selectedImage} alt="Preview" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex flex-col text-left justify-center">
+                    <span className="text-[11px] font-semibold text-white/95 leading-tight">Image Attachment</span>
+                    <span className="text-[9px] text-pink-300/80 font-medium leading-none">Ready to send</span>
+                  </div>
                   <button 
                     type="button"
                     onClick={() => setSelectedImageValue(null)}
-                    className="absolute -top-2 -right-2 bg-pink-600 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="ml-2 bg-white/5 hover:bg-red-500/25 border border-white/10 hover:border-red-500/30 text-white/75 hover:text-white p-1.5 rounded-full transition-all duration-200"
+                    aria-label="Remove image"
                   >
-                    <X className="w-3 h-3" />
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -5369,120 +5696,125 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               }}
             />
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            {/* Row wrapper for composer controls */}
+            <div className="flex items-center w-full gap-2.5 h-[48px]">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="saheli-composer-btn ml-1"
+                    aria-label="Add image"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="start" 
+                  className="border border-white/15 bg-white/5 backdrop-blur-2xl text-white shadow-[0_12px_40px_rgba(0,0,0,0.6),0_0_20px_rgba(var(--theme-primary-rgb),0.15)] rounded-2xl p-1.5 min-w-[150px] overflow-hidden"
+                >
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13.5px] rounded-xl cursor-pointer transition-all duration-200 focus:bg-white/10 focus:text-white hover:bg-white/10 hover:text-white outline-none font-medium"
+                    onSelect={() => {
+                      if (isMobile()) {
+                        mobileCameraInputRef.current?.click();
+                        return;
+                      }
+
+                      void captureVisionFrame()
+                        .then((base64) => {
+                          if (!base64) {
+                            throw new Error("Camera access nahi mila. Please allow camera and try again.");
+                          }
+                          setSelectedImageValue(`data:image/jpeg;base64,${base64}`);
+                        })
+                        .catch((error) => {
+                          const message = error instanceof Error ? error.message : "Camera access nahi mila. Please allow camera and try again.";
+                          toast.error(message, { duration: 5000 });
+                        });
+                    }}
+                  >
+                    <Camera className="h-4 w-4 text-[var(--theme-light)]" />
+                    Camera
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13.5px] rounded-xl cursor-pointer transition-all duration-200 focus:bg-white/10 focus:text-white hover:bg-white/10 hover:text-white outline-none font-medium"
+                    onSelect={() => {
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <ImagePlus className="h-4 w-4 text-[var(--theme-light)]" />
+                    Gallery
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13.5px] rounded-xl cursor-pointer transition-all duration-200 focus:bg-white/10 focus:text-white hover:bg-white/10 hover:text-white outline-none font-medium"
+                    onSelect={() => {
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    <Upload className="h-4 w-4 text-[var(--theme-light)]" />
+                    File Upload
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => {
+                  const newInput = e.target.value;
+                  setInput(newInput);
+                  setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
+                  
+                  // Clear existing timeouts
+                  if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                  if (teasingTimeoutRef.current) clearTimeout(teasingTimeoutRef.current);
+                  
+                  // Check for backspace teasing (>10 chars deleted)
+                  if (lastInputLength > newInput.length && lastInputLength - newInput.length > 10) {
+                    setPresenceStatus("Arey! Itna sab likh ke mita diya? 🧐");
+                    teasingTimeoutRef.current = window.setTimeout(() => {
+                      setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
+                    }, 3000);
+                  }
+                  
+                  setLastInputLength(newInput.length);
+                  
+                  // Stop typing teasing after 7 seconds of no input
+                  if (newInput.length > 0) {
+                    typingTimeoutRef.current = window.setTimeout(() => {
+                      setPresenceStatus("Ruk kyun gaye? Likh bhi do ab! 😉");
+                    }, 7000);
+                  }
+                }}
+                placeholder={inputPlaceholder}
+                className="saheli-composer-input flex-1 bg-transparent px-2 text-[15px] text-white placeholder-white/35 focus:outline-none focus:ring-0"
+              />
+              <div className="flex items-center gap-2 pr-1">
                 <button
                   type="button"
-                  className="saheli-composer-btn ml-1"
-                  aria-label="Add image"
+                  onClick={handleMicClick}
+                  aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
+                  className="saheli-composer-btn"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Mic className={`w-4 h-4 ${isListening ? "text-pink-300" : ""}`} />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="border border-white/10 bg-[#120b1f]/95 text-white shadow-2xl backdrop-blur-xl">
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    if (isMobile()) {
-                      mobileCameraInputRef.current?.click();
-                      return;
-                    }
-
-                    void captureVisionFrame()
-                      .then((base64) => {
-                        if (!base64) {
-                          throw new Error("Camera access nahi mila. Please allow camera and try again.");
-                        }
-                        setSelectedImageValue(`data:image/jpeg;base64,${base64}`);
-                        void handleSubmit();
-                      })
-                      .catch((error) => {
-                        const message = error instanceof Error ? error.message : "Camera access nahi mila. Please allow camera and try again.";
-                        toast.error(message, { duration: 5000 });
-                      });
-                  }}
+                <button
+                  type="submit"
+                  aria-label={t.composer.sendMessage}
+                  disabled={(!(input.trim() || selectedImage) || isLoading)}
+                  className="saheli-composer-btn saheli-send-btn group/send"
                 >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Camera
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  <ImagePlus className="mr-2 h-4 w-4" />
-                  Gallery
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(event) => {
-                    event.preventDefault();
-                    fileInputRef.current?.click();
-                  }}
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  File Upload
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => {
-                const newInput = e.target.value;
-                setInput(newInput);
-                setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
-                
-                // Clear existing timeouts
-                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                if (teasingTimeoutRef.current) clearTimeout(teasingTimeoutRef.current);
-                
-                // Check for backspace teasing (>10 chars deleted)
-                if (lastInputLength > newInput.length && lastInputLength - newInput.length > 10) {
-                  setPresenceStatus("Arey! Itna sab likh ke mita diya? 🧐");
-                  teasingTimeoutRef.current = window.setTimeout(() => {
-                    setPresenceStatus(newInput.length > 0 ? "Swara sun rahi hai..." : null);
-                  }, 3000);
-                }
-                
-                setLastInputLength(newInput.length);
-                
-                // Stop typing teasing after 7 seconds of no input
-                if (newInput.length > 0) {
-                  typingTimeoutRef.current = window.setTimeout(() => {
-                    setPresenceStatus("Ruk kyun gaye? Likh bhi do ab! 😉");
-                  }, 7000);
-                }
-              }}
-              placeholder={inputPlaceholder}
-              className="saheli-composer-input flex-1 bg-transparent px-2 text-[15px] text-white placeholder-white/35 focus:outline-none focus:ring-0"
-            />
-            <div className="flex items-center gap-2 pr-1">
-              <button
-                type="button"
-                onClick={toggleMic}
-                aria-label={isListening ? t.composer.stopListening : t.composer.voiceInput}
-                className="saheli-composer-btn"
-              >
-                <Mic className={`w-4 h-4 ${isListening ? "text-pink-300" : ""}`} />
-              </button>
-              <button
-                type="submit"
-                aria-label={t.composer.sendMessage}
-                disabled={(!(input.trim() || selectedImage) || isLoading)}
-                className="saheli-composer-btn saheli-send-btn group/send"
-              >
-                <svg className="w-5 h-5 transition-all duration-300 group-hover/send:scale-110 active:scale-95 group-hover/send:rotate-[6deg]" viewBox="0 0 24 24" fill="none">
-                  {/* Translucent Wings */}
-                  <path d="M12 12C9 7 5 7 5 10c0 4 4 6 7 2M12 12c3-5 7-5 7-2 0 4-4 6-7 2" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M12 12c-2 2-6 2-6-1 0-3 3-4 6 1M12 12c2 2 6 2 6-1 0-3-3-4-6 1" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  {/* Solid Heart Core */}
-                  <path d="M12 17.5c-4-3.5-6-5.5-6-7.5 0-2.2 1.8-4 4-4 1.3 0 2.5.8 3 2 .5-1.2 1.7-2 3-2 2.2 0 4 1.8 4 4 0 2-2 4-6 7.5z" fill="currentColor" />
-                  {/* Sparkle Center */}
-                  <path d="M12 9.5l0.4 1.1 1.1 0.4-1.1 0.4-0.4 1.1-0.4-1.1-1.1-0.4 1.1-0.4z" fill="#ffffff" />
-                </svg>
-              </button>
+                  <svg className="w-5 h-5 transition-all duration-300 group-hover/send:scale-110 active:scale-95 group-hover/send:rotate-[6deg]" viewBox="0 0 24 24" fill="none">
+                    {/* Translucent Wings */}
+                    <path d="M12 12C9 7 5 7 5 10c0 4 4 6 7 2M12 12c3-5 7-5 7-2 0 4-4 6-7 2" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M12 12c-2 2-6 2-6-1 0-3 3-4 6 1M12 12c2 2 6 2 6-1 0-3-3-4-6 1" fill="currentColor" opacity="0.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    {/* Solid Heart Core */}
+                    <path d="M12 17.5c-4-3.5-6-5.5-6-7.5 0-2.2 1.8-4 4-4 1.3 0 2.5.8 3 2 .5-1.2 1.7-2 3-2 2.2 0 4 1.8 4 4 0 2-2 4-6 7.5z" fill="currentColor" />
+                    {/* Sparkle Center */}
+                    <path d="M12 9.5l0.4 1.1 1.1 0.4-1.1 0.4-0.4 1.1-0.4-1.1-1.1-0.4 1.1-0.4z" fill="#ffffff" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </form>
           
@@ -6450,6 +6782,43 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Premium Lightbox Viewer ── */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 md:p-8"
+            onClick={() => setLightboxImage(null)}
+          >
+            <button
+              type="button"
+              className="absolute top-6 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors border border-white/10 shadow-lg cursor-pointer"
+              onClick={() => setLightboxImage(null)}
+              aria-label="Close image viewer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: "spring", stiffness: 350, damping: 28 }}
+              className="relative max-w-5xl max-h-[85vh] w-full flex items-center justify-center rounded-3xl overflow-hidden border border-white/10 shadow-2xl bg-black/40"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={lightboxImage}
+                alt="Enlarged content"
+                className="max-w-full max-h-[85vh] object-contain rounded-3xl"
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   </div>
   );
