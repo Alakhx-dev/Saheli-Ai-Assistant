@@ -23,6 +23,7 @@ import {
   CloudRain,
   CloudSnow,
   CloudSun,
+  CloudMoon,
   Droplets,
   MapPin,
   Moon,
@@ -255,28 +256,30 @@ function getMoonDetails(date: Date) {
     litPath = "";
   } else if (normalizedPhase >= 0.05 && normalizedPhase < 0.20) {
     moonPhaseName = "Waxing Crescent";
-    litPath = "M16,2 A14,14 0 0,1 16,30 A9,14 0 0,1 16,2";
+    litPath = "M16,2 A14,14 0 0,1 16,30 A9,14 0 0,0 16,2";
   } else if (normalizedPhase >= 0.20 && normalizedPhase < 0.30) {
     moonPhaseName = "First Quarter";
     litPath = "M16,2 A14,14 0 0,1 16,30 Z";
   } else if (normalizedPhase >= 0.30 && normalizedPhase < 0.45) {
     moonPhaseName = "Waxing Gibbous";
-    litPath = "M16,2 A14,14 0 0,1 16,30 A7,14 0 0,0 16,2";
+    litPath = "M16,2 A14,14 0 0,1 16,30 A7,14 0 0,1 16,2";
   } else if (normalizedPhase >= 0.45 && normalizedPhase < 0.55) {
     moonPhaseName = "Full Moon";
     litPath = "FULL";
   } else if (normalizedPhase >= 0.55 && normalizedPhase < 0.70) {
     moonPhaseName = "Waning Gibbous";
-    litPath = "M16,2 A14,14 0 0,0 16,30 A7,14 0 0,1 16,2";
+    litPath = "M16,2 A14,14 0 0,0 16,30 A7,14 0 0,0 16,2";
   } else if (normalizedPhase >= 0.70 && normalizedPhase < 0.80) {
     moonPhaseName = "Last Quarter";
     litPath = "M16,2 A14,14 0 0,0 16,30 Z";
   } else {
     moonPhaseName = "Waning Crescent";
-    litPath = "M16,2 A14,14 0 0,0 16,30 A9,14 0 0,0 16,2";
+    litPath = "M16,2 A14,14 0 0,0 16,30 A9,14 0 0,1 16,2";
   }
 
-  return { name: moonPhaseName, litPath };
+  const illumination = 0.5 * (1 - Math.cos(2 * Math.PI * normalizedPhase));
+
+  return { name: moonPhaseName, litPath, illumination };
 }
 
 function normalizeTitleContext(text: string) {
@@ -513,6 +516,28 @@ const THEME_SLIDER_CARD_CLASSES: Record<string, { border: string; glow: string; 
     buttonText: "text-white"
   }
 };
+
+const STATIC_STARS = [
+  { right: 75, top: 15 },
+  { right: 115, top: 8 },
+  { right: 160, top: 22 },
+  { right: 210, top: 12 },
+  { right: 255, top: 18 },
+  { right: 18, top: 55 },
+  { right: 52, top: 68 },
+  { right: 90, top: 42 },
+  { right: 135, top: 58 },
+  { right: 182, top: 48 },
+  { right: 228, top: 62 },
+  { right: 275, top: 38 },
+  { right: 35, top: 105 },
+  { right: 78, top: 92 },
+  { right: 120, top: 118 },
+  { right: 165, top: 98 },
+  { right: 205, top: 112 },
+  { right: 248, top: 88 },
+  { right: 288, top: 102 }
+];
 
 const renderSlider = (
   label: string,
@@ -4426,7 +4451,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const deriveVisualTheme = (hour24: number) => {
     if (hour24 >= 5 && hour24 < 11) return "morning";
     if (hour24 >= 11 && hour24 < 16) return "afternoon";
-    if (hour24 >= 16 && hour24 < 20) return "evening";
+    if (hour24 >= 16 && hour24 < 19) return "evening";
     return "night";
   };
 
@@ -5039,7 +5064,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     {isRefreshingRealtime ? (
                       <span className="absolute inset-0 rounded-full border border-cyan-400/40 border-t-transparent animate-spin" />
                     ) : null}
-                    <CloudSun className="h-3.5 w-3.5" />
+                    {awareness.datetime.dayState === "day" ? (
+                      <CloudSun className="h-3.5 w-3.5" />
+                    ) : (
+                      <CloudMoon className="h-3.5 w-3.5" />
+                    )}
                   </span>
                 </motion.button>
 
@@ -5248,11 +5277,21 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         {isClearNight && (
                           <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(224,242,254,0.18)_0%,rgba(99,102,241,0.03)_60%,transparent_100%)] mix-blend-screen pointer-events-none" />
                         )}
-                        <div className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl animate-[weatherMoonGlow_4s_ease-in-out_infinite_alternate]" />
+                        <div 
+                          className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl animate-[weatherMoonGlow_4s_ease-in-out_infinite_alternate]" 
+                          style={{
+                            "--moon-glow-intensity": moonDetails.illumination
+                          } as React.CSSProperties}
+                        />
                         
                         {/* Dynamically calculated Moon Phase (clean top right, no dots nearby) */}
                         {moonDetails.name !== "New Moon" && (
-                          <div className="absolute right-6 top-5 pointer-events-none z-0 animate-[weatherMoonPulse_4s_ease-in-out_infinite_alternate]">
+                          <div 
+                            className="absolute right-6 top-5 pointer-events-none z-0 animate-[weatherMoonPulse_4s_ease-in-out_infinite_alternate]"
+                            style={{
+                              "--moon-glow-intensity": moonDetails.illumination,
+                            } as React.CSSProperties}
+                          >
                             <svg width="32" height="32" viewBox="0 0 32 32">
                               <defs>
                                 <radialGradient id="moonGlowGrad" cx="35%" cy="35%" r="65%">
@@ -5262,7 +5301,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                                 </radialGradient>
                               </defs>
                               {/* Dark side silhouette */}
-                              <circle cx="16" cy="16" r="14" fill="rgba(255, 255, 255, 0.05)" stroke="rgba(255, 255, 255, 0.1)" strokeWidth="0.5" />
+                              <circle cx="16" cy="16" r="14" fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth="0.5" />
                               {/* Glowing lit part */}
                               {moonDetails.litPath === "FULL" ? (
                                 <circle cx="16" cy="16" r="14" fill="url(#moonGlowGrad)" />
@@ -5274,26 +5313,27 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         )}
 
                         {/* Twinkling Starfield across entire card, avoiding top-right moon area */}
-                        {Array.from({ length: 15 }).map((_, index) => {
-                          const right = 10 + (index * 17) % 268;
-                          const top = 10 + (index * 23) % 180;
-                          if (right > 200 && top < 60) return null;
+                        {STATIC_STARS.map((star, index) => {
+                          const size = index % 3 === 0 ? "1.5px" : index % 3 === 1 ? "1px" : "2px";
+                          const delay = index * 0.35;
+
                           return (
                             <span
                               key={`weather-star-field-${index}`}
-                              className="absolute h-0.5 w-0.5 rounded-full bg-white/80 animate-[weatherTwinkle_4s_ease-in-out_infinite]"
+                              className="absolute rounded-full bg-white/85 pointer-events-none animate-[weatherTwinkle_4s_ease-in-out_infinite]"
                               style={{
-                                right: `${right}px`,
-                                top: `${top}px`,
-                                animationDelay: `${index * 0.35}s`,
+                                right: `${star.right}px`,
+                                top: `${star.top}px`,
+                                width: size,
+                                height: size,
+                                animationDelay: `${delay}s`,
+                                boxShadow: index % 3 === 2 ? "0 0 4px rgba(255, 255, 255, 0.8)" : "none"
                               }}
                             />
                           );
                         })}
 
-                        {/* Shooting Stars */}
-                        <div className="absolute top-2 left-1/4 w-[1px] h-[1px] bg-gradient-to-r from-white to-transparent rotate-[35deg] animate-[weatherShootingStar_12s_linear_infinite] pointer-events-none" />
-                        <div className="absolute top-12 left-1/2 w-[1px] h-[1px] bg-gradient-to-r from-white to-transparent rotate-[35deg] animate-[weatherShootingStar_15s_linear_infinite] pointer-events-none" style={{ animationDelay: "5s" }} />
+
                       </>
                     ) : (
                       <>
@@ -5396,7 +5436,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         </div>
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                           <span className="inline-flex min-w-0 items-center gap-2">
-                            <CloudSun className="h-3.5 w-3.5 text-cyan-200/80" />
+                            {awareness.datetime.dayState === "day" ? (
+                              <CloudSun className="h-3.5 w-3.5 text-cyan-200/80" />
+                            ) : (
+                              <CloudMoon className="h-3.5 w-3.5 text-cyan-200/80" />
+                            )}
                             <span className="shrink-0 text-white/34">Weather</span>
                             <span className="truncate text-white/78">{weatherCondition}</span>
                           </span>
@@ -5491,7 +5535,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               @keyframes weatherFog { 0% { transform: translateX(-30%); } 100% { transform: translateX(10%); } }
               @keyframes weatherFogVertical { 0% { transform: translateY(-20%); } 100% { transform: translateY(10%); } }
               @keyframes weatherHeatShimmer { 0% { opacity: 0.2; transform: scale(1); } 100% { opacity: 0.4; transform: scale(1.05); } }
-              @keyframes weatherMoonGlow { 0% { transform: scale(1); opacity: 0.6; filter: blur(24px); } 100% { transform: scale(1.2); opacity: 0.9; filter: blur(32px); } }
+              @keyframes weatherMoonGlow { 0% { transform: scale(1); opacity: calc(var(--moon-glow-intensity, 1) * 0.6); filter: blur(24px); } 100% { transform: scale(1.2); opacity: calc(var(--moon-glow-intensity, 1) * 0.9); filter: blur(32px); } }
               @keyframes weatherTwinkle { 0%, 100% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.2); } }
               @keyframes weatherCloudMove { 0% { transform: translateX(0); } 100% { transform: translateX(450px); } }
               @keyframes weatherLightningFlash { 0%, 92%, 100% { opacity: 0; } 93% { opacity: 0.8; } 94% { opacity: 0.1; } 96% { opacity: 0.9; } 98% { opacity: 0; } }
@@ -5499,13 +5543,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               @keyframes weatherWindDrift { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 15% { opacity: 0.5; } 50% { transform: translate(150px, 15px) rotate(90deg); } 85% { opacity: 0.5; } 100% { transform: translate(320px, -15px) rotate(180deg); opacity: 0; } }
               @keyframes weatherSunPulse { 0%, 100% { filter: drop-shadow(0 0 12px rgba(251,191,36,0.75)); } 50% { filter: drop-shadow(0 0 24px rgba(251,191,36,0.95)); } }
               @keyframes weatherSunRayPulse { 0% { transform: scale(1.1) rotate(0deg); opacity: 0.4; } 50% { transform: scale(1.3) rotate(180deg); opacity: 0.75; } 100% { transform: scale(1.1) rotate(360deg); opacity: 0.4; } }
-              @keyframes weatherMoonPulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(255,255,255,0.7)); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 18px rgba(255,255,255,0.95)); } }
-              @keyframes weatherShootingStar {
-                0% { transform: translate3d(0, 0, 0) scale(0); opacity: 0; width: 0px; }
-                5% { opacity: 1; width: 30px; }
-                15% { transform: translate3d(120px, 80px, 0) scale(1); opacity: 0; width: 0px; }
-                100% { transform: translate3d(120px, 80px, 0) scale(0); opacity: 0; }
-              }
+              @keyframes weatherMoonPulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 calc(var(--moon-glow-intensity, 1) * 10px) rgba(255,255,255,calc(var(--moon-glow-intensity, 1) * 0.7))); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 calc(var(--moon-glow-intensity, 1) * 18px) rgba(255,255,255,calc(var(--moon-glow-intensity, 1) * 0.95))); } }
+
             `}</style>
           </div>
         ) : (
@@ -6096,12 +6135,13 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         <Dialog open={confirmModal?.isOpen ?? false} onOpenChange={(open) => { if (!open) setConfirmModal(null); }}>
           <DialogContent 
             overlayClassName="z-[105] bg-black/40 backdrop-blur-[8px]"
-            className={`z-[110] flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
+            className={`z-[110] theme-${activeTheme} flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
             style={{
               background: "rgba(10, 10, 12, 0.45)",
               backdropFilter: "blur(30px)",
               boxShadow: `0 25px 50px rgba(0, 0, 0, 0.65), 0 0 35px ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.glow || "rgba(255, 0, 120, 0.15)"}, inset 0 1px 0 rgba(255,255,255,0.1)`,
-              borderRadius: "28px"
+              borderRadius: "28px",
+              ...(activeTheme === "custom" ? getCustomThemeStyles(customColor) : {})
             }}
           >
             <DialogHeader className="text-left">
@@ -6117,7 +6157,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               <button
                 type="button"
                 onClick={() => setConfirmModal(null)}
-                className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-[rgba(var(--theme-primary-rgb),0.15)] bg-[rgba(var(--theme-primary-rgb),0.03)] text-[var(--theme-light)] hover:bg-[rgba(var(--theme-primary-rgb),0.1)] hover:border-[rgba(var(--theme-primary-rgb),0.35)] hover:text-white hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer"
               >
                 Cancel
               </button>
@@ -6924,7 +6964,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
         <DialogContent 
           overlayClassName="!bg-black/35 !backdrop-blur-md"
-          className="z-[100] w-[min(30rem,calc(100vw-2rem))] max-w-[30rem] overflow-hidden rounded-[48px] sm:rounded-[48px] border border-white/10 bg-[#0d0616]/60 p-6 text-white backdrop-blur-[30px] transition-all duration-300 shadow-[0_32px_90px_rgba(0,0,0,0.8)]"
+          className={`z-[100] theme-${activeTheme} w-[min(30rem,calc(100vw-2rem))] max-w-[30rem] overflow-hidden rounded-[48px] sm:rounded-[48px] border border-white/10 bg-[#0d0616]/60 p-6 text-white backdrop-blur-[30px] transition-all duration-300 shadow-[0_32px_90px_rgba(0,0,0,0.8)]`}
+          style={activeTheme === "custom" ? getCustomThemeStyles(customColor) : undefined}
         >
           <div className="space-y-5">
             {passwordChangeError ? (
@@ -6989,7 +7030,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                   <button
                     type="button"
                     onClick={() => setIsPasswordModalOpen(false)}
-                    className="inline-flex flex-1 items-center justify-center rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-semibold text-white/80 transition duration-300 hover:border-white/20 hover:bg-white/[0.08]"
+                    className="inline-flex flex-1 items-center justify-center rounded-[20px] border border-[rgba(var(--theme-primary-rgb),0.15)] bg-[rgba(var(--theme-primary-rgb),0.03)] px-4 py-3 text-xs font-semibold text-[var(--theme-light)] transition duration-300 hover:border-[rgba(var(--theme-primary-rgb),0.35)] hover:bg-[rgba(var(--theme-primary-rgb),0.1)] hover:text-white"
                   >
                     Cancel
                   </button>
@@ -7080,6 +7121,8 @@ const getSubmitButtonThemeClasses = (color: string) => {
       return "border-red-400/25 bg-gradient-to-r from-red-800/20 to-red-950/15 hover:from-red-800/25 hover:to-red-950/20 text-red-100 shadow-[0_0_15px_rgba(208,28,63,0.15)] hover:border-red-400/40";
     case "gemini":
       return "border-blue-400/25 bg-gradient-to-r from-blue-500/20 to-indigo-950/25 hover:from-blue-500/25 hover:to-indigo-950/30 text-blue-100 shadow-[0_0_15px_rgba(74,137,255,0.15)] hover:border-blue-400/40";
+    case "custom":
+      return "border-[rgba(var(--theme-primary-rgb),0.25)] bg-gradient-to-r from-[rgba(var(--theme-primary-rgb),0.2)] to-[rgba(var(--theme-primary-rgb),0.15)] hover:from-[rgba(var(--theme-primary-rgb),0.25)] hover:to-[rgba(var(--theme-primary-rgb),0.2)] text-[var(--theme-light)] shadow-[0_0_15px_rgba(var(--theme-primary-rgb),0.15)] hover:border-[rgba(var(--theme-primary-rgb),0.4)]";
     case "pink":
     default:
       return "border-pink-400/25 bg-gradient-to-r from-pink-500/20 to-purple-500/15 hover:from-pink-500/25 hover:to-purple-500/20 text-pink-100 shadow-[0_0_15px_rgba(255,105,180,0.15)] hover:border-pink-400/40";
@@ -7095,6 +7138,7 @@ const getModalThemeBorderClass = (color: string) => {
     case "beige": return "border-amber-500/20 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(212,184,149,0.05)]";
     case "maroon": return "border-red-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(208,28,63,0.08)]";
     case "gemini": return "border-blue-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(74,137,255,0.08)]";
+    case "custom": return "border-[rgba(var(--theme-primary-rgb),0.3)] shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(var(--theme-primary-rgb),0.08)]";
     case "pink":
     default:
       return "border-pink-500/30 shadow-[0_32px_90px_rgba(0,0,0,0.7),0_0_30px_rgba(255,105,180,0.08)]";

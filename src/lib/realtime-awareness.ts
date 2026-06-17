@@ -71,6 +71,7 @@ export interface RealtimeAwarenessSnapshot {
 export interface RealtimeAwarenessSettings {
   timeFormat: TimeFormatMode;
   showDayDate: boolean;
+  weatherRefreshInterval?: number; // in minutes
 }
 
 export const AWARENESS_STORAGE_KEYS = {
@@ -82,6 +83,7 @@ export const AWARENESS_STORAGE_KEYS = {
 const DEFAULT_SETTINGS: RealtimeAwarenessSettings = {
   timeFormat: "12h",
   showDayDate: true,
+  weatherRefreshInterval: 5, // Default 5 minutes
 };
 
 function safeParse<T>(raw: string | null): T | null {
@@ -134,6 +136,7 @@ export function readAwarenessSettings(): RealtimeAwarenessSettings {
   return {
     timeFormat: parsed?.timeFormat === "24h" ? "24h" : "12h",
     showDayDate: parsed?.showDayDate !== false,
+    weatherRefreshInterval: typeof parsed?.weatherRefreshInterval === "number" ? parsed.weatherRefreshInterval : 5,
   };
 }
 

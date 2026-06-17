@@ -21,18 +21,32 @@ function resolveHotColdState(temperatureC: number): "hot" | "cold" | "mild" {
   return "mild";
 }
 
-async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
-  const controller = new AbortController();
-  const id = globalThis.setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    return response;
-  } finally {
-    globalThis.clearTimeout(id);
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs = 15000,
+  retries = 2
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const id = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      return response;
+    } catch (err) {
+      if (attempt === retries) {
+        throw err;
+      }
+      // Wait before retrying (exponential backoff: 1.5s, 3s)
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 1500 * Math.pow(2, attempt)));
+    } finally {
+      globalThis.clearTimeout(id);
+    }
   }
+  throw new Error("Fetch failed after retries");
 }
 
 export async function fetchGeocoding(latitude: number, longitude: number) {
@@ -46,34 +60,14 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
     return { city: null, region: null, country: null, timezone: null };
   }
 
-  const url = `https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&language=en&format=json`;
-  
-  try {
-    const response = await fetchWithTimeout(url);
-    if (response.ok) {
-      const data: any = await response.json();
-      const first = data.results?.[0];
-      if (first?.name || first?.country) {
-        return {
-          city: first?.name || null,
-          region: first?.admin1 || null,
-          country: first?.country || null,
-          timezone: first?.timezone || null,
-        };
-      }
-    }
-  } catch (err) {
-    // Open-Meteo fails or times out. Catch silently.
-  }
-
-  // Graceful fallback to Nominatim
+  // Use Nominatim directly since Open-Meteo geocoding search does not support reverse lookups (always 404s)
   try {
     const osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`;
     const response = await fetchWithTimeout(osmUrl, {
       headers: {
         "User-Agent": "Saheli-AI-Assistant/1.0 (aniraj@saheli.app)"
       }
-    });
+    }, 10000);
     
     if (response.ok) {
       const data: any = await response.json();
@@ -87,10 +81,10 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
       };
     }
   } catch (osmErr) {
-    // Nominatim fallback also fails. Catch silently to prevent console spam.
+    // Nominatim fallback fails. Catch silently.
   }
 
-  // If all layers fail, return a default safe structure without throwing
+  // If Nominatim fails, return a default safe structure
   return {
     city: null,
     region: null,

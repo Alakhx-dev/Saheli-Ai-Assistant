@@ -147,7 +147,7 @@ async function fetchWeather(latitude: number, longitude: number): Promise<Weathe
 
   const data = await response.json();
   if (!data.weather) {
-    throw new Error("Weather data missing in response");
+    throw new Error(data.weatherError || "Weather data missing in response");
   }
 
   return data.weather;
@@ -159,8 +159,6 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const lastTimingWriteRef = useRef(0);
   const deniedToastShownRef = useRef(false);
-  const retryCountRef = useRef(0);
-  const retryTimeoutRef = useRef<number | null>(null);
   const hasLoggedErrorRef = useRef(false);
 
   const persistAwareness = useCallback((next: RealtimeAwarenessSnapshot) => {
@@ -199,7 +197,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
     });
   }, []);
 
-  const runLocationWeatherRefresh = useCallback(async (options?: { force?: boolean; requestPermission?: boolean }) => {
+  const runLocationWeatherRefresh = useCallback(async (options?: { force?: boolean; requestPermission?: boolean }): Promise<boolean> => {
     const force = options?.force === true;
     const requestPermission = options?.requestPermission !== false;
 
@@ -209,7 +207,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
         writeAwarenessCache(next);
         return next;
       });
-      return;
+      return false;
     }
 
     setIsRefreshing(true);
@@ -227,7 +225,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
           deniedToastShownRef.current = true;
           toast.message(FRIENDLY_LOCATION_PROMPT);
         }
-        return;
+        return false;
       }
 
       const askedBefore = typeof window !== "undefined"
@@ -235,25 +233,30 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
       const allowPromptRequest = requestPermission && (!askedBefore || force || permission === "prompt");
 
       const locationStale = shouldRefreshLocation(awareness.location?.updatedAt);
-      const weatherStale = shouldRefreshWeather(awareness.weather?.updatedAt);
+      const weatherStale = shouldRefreshWeather(awareness.weather?.updatedAt, 60 * 1000);
 
       if (permission === "prompt" && !allowPromptRequest) {
         if (!force && awareness.location && weatherStale) {
-          const weather = await fetchWeather(awareness.location.latitude, awareness.location.longitude);
-          setAwareness((prev) => {
-            const next: RealtimeAwarenessSnapshot = {
-              ...prev,
-              weather,
-            };
-            writeAwarenessCache(next);
-            return next;
-          });
+          try {
+            const weather = await fetchWeather(awareness.location.latitude, awareness.location.longitude);
+            setAwareness((prev) => {
+              const next: RealtimeAwarenessSnapshot = {
+                ...prev,
+                weather,
+              };
+              writeAwarenessCache(next);
+              return next;
+            });
+            return true;
+          } catch (err) {
+            return false;
+          }
         }
-        return;
+        return !!(awareness.location && !weatherStale);
       }
 
       if (!force && !locationStale && !weatherStale) {
-        return;
+        return true;
       }
 
       if (allowPromptRequest && typeof window !== "undefined") {
@@ -280,7 +283,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
         if (data.weather) {
           weather = data.weather;
         } else {
-          throw new Error("Weather data missing in response");
+          throw new Error(data.weatherError || "Weather data missing in response");
         }
       } catch (err) {
         if (!hasLoggedErrorRef.current) {
@@ -301,12 +304,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
       }
 
       // Success - reset retry logic
-      retryCountRef.current = 0;
       hasLoggedErrorRef.current = false;
-      if (retryTimeoutRef.current) {
-        window.clearTimeout(retryTimeoutRef.current);
-        retryTimeoutRef.current = null;
-      }
 
       const location: LocationSnapshot = {
         latitude,
@@ -328,6 +326,7 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
         writeAwarenessCache(next);
         return next;
       });
+      return true;
     } catch (error) {
       const geoError = error as { code?: number } | undefined;
       if (geoError?.code === 1) {
@@ -340,20 +339,8 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
           deniedToastShownRef.current = true;
           toast.message(FRIENDLY_LOCATION_PROMPT);
         }
-      } else {
-        // Schedule backoff retry for network/weather errors
-        const delays = [5000, 15000, 30000, 120000]; // 5s, 15s, 30s, 2m
-        const nextDelay = delays[Math.min(retryCountRef.current, delays.length - 1)];
-        
-        if (retryTimeoutRef.current) {
-          window.clearTimeout(retryTimeoutRef.current);
-        }
-        
-        retryTimeoutRef.current = window.setTimeout(() => {
-          retryCountRef.current += 1;
-          void runLocationWeatherRefresh({ force: true, requestPermission: false });
-        }, nextDelay);
       }
+      return false;
     } finally {
       setIsRefreshing(false);
     }
@@ -373,15 +360,36 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
 
   useEffect(() => {
     refreshTimeNow();
-    void runLocationWeatherRefresh({ requestPermission: true });
 
     const timeInterval = window.setInterval(() => {
       refreshTimeNow();
     }, 1000); // 1 second
 
-    const weatherInterval = window.setInterval(() => {
-      void runLocationWeatherRefresh({ requestPermission: false });
-    }, 10 * 60 * 1000); // 10 minutes
+    let weatherTimeoutId: number | null = null;
+
+    const scheduleNextWeatherRefresh = (delayMs: number) => {
+      if (weatherTimeoutId) {
+        window.clearTimeout(weatherTimeoutId);
+      }
+      weatherTimeoutId = window.setTimeout(async () => {
+        const success = await runLocationWeatherRefresh({ requestPermission: false });
+        if (success) {
+          scheduleNextWeatherRefresh(60 * 1000); // 1 minute on success
+        } else {
+          scheduleNextWeatherRefresh(10 * 1000); // 10 seconds on failure
+        }
+      }, delayMs);
+    };
+
+    const startInitialRefresh = async () => {
+      const success = await runLocationWeatherRefresh({ requestPermission: true });
+      if (success) {
+        scheduleNextWeatherRefresh(60 * 1000);
+      } else {
+        scheduleNextWeatherRefresh(10 * 1000);
+      }
+    };
+    void startInitialRefresh();
 
     const onVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -400,7 +408,9 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
 
     return () => {
       window.clearInterval(timeInterval);
-      window.clearInterval(weatherInterval);
+      if (weatherTimeoutId) {
+        window.clearTimeout(weatherTimeoutId);
+      }
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pointerdown", onInteraction);
       window.removeEventListener("keydown", onInteraction);
@@ -421,6 +431,10 @@ export function useRealtimeAwareness(): UseRealtimeAwarenessResult {
 
   const locationLabel = useMemo(() => buildLocationLabel(awareness.location), [awareness.location]);
   const weatherLabel = useMemo(() => buildWeatherLabel(awareness.weather), [awareness.weather]);
+
+  const setWeatherRefreshInterval = useCallback((minutes: number) => {
+    setSettings((prev) => ({ ...prev, weatherRefreshInterval: minutes }));
+  }, []);
 
   return {
     awareness,

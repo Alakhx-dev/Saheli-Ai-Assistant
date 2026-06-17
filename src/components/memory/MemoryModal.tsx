@@ -52,6 +52,12 @@ export default function MemoryModal({
     }
     return "maroon";
   });
+  const [customColor, setCustomColor] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.localStorage.getItem("saheli_custom_theme_color") || "#ff0078";
+    }
+    return "#ff0078";
+  });
 
   useEffect(() => {
     const handleTabSwitch = (event: Event) => {
@@ -65,6 +71,8 @@ export default function MemoryModal({
       if (typeof window !== "undefined") {
         const saved = window.localStorage.getItem("saheli_theme_color");
         if (saved) setActiveTheme(saved);
+        const savedCustom = window.localStorage.getItem("saheli_custom_theme_color");
+        if (savedCustom) setCustomColor(savedCustom);
       }
     };
 
@@ -88,13 +96,14 @@ export default function MemoryModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         overlayClassName="bg-black/25 backdrop-blur-[6px]"
-        className="z-[100] flex flex-col h-[min(40rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] overflow-hidden p-0 text-white !outline-none"
+        className={`z-[100] saheli-app-wrapper theme-${activeTheme} flex flex-col h-[min(40rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] max-w-[32rem] overflow-hidden p-0 text-white !outline-none`}
         style={{
           background: "rgba(10, 10, 12, 0.45)",
           backdropFilter: "blur(30px)",
           border: "1px solid rgba(255, 255, 255, 0.08)",
           boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${THEME_GLOWS[activeTheme] || THEME_GLOWS.pink}, inset 0 1px 0 rgba(255,255,255,0.1)`,
-          borderRadius: "32px"
+          borderRadius: "32px",
+          ...(activeTheme === "custom" ? getCustomThemeStyles(customColor) : {})
         }}
       >
         <div className="flex shrink-0 items-center gap-4 border-b border-white/5 px-6 py-5 bg-white/[0.01]">
@@ -156,7 +165,7 @@ export default function MemoryModal({
           <button
             type="button"
             onClick={() => void onClearAll(activeTab)}
-            className="flex w-full items-center justify-center rounded-[18px] border border-red-400/10 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-100 transition duration-300 hover:border-red-400/20 hover:bg-red-500/10"
+            className="flex w-full items-center justify-center rounded-[18px] border border-[rgba(var(--theme-primary-rgb),0.2)] bg-[rgba(var(--theme-primary-rgb),0.06)] px-4 py-3 text-sm font-semibold text-[var(--theme-light)] transition duration-300 hover:border-[rgba(var(--theme-primary-rgb),0.4)] hover:bg-[rgba(var(--theme-primary-rgb),0.12)] hover:text-white cursor-pointer shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
           >
             {activeTab === "chat" ? "Clear all chat memory" : "Clear all image memory"}
           </button>
@@ -165,3 +174,36 @@ export default function MemoryModal({
     </Dialog>
   );
 }
+
+const getCustomThemeStyles = (hex: string) => {
+  const cleanHex = hex.replace("#", "");
+  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+  const rNormal = r / 255;
+  const gNormal = g / 255;
+  const bNormal = b / 255;
+  const max = Math.max(rNormal, gNormal, bNormal);
+  const min = Math.min(rNormal, gNormal, bNormal);
+  let h = 0, s = 0, l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rNormal: h = (gNormal - bNormal) / d + (gNormal < bNormal ? 6 : 0); break;
+      case gNormal: h = (bNormal - rNormal) / d + 2; break;
+      case bNormal: h = (rNormal - gNormal) / d + 4; break;
+    }
+    h /= 6;
+  }
+  const hDeg = Math.round(h * 360);
+  const sPct = Math.round(s * 100);
+  const themeLight = `hsl(${hDeg}, ${sPct}%, 88%)`;
+
+  return {
+    "--theme-primary": `#${cleanHex}`,
+    "--theme-primary-rgb": `${r}, ${g}, ${b}`,
+    "--theme-glow": `rgba(${r}, ${g}, ${b}, 0.35)`,
+    "--theme-light": themeLight,
+  } as React.CSSProperties;
+};
