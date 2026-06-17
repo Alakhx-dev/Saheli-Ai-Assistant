@@ -1,0 +1,176 @@
+[33mcommit 28b3df7a3439012cc0e5772c6ec1f64acfea8a0f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: Alakhx-dev <aniranjan170@gmail.com>
+Date:   Wed Jun 10 15:36:03 2026 +0530
+
+    imporve memory ui
+
+[1mdiff --git a/src/components/memory/MemoryModal.tsx b/src/components/memory/MemoryModal.tsx[m
+[1mindex 3884f24..c91db1f 100644[m
+[1m--- a/src/components/memory/MemoryModal.tsx[m
+[1m+++ b/src/components/memory/MemoryModal.tsx[m
+[36m@@ -1,6 +1,6 @@[m
+ import React, { useEffect, useMemo, useState } from "react";[m
+ import { AnimatePresence, motion } from "framer-motion";[m
+[31m-import { ImageIcon, MessageSquareText, ChevronLeft } from "lucide-react";[m
+[32m+[m[32mimport { ImageIcon, MessageSquareText, ChevronLeft, Trash2 } from "lucide-react";[m
+ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";[m
+ import type { MemoryProfile } from "@/lib/memory";[m
+ import MemoryList from "@/components/memory/MemoryList";[m
+[36m@@ -11,40 +11,63 @@[m [minterface MemoryModalProps {[m
+   onOpenChange: (open: boolean) => void;[m
+   memory: MemoryProfile | null;[m
+   status?: string | null;[m
+[32m+[m[32m  memoryEnabled: boolean;[m
+   onToggleMemory: (enabled: boolean) => void | Promise<void>;[m
+   onDeleteChat: (messageId: string) => void | Promise<void>;[m
+   onDeleteImage: (imageId: string) => void | Promise<void>;[m
+[31m-  onClearAll: () => void | Promise<void>;[m
+[32m+[m[32m  onClearMemory: (type: "chat" | "image") => void | Promise<void>;[m
+   onPreviewImage: (url: string) => void;[m
+   onBack?: () => void;[m
+ }[m
+ [m
+ type MemoryTab = "chat" | "image";[m
+ [m
+[31m-const THEME_GLOWS: Record<string, string> = {[m
+[31m-  pink: "rgba(255, 0, 120, 0.15)",[m
+[31m-  yellow: "rgba(255, 215, 0, 0.15)",[m
+[31m-  blue: "rgba(0, 229, 255, 0.15)",[m
+[31m-  orchid: "rgba(213, 0, 249, 0.15)",[m
+[31m-  peach: "rgba(255, 158, 125, 0.15)",[m
+[31m-  beige: "rgba(212, 184, 149, 0.08)",[m
+[31m-  maroon: "rgba(208, 28, 63, 0.15)",[m
+[31m-  gemini: "rgba(74, 137, 255, 0.15)",[m
+[32m+[m[32mconst THEME_COLORS: Record<string, string> = {[m
+[32m+[m[32m  pink: "#ff0078",[m
+[32m+[m[32m  yellow: "#ffd700",[m
+[32m+[m[32m  blue: "#00e5ff",[m
+[32m+[m[32m  orchid: "#d500f9",[m
+[32m+[m[32m  peach: "#ff9e7d",[m
+[32m+[m[32m  beige: "#d4b895",[m
+[32m+[m[32m  maroon: "#d01c3f",[m
+[32m+[m[32m  gemini: "#4a89ff",[m
+ };[m
+ [m
+[32m+[m[32m// Helper function to convert hex to RGBA[m
+[32m+[m[32mfunction hexToRgba(hex: string, alpha: number): string {[m
+[32m+[m[32m  const cleanHex = hex.replace("#", "");[m
+[32m+[m[32m  const r = parseInt(cleanHex.substring(0, 2), 16);[m
+[32m+[m[32m  const g = parseInt(cleanHex.substring(2, 4), 16);[m
+[32m+[m[32m  const b = parseInt(cleanHex.substring(4, 6), 16);[m
+[32m+[m[32m  return `rgba(${r}, ${g}, ${b}, ${alpha})`;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m// Helper to check if a color is light[m
+[32m+[m[32mfunction isLightColor(hex: string): boolean {[m
+[32m+[m[32m  const cleanHex = hex.replace("#", "");[m
+[32m+[m[32m  const r = parseInt(cleanHex.substring(0, 2), 16);[m
+[32m+[m[32m  const g = parseInt(cleanHex.substring(2, 4), 16);[m
+[32m+[m[32m  const b = parseInt(cleanHex.substring(4, 6), 16);[m
+[32m+[m[32m  const yiq = (r * 299 + g * 587 + b * 114) / 1000;[m
+[32m+[m[32m  return yiq >= 180;[m
+[32m+[m[32m}[m
+[32m+[m
+ export default function MemoryModal({[m
+   open,[m
+   onOpenChange,[m
+   memory,[m
+   status,[m
+[32m+[m[32m  memoryEnabled,[m
+   onToggleMemory,[m
+   onDeleteChat,[m
+   onDeleteImage,[m
+[31m-  onClearAll,[m
+[32m+[m[32m  onClearMemory,[m
+   onPreviewImage,[m
+   onBack,[m
+ }: MemoryModalProps) {[m
+   const [activeTab, setActiveTab] = useState<MemoryTab>("chat");[m
+[32m+[m[32m  const [showClearConfirm, setShowClearConfirm] = useState(false);[m
+[32m+[m[41m  [m
+   const [activeTheme, setActiveTheme] = useState<string>(() => {[m
+     if (typeof window !== "undefined") {[m
+       const saved = window.localStorage.getItem("saheli_theme_color");[m
+[36m@@ -53,29 +76,41 @@[m [mexport default function MemoryModal({[m
+     return "maroon";[m
+   });[m
+ [m
+[31m-  useEffect(() => {[m
+[31m-    const handleTabSwitch = (event: Event) => {[m
+[31m-      const customEvent = event as CustomEvent;[m
+[31m-      if (customEvent.detail === "chat" || customEvent.detail === "image") {[m
+[31m-        setActiveTab(customEvent.detail);[m
+[31m-      }[m
+[31m-    };[m
+[32m+[m[32m  const [customHexColor, setCustomHexColor] = useState<string>(() => {[m
+[32m+[m[32m    if (typeof window !== "undefined") {[m
+[32m+[m[32m      return window.localStorage.getItem("saheli_custom_theme_color") || "#a855f7";[m
+[32m+[m[32m    }[m
+[32m+[m[32m    return "#a855f7";[m
+[32m+[m[32m  });[m
+ [m
+[32m+[m[32m  // Keep theme in sync with localStorage updates[m
+[32m+[m[32m  useEffect(() => {[m
+     const handleThemeChange = () => {[m
+       if (typeof window !== "undefined") {[m
+         const saved = window.localStorage.getItem("saheli_theme_color");[m
+         if (saved) setActiveTheme(saved);[m
+[32m+[m[32m        const customSaved = window.localStorage.getItem("saheli_custom_theme_color");[m
+[32m+[m[32m        if (customSaved) setCustomHexColor(customSaved);[m
+       }[m
+     };[m
+ [m
+[31m-    window.addEventListener("saheli-memory-tab", handleTabSwitch);[m
+     window.addEventListener("saheli_theme_color_changed", handleThemeChange);[m
+     return () => {[m
+[31m-      window.removeEventListener("saheli-memory-tab", handleTabSwitch);[m
+       window.removeEventListener("saheli_theme_color_changed", handleThemeChange);[m
+     };[m
+   }, []);[m
+ [m
+[32m+[m[32m  // Update theme settings every time the modal is opened[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    if (open && typeof window !== "undefined") {[m
+[32m+[m[32m      const saved = window.localStorage.getItem("saheli_theme_color");[m
+[32m+[m[32m      if (saved) setActiveTheme(saved);[m
+[32m+[m[32m      const customSaved = window.localStorage.getItem("saheli_custom_theme_color");[m
+[32m+[m[32m      if (customSaved) setCustomHexColor(customSaved);[m
+[32m+[m[32m      setShowClearConfirm(false);[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }, [open]);[m
+[32m+[m
+   const profile = memory ?? useMemo(() => ({[m
+     preferences: [],[m
+     facts: [],[m
+[36m@@ -84,6 +119,15 @@[m [mexport default function MemoryModal({[m
+     images: [],[m
+   }), []);[m
+ [m
+[32m+[m[32m  const themePrimaryColor = useMemo(() => {[m
+[32m+[m[32m    if (activeTheme === "custom") {[m
+[32m+[m[32m      return customHexColor;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    return THEME_COLORS[activeTheme] || THEME_COLORS.maroon;[m
+[32m+[m[32m  }, [activeTheme, customHexColor]);[m
+[32m+[m
+[32m+[m[32m  const isLight = useMemo(() => isLightColor(themePrimaryColor), [themePrimaryColor]);[m
+[32m+[m
+   return ([m
+     <Dialog open={open} onOpenChange={onOpenChange}>[m
+       <DialogContent [m
+[36m@@ -93,13 +137,15 @@[m [mexport default function MemoryModal({[m
+           background: "rgba(10, 10, 12, 0.45)",[m
+           backdropFilter: "blur(30px)",[m
+           border: "1px solid rgba(255, 255, 255, 0.08)",[m
+[31m-          boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${THEME_GLOWS[activeTheme] || THEME_GLOWS.pink}, inset 0 1px 0 rgba(255,255,255,0.1)`,[m
+[32m+[m[32m          boxShadow: `0 25px 50px rgba(0, 0, 0, 0.6), 0 0 35px ${hexToRgba(themePrimaryColor, 0.15)}, inset 0 1px 0 rgba(255,255,255,0.1)`,[m
+           borderRadius: "32px"[m
+         }}[m
+       >[m
+[32m+[m[32m        {/* Header */}[m
+         <div className="flex shrink-0 items-center gap-4 border-b border-white/5 px-6 py-5 bg-white/[0.01]">[m
+           {onBack && ([m
+             <button[m
+[32m+[m[32m              type="button"[m
+               onClick={onBack}[m
+               className="flex h-9 w-9 ite

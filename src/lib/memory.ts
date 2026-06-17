@@ -759,7 +759,7 @@ export async function deleteMemoryImage(user: User | null, imageId: string) {
   await deleteDoc(doc(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION, imageId));
 }
 
-export async function clearAllMemory(user: User | null) {
+export async function clearAllMemory(user: User | null, type?: "chat" | "image") {
   if (!user) {
     localStorage.setItem(LOCAL_MEMORY_ENABLED_KEY, "true");
     return;
@@ -767,21 +767,26 @@ export async function clearAllMemory(user: User | null) {
 
   await ensureUserMemoryDoc(user);
 
-  const [chatSnapshot, imageSnapshot] = await Promise.all([
-    getDocs(query(getChatHistoryCollection(user), limit(500))),
-    getDocs(query(getImagesCollection(user), limit(500))),
-  ]);
+  const promises: Promise<unknown>[] = [];
 
-  await Promise.all([
-    ...chatSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
-    ...imageSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
-  ]);
+  if (!type || type === "chat") {
+    const chatSnapshot = await getDocs(query(getChatHistoryCollection(user), limit(500)));
+    promises.push(
+      ...chatSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
+      updateDoc(getUserDocRef(user), {
+        preferences: [],
+        facts: [],
+        updatedAt: serverTimestamp(),
+      })
+    );
+  }
 
-  await updateDoc(getUserDocRef(user), {
-    preferences: [],
-    facts: [],
-    updatedAt: serverTimestamp(),
-  });
+  if (!type || type === "image") {
+    const imageSnapshot = await getDocs(query(getImagesCollection(user), limit(500)));
+    promises.push(...imageSnapshot.docs.map((entry) => deleteDoc(entry.ref)));
+  }
+
+  await Promise.all(promises);
 }
 
 export async function pruneLowValueMemories(user: User | null, scanLimit = 500) {

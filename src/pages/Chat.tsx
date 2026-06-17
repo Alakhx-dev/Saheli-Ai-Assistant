@@ -1709,8 +1709,76 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [memoryEnabled, setMemoryEnabledState] = useState(true);
   const [memoryHydrated, setMemoryHydrated] = useState(false);
   const [selectedMemoryImage, setSelectedMemoryImage] = useState<string | null>(null);
-  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<React.ReactNode | null>(null);
   const [dbStatus, setDbStatus] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const askConfirmation = (title: string, description: string, onConfirm: () => void | Promise<void>) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      description,
+      onConfirm: async () => {
+        await onConfirm();
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  interface PendingDelete {
+    type: "chat" | "image" | "clear-chat" | "clear-image";
+    id?: string;
+    chatItem?: any;
+    imageItem?: any;
+    clearedChats?: any[];
+    clearedImages?: any[];
+  }
+
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+
+  const commitPendingDeletes = async () => {
+    // Read the latest state using functional state updates or simple check
+    let currentPending: PendingDelete | null = null;
+    setPendingDelete(prev => {
+      currentPending = prev;
+      return null;
+    });
+
+    if (!currentPending) return;
+
+    try {
+      if (currentPending.type === "chat" && currentPending.id) {
+        await deleteMemoryChat(user, currentPending.id);
+      } else if (currentPending.type === "image" && currentPending.id) {
+        await deleteMemoryImage(user, currentPending.id);
+      } else if (currentPending.type === "clear-chat") {
+        await clearAllMemory(user, "chat");
+      } else if (currentPending.type === "clear-image") {
+        await clearAllMemory(user, "image");
+      }
+      await refreshMemoryState();
+    } catch (error) {
+      console.error("Failed to commit pending deletes:", error);
+    }
+  };
+
+  const queuePendingDelete = async (newPending: PendingDelete) => {
+    if (pendingDelete) {
+      await commitPendingDeletes();
+    }
+    setPendingDelete(newPending);
+  };
+
+  const handleUndoDelete = async () => {
+    setPendingDelete(null);
+    setMemoryStatus(null);
+    await refreshMemoryState();
+  };
   const [incognitoMode, setIncognitoMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       return window.localStorage.getItem("saheli_incognito_mode") === "true";
@@ -2844,53 +2912,165 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   }, [refreshMemoryState]);
 
   const handleDeleteMemoryChat = async (messageId: string) => {
-    if (!window.confirm("Delete this chat memory?")) {
-      return;
-    }
+    askConfirmation("Delete Chat Memory", "Are you sure you want to delete this chat memory?", async () => {
+      const chatItem = memoryProfile?.chat_history.find(c => c.id === messageId);
+      if (!chatItem) return;
 
-    try {
-      await deleteMemoryChat(user, messageId);
-      await refreshMemoryState();
-      setMemoryStatus("Chat memory deleted.");
-    } catch (error) {
-      console.error("Failed to delete chat memory", error);
-      setMemoryStatus("Could not delete chat memory.");
-    }
+      await queuePendingDelete({
+        type: "chat",
+        id: messageId,
+        chatItem
+      });
+
+      // Filter locally immediately
+      setMemoryProfile(prev => prev ? {
+        ...prev,
+        chat_history: prev.chat_history.filter(c => c.id !== messageId)
+      } : null);
+
+      setMemoryStatus(
+        <div className="flex items-center justify-between w-full">
+          <span>Chat memory deleted.</span>
+          <button
+            type="button"
+            onClick={() => void handleUndoDelete()}
+            className="text-[var(--theme-light)] hover:text-white font-bold ml-2 underline transition cursor-pointer"
+          >
+            Undo
+          </button>
+        </div>
+      );
+    });
   };
 
   const handleDeleteMemoryImage = async (imageId: string) => {
-    if (!window.confirm("Delete this image memory?")) {
-      return;
-    }
+    askConfirmation("Delete Image Memory", "Are you sure you want to delete this image memory?", async () => {
+      const imageItem = memoryProfile?.images.find(img => img.id === imageId);
+      if (!imageItem) return;
 
-    try {
-      const deletedImage = memoryProfile?.images.find((image) => image.id === imageId);
-      await deleteMemoryImage(user, imageId);
-      if (selectedMemoryImage && deletedImage?.url === selectedMemoryImage) {
+      await queuePendingDelete({
+        type: "image",
+        id: imageId,
+        imageItem
+      });
+
+      // Filter locally immediately
+      setMemoryProfile(prev => prev ? {
+        ...prev,
+        images: prev.images.filter(img => img.id !== imageId)
+      } : null);
+
+      if (selectedMemoryImage && imageItem.url === selectedMemoryImage) {
         setSelectedMemoryImage(null);
       }
-      await refreshMemoryState();
-      setMemoryStatus("Image memory deleted.");
-    } catch (error) {
-      console.error("Failed to delete image memory", error);
-      setMemoryStatus("Could not delete image memory.");
-    }
+
+      setMemoryStatus(
+        <div className="flex items-center justify-between w-full">
+          <span>Image memory deleted.</span>
+          <button
+            type="button"
+            onClick={() => void handleUndoDelete()}
+            className="text-[var(--theme-light)] hover:text-white font-bold ml-2 underline transition cursor-pointer"
+          >
+            Undo
+          </button>
+        </div>
+      );
+    });
   };
 
-  const handleClearAllMemory = async () => {
-    if (!window.confirm("Clear all memory (chats + images + facts + preferences)?")) {
-      return;
+  const handleClearAllMemory = async (type?: "chat" | "image") => {
+    let title = "Clear Memory";
+    let confirmMsg = "Clear all memory (chats + images + facts + preferences)?";
+    if (type === "chat") {
+      title = "Clear Chat Memory";
+      confirmMsg = "Clear all chat memory (chats + facts + preferences)?";
+    } else if (type === "image") {
+      title = "Clear Image Memory";
+      confirmMsg = "Clear all image memory?";
     }
 
-    try {
-      await clearAllMemory(user);
-      await refreshMemoryState();
-      setSelectedMemoryImage(null);
-      setMemoryStatus("All memory cleared.");
-    } catch (error) {
-      console.error("Failed to clear memory", error);
-      setMemoryStatus("Couldn't clear memory right now.");
-    }
+    askConfirmation(title, confirmMsg, async () => {
+      if (type === "chat") {
+        await queuePendingDelete({
+          type: "clear-chat",
+          clearedChats: memoryProfile?.chat_history || []
+        });
+
+        // Filter locally immediately
+        setMemoryProfile(prev => prev ? {
+          ...prev,
+          chat_history: []
+        } : null);
+
+        setMemoryStatus(
+          <div className="flex items-center justify-between w-full">
+            <span>Chat memory cleared.</span>
+            <button
+              type="button"
+              onClick={() => void handleUndoDelete()}
+              className="text-[var(--theme-light)] hover:text-white font-bold ml-2 underline transition cursor-pointer"
+            >
+              Undo
+            </button>
+          </div>
+        );
+      } else if (type === "image") {
+        await queuePendingDelete({
+          type: "clear-image",
+          clearedImages: memoryProfile?.images || []
+        });
+
+        // Filter locally immediately
+        setMemoryProfile(prev => prev ? {
+          ...prev,
+          images: []
+        } : null);
+        setSelectedMemoryImage(null);
+
+        setMemoryStatus(
+          <div className="flex items-center justify-between w-full">
+            <span>Image memory cleared.</span>
+            <button
+              type="button"
+              onClick={() => void handleUndoDelete()}
+              className="text-[var(--theme-light)] hover:text-white font-bold ml-2 underline transition cursor-pointer"
+            >
+              Undo
+            </button>
+          </div>
+        );
+      } else {
+        await queuePendingDelete({
+          type: "clear-chat",
+          clearedChats: memoryProfile?.chat_history || []
+        });
+        setMemoryProfile(prev => prev ? {
+          ...prev,
+          chat_history: [],
+          images: []
+        } : null);
+        setSelectedMemoryImage(null);
+        setMemoryStatus(
+          <div className="flex items-center justify-between w-full">
+            <span>All memory cleared.</span>
+            <button
+              type="button"
+              onClick={() => void handleUndoDelete()}
+              className="text-[var(--theme-light)] hover:text-white font-bold ml-2 underline transition cursor-pointer"
+            >
+              Undo
+            </button>
+          </div>
+        );
+      }
+    });
+  };
+
+  const handleCloseMemoryModal = async () => {
+    setMemoryModalOpen(false);
+    await commitPendingDeletes();
+    setMemoryStatus(null);
   };
 
   const persistMemoryImage = useCallback(async (payload: {
@@ -5892,20 +6072,65 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
         <MemoryModal
           open={memoryModalOpen}
-          onOpenChange={setMemoryModalOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              void handleCloseMemoryModal();
+            } else {
+              setMemoryModalOpen(true);
+            }
+          }}
           memory={memoryProfile}
           status={memoryStatus}
           onToggleMemory={(enabled) => handleMemoryToggle(enabled)}
           onDeleteChat={(messageId) => void handleDeleteMemoryChat(messageId)}
           onDeleteImage={(imageId) => void handleDeleteMemoryImage(imageId)}
-          onClearAll={() => void handleClearAllMemory()}
+          onClearAll={(type) => void handleClearAllMemory(type)}
           onPreviewImage={(url) => setSelectedMemoryImage(url)}
           onBack={() => {
-            setMemoryModalOpen(false);
+            void handleCloseMemoryModal();
             setSettingsPanelOpen(true);
             setActiveSettingsSection("memory");
           }}
         />
+
+        <Dialog open={confirmModal?.isOpen ?? false} onOpenChange={(open) => { if (!open) setConfirmModal(null); }}>
+          <DialogContent 
+            overlayClassName="z-[105] bg-black/40 backdrop-blur-[8px]"
+            className={`z-[110] flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
+            style={{
+              background: "rgba(10, 10, 12, 0.45)",
+              backdropFilter: "blur(30px)",
+              boxShadow: `0 25px 50px rgba(0, 0, 0, 0.65), 0 0 35px ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.glow || "rgba(255, 0, 120, 0.15)"}, inset 0 1px 0 rgba(255,255,255,0.1)`,
+              borderRadius: "28px"
+            }}
+          >
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-lg font-semibold tracking-tight text-white">
+                {confirmModal?.title}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-white/60 mt-2 leading-relaxed">
+                {confirmModal?.description}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex items-center justify-end gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(null)}
+                className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmModal?.onConfirm()}
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.buttonBg || THEME_SLIDER_CARD_CLASSES.pink.buttonBg} ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.buttonText || THEME_SLIDER_CARD_CLASSES.pink.buttonText}`}
+              >
+                Delete
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <MusicPlayerPanel
           isOpen={isMusicPanelOpen}

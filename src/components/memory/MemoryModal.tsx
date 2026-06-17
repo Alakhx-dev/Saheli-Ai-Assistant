@@ -10,11 +10,11 @@ interface MemoryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   memory: MemoryProfile | null;
-  status?: string | null;
+  status?: React.ReactNode | null;
   onToggleMemory: (enabled: boolean) => void | Promise<void>;
   onDeleteChat: (messageId: string) => void | Promise<void>;
   onDeleteImage: (imageId: string) => void | Promise<void>;
-  onClearAll: () => void | Promise<void>;
+  onClearAll: (type: "chat" | "image") => void | Promise<void>;
   onPreviewImage: (url: string) => void;
   onBack?: () => void;
 }
@@ -155,10 +155,10 @@ export default function MemoryModal({
         <div className="shrink-0 border-t border-white/10 p-4">
           <button
             type="button"
-            onClick={() => void onClearAll()}
+            onClick={() => void onClearAll(activeTab)}
             className="flex w-full items-center justify-center rounded-[18px] border border-red-400/10 bg-red-500/5 px-4 py-3 text-sm font-medium text-red-100 transition duration-300 hover:border-red-400/20 hover:bg-red-500/10"
           >
-            Clear all memory
+            {activeTab === "chat" ? "Clear all chat memory" : "Clear all image memory"}
           </button>
         </div>
       </DialogContent>
