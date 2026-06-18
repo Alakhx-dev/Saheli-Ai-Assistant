@@ -1,5 +1,5 @@
-function resolveDayState(hour24: number): "day" | "night" {
-  return hour24 >= 6 && hour24 < 18 ? "day" : "night";
+function resolveDayState(hour24: number, sunriseHour = 6.0, sunsetHour = 18.0): "day" | "night" {
+  return hour24 >= sunriseHour && hour24 < sunsetHour ? "day" : "night";
 }
 
 function weatherConditionFromCode(code: number): { condition: string; isRainy: boolean; isCloudy: boolean } {
@@ -103,8 +103,8 @@ function resolveWeatherAlert(weatherCode: number, windSpeedKph: number, temperat
 }
 
 export async function fetchForecast(latitude: number, longitude: number) {
-  // Correct Open-Meteo URL parameters: relative_humidity_2m and wind_speed_10m are valid in current; precipitation_probability is ONLY valid in hourly.
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&forecast_days=2&timezone=auto`;
+  // Correct Open-Meteo URL parameters: relative_humidity_2m and wind_speed_10m are valid in current; precipitation_probability is ONLY valid in hourly; added daily sunrise, sunset.
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&daily=sunrise,sunset&forecast_days=2&timezone=auto`;
   const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi`;
 
   let weatherData: any = null;
@@ -132,6 +132,7 @@ export async function fetchForecast(latitude: number, longitude: number) {
 
   const current = weatherData.current;
   const hourly = weatherData.hourly;
+  const daily = weatherData.daily;
 
   const temperatureC = typeof current?.temperature_2m === "number" ? current.temperature_2m : 0;
   const feelsLikeC = typeof current?.apparent_temperature === "number" ? current.apparent_temperature : undefined;
@@ -158,6 +159,41 @@ export async function fetchForecast(latitude: number, longitude: number) {
       ? Math.min(Math.max(currentHour, 0), Math.max(forecastTimes.length - 1, 0))
       : 0;
 
+  const sunrise = daily?.sunrise?.[0];
+  const sunset = daily?.sunset?.[0];
+  let moonPhase = 0.0;
+  try {
+    const now = new Date();
+    const newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+    const diffMs = now.getTime() - newMoonRef.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const cycle = 29.530588853;
+    const phase = (diffDays / cycle) % 1;
+    moonPhase = phase < 0 ? phase + 1 : phase;
+  } catch (e) {
+    // fallback to a default value
+    moonPhase = 0.5;
+  }
+
+  let sunriseHour = 6.0;
+  let sunsetHour = 18.0;
+  if (sunrise) {
+    try {
+      const srDate = new Date(sunrise);
+      sunriseHour = srDate.getHours() + srDate.getMinutes() / 60;
+    } catch (e) {
+      // ignore
+    }
+  }
+  if (sunset) {
+    try {
+      const ssDate = new Date(sunset);
+      sunsetHour = ssDate.getHours() + ssDate.getMinutes() / 60;
+    } catch (e) {
+      // ignore
+    }
+  }
+
   const hourlyForecast = forecastTimes
     .slice(startIndex, startIndex + 6)
     .map((timeIso: string, index: number) => {
@@ -179,7 +215,7 @@ export async function fetchForecast(latitude: number, longitude: number) {
         precipitationProbabilityPercent: rainProbability,
         isRainy: meta.isRainy,
         isCloudy: meta.isCloudy,
-        dayState: resolveDayState(date.getHours()),
+        dayState: resolveDayState(date.getHours(), sunriseHour, sunsetHour),
         humidityPercent: humidity,
         windSpeedKph: wind,
       };
@@ -232,6 +268,9 @@ export async function fetchForecast(latitude: number, longitude: number) {
     aqi: usAqi,
     aqiStatus,
     activeAlert,
+    sunrise,
+    sunset,
+    moonPhase,
   };
 }
 

@@ -35,6 +35,9 @@ export interface WeatherSnapshot {
   isCloudy: boolean;
   dayState: DayState;
   updatedAt: number;
+  sunrise?: string;
+  sunset?: string;
+  moonPhase?: number;
   hourlyForecast: Array<{
     timeIso: string;
     hourLabel: string;

@@ -244,46 +244,78 @@ const TITLE_STOPWORDS = new Set([
   "unse",
 ]);
 
-function getMoonDetails(date: Date) {
-  const newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
-  const diffMs = date.getTime() - newMoonRef.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-  const cycle = 29.530588853;
-  const phase = (diffDays / cycle) % 1;
-  const normalizedPhase = phase < 0 ? phase + 1 : phase;
+function getMoonDetails(date: Date, apiMoonPhase?: number) {
+  let normalizedPhase = apiMoonPhase;
+  if (normalizedPhase === undefined || normalizedPhase === null) {
+    const newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+    const diffMs = date.getTime() - newMoonRef.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const cycle = 29.530588853;
+    const phase = (diffDays / cycle) % 1;
+    normalizedPhase = phase < 0 ? phase + 1 : phase;
+  }
 
   let moonPhaseName = "New Moon";
-  let litPath = "";
-
-  if (normalizedPhase < 0.05 || normalizedPhase > 0.95) {
+  if (normalizedPhase < 0.03 || normalizedPhase > 0.97) {
     moonPhaseName = "New Moon";
-    litPath = "";
-  } else if (normalizedPhase >= 0.05 && normalizedPhase < 0.20) {
+  } else if (normalizedPhase >= 0.03 && normalizedPhase < 0.22) {
     moonPhaseName = "Waxing Crescent";
-    litPath = "M16,2 A14,14 0 0,1 16,30 A9,14 0 0,0 16,2";
-  } else if (normalizedPhase >= 0.20 && normalizedPhase < 0.30) {
+  } else if (normalizedPhase >= 0.22 && normalizedPhase < 0.28) {
     moonPhaseName = "First Quarter";
-    litPath = "M16,2 A14,14 0 0,1 16,30 Z";
-  } else if (normalizedPhase >= 0.30 && normalizedPhase < 0.45) {
+  } else if (normalizedPhase >= 0.28 && normalizedPhase < 0.47) {
     moonPhaseName = "Waxing Gibbous";
-    litPath = "M16,2 A14,14 0 0,1 16,30 A7,14 0 0,1 16,2";
-  } else if (normalizedPhase >= 0.45 && normalizedPhase < 0.55) {
+  } else if (normalizedPhase >= 0.47 && normalizedPhase < 0.53) {
     moonPhaseName = "Full Moon";
-    litPath = "FULL";
-  } else if (normalizedPhase >= 0.55 && normalizedPhase < 0.70) {
+  } else if (normalizedPhase >= 0.53 && normalizedPhase < 0.72) {
     moonPhaseName = "Waning Gibbous";
-    litPath = "M16,2 A14,14 0 0,0 16,30 A7,14 0 0,0 16,2";
-  } else if (normalizedPhase >= 0.70 && normalizedPhase < 0.80) {
+  } else if (normalizedPhase >= 0.72 && normalizedPhase < 0.78) {
     moonPhaseName = "Last Quarter";
-    litPath = "M16,2 A14,14 0 0,0 16,30 Z";
   } else {
     moonPhaseName = "Waning Crescent";
-    litPath = "M16,2 A14,14 0 0,0 16,30 A9,14 0 0,1 16,2";
+  }
+
+  // Draw moon shape continuously
+  const p = normalizedPhase % 1;
+  const R = 14; // Radius
+  const cx = 16;
+  const cy = 16;
+  const topY = cy - R;
+  const botY = cy + R;
+  
+  let litPath = "";
+  if (p < 0.03 || p > 0.97) {
+    litPath = ""; // New moon, nothing lit
+  } else if (p >= 0.47 && p <= 0.53) {
+    litPath = "FULL"; // Full moon
+  } else {
+    if (p < 0.5) {
+      // Waxing: right side is lit
+      if (p < 0.25) {
+        // Crescent: inner arc sweep-flag = 0, rx goes from R to 0
+        const rx = R * (1 - 4 * p);
+        litPath = `M${cx},${topY} A${R},${R} 0 0,1 ${cx},${botY} A${rx},${R} 0 0,0 ${cx},${topY}`;
+      } else {
+        // Gibbous: inner arc sweep-flag = 1, rx goes from 0 to R
+        const rx = R * (4 * p - 1);
+        litPath = `M${cx},${topY} A${R},${R} 0 0,1 ${cx},${botY} A${rx},${R} 0 0,1 ${cx},${topY}`;
+      }
+    } else {
+      // Waning: left side is lit
+      if (p < 0.75) {
+        // Gibbous: inner arc sweep-flag = 0, rx goes from R to 0
+        const rx = R * (3 - 4 * p);
+        litPath = `M${cx},${topY} A${R},${R} 0 0,0 ${cx},${botY} A${rx},${R} 0 0,0 ${cx},${topY}`;
+      } else {
+        // Crescent: inner arc sweep-flag = 1, rx goes from 0 to R
+        const rx = R * (4 * p - 3);
+        litPath = `M${cx},${topY} A${R},${R} 0 0,0 ${cx},${botY} A${rx},${R} 0 0,1 ${cx},${topY}`;
+      }
+    }
   }
 
   const illumination = 0.5 * (1 - Math.cos(2 * Math.PI * normalizedPhase));
 
-  return { name: moonPhaseName, litPath, illumination };
+  return { name: moonPhaseName, litPath, illumination, normalizedPhase };
 }
 
 function normalizeTitleContext(text: string) {
@@ -4775,29 +4807,78 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   }, [awareness.datetime.currentTime, awareness.weather?.temperatureC]);
   const weatherThemeMode = weatherThemeOverride === "auto" ? awareness.datetime.dayState : weatherThemeOverride;
 
-  const deriveVisualTheme = (hour24: number) => {
-    if (hour24 >= 5 && hour24 < 11) return "morning";
-    if (hour24 >= 11 && hour24 < 16) return "afternoon";
-    if (hour24 >= 16 && hour24 < 19) return "evening";
+  // Dynamic sunrise/sunset times from API
+  const dynamicSunriseHour = useMemo(() => {
+    if (awareness.weather?.sunrise) {
+      try {
+        const srDate = new Date(awareness.weather.sunrise);
+        return srDate.getHours() + srDate.getMinutes() / 60;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return 5.5; // Default 5:30 AM
+  }, [awareness.weather?.sunrise]);
+
+  const dynamicSunsetHour = useMemo(() => {
+    if (awareness.weather?.sunset) {
+      try {
+        const ssDate = new Date(awareness.weather.sunset);
+        return ssDate.getHours() + ssDate.getMinutes() / 60;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return 18.5; // Default 6:30 PM
+  }, [awareness.weather?.sunset]);
+
+  const currentTimeDate = weatherPanelClockNow || new Date();
+  const currentHour = useMemo(() => {
+    return currentTimeDate.getHours() + currentTimeDate.getMinutes() / 60 + currentTimeDate.getSeconds() / 3600;
+  }, [currentTimeDate]);
+
+  // Compute smooth skyDarkness (0 = bright day, 1 = dark night)
+  const skyDarkness = useMemo(() => {
+    const morningStart = dynamicSunriseHour - 1.0;
+    const morningEnd = dynamicSunriseHour + 1.5;
+    const eveningStart = dynamicSunsetHour - 2.0;
+    const eveningEnd = dynamicSunsetHour + 1.0;
+
+    if (currentHour >= morningEnd && currentHour < eveningStart) {
+      return 0.0;
+    } else if (currentHour >= morningStart && currentHour < morningEnd) {
+      const progress = (currentHour - morningStart) / (morningEnd - morningStart);
+      return 1.0 - (3 * progress * progress - 2 * progress * progress * progress);
+    } else if (currentHour >= eveningStart && currentHour < eveningEnd) {
+      const progress = (currentHour - eveningStart) / (eveningEnd - eveningStart);
+      return 3 * progress * progress - 2 * progress * progress * progress;
+    } else {
+      return 1.0;
+    }
+  }, [currentHour, dynamicSunriseHour, dynamicSunsetHour]);
+
+  const deriveVisualTheme = useCallback((hourVal: number) => {
+    if (hourVal >= dynamicSunriseHour - 1.0 && hourVal < dynamicSunriseHour + 5.0) return "morning";
+    if (hourVal >= dynamicSunriseHour + 5.0 && hourVal < dynamicSunsetHour - 2.0) return "afternoon";
+    if (hourVal >= dynamicSunsetHour - 2.0 && hourVal < dynamicSunsetHour + 1.0) return "evening";
     return "night";
-  };
+  }, [dynamicSunriseHour, dynamicSunsetHour]);
 
   const visualTheme = weatherThemeOverride === "auto"
-    ? deriveVisualTheme(awareness.datetime.hour24)
+    ? deriveVisualTheme(currentHour)
     : weatherThemeMode === "day"
       ? "afternoon"
       : "night";
 
-  const currentTimeDate = weatherPanelClockNow || new Date();
   const sunDetailsHour = weatherThemeOverride === "auto"
-    ? currentTimeDate.getHours() + currentTimeDate.getMinutes() / 60
+    ? currentHour
     : weatherThemeMode === "day"
       ? 12
       : 0;
 
-  const getSunDetails = (hour: number) => {
-    const start = 5.5; // 5:30 AM
-    const end = 18.5; // 6:30 PM
+  const getSunDetails = useCallback((hour: number) => {
+    const start = dynamicSunriseHour;
+    const end = dynamicSunsetHour;
     if (hour < start || hour > end) return null;
     
     const p = (hour - start) / (end - start); // progress from 0 (sunrise) to 1 (sunset)
@@ -4831,12 +4912,51 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
     
     return { left, top, sunClass, rayColor, glowColor, raySize };
-  };
+  }, [dynamicSunriseHour, dynamicSunsetHour]);
+
   const sunDetails = getSunDetails(sunDetailsHour);
 
   const moonDetails = useMemo(() => {
-    return getMoonDetails(currentTimeDate);
-  }, [currentTimeDate]);
+    return getMoonDetails(currentTimeDate, awareness.weather?.moonPhase);
+  }, [currentTimeDate, awareness.weather?.moonPhase]);
+
+  // Helper to format floating point hour (e.g. 19.32) to readable time format (12h or 24h)
+  const formatHour = useCallback((hourFloat: number) => {
+    const totalMinutes = Math.round(hourFloat * 60);
+    const totalHours = Math.floor(totalMinutes / 60) % 24;
+    const minutes = totalMinutes % 60;
+    
+    const pad = (n: number) => String(n).padStart(2, "0");
+    if (awarenessSettings.timeFormat === "12h") {
+      const period = totalHours >= 12 ? "PM" : "AM";
+      const displayHour = totalHours % 12 === 0 ? 12 : totalHours % 12;
+      return `${pad(displayHour)}:${pad(minutes)} ${period}`;
+    } else {
+      return `${pad(totalHours)}:${pad(minutes)}`;
+    }
+  }, [awarenessSettings.timeFormat]);
+
+  // Calculate moonrise and moonset hours mathematically
+  const moonriseHour = useMemo(() => {
+    return (dynamicSunriseHour + 24 * moonDetails.normalizedPhase) % 24;
+  }, [dynamicSunriseHour, moonDetails.normalizedPhase]);
+
+  const moonsetHour = useMemo(() => {
+    return (dynamicSunsetHour + 24 * moonDetails.normalizedPhase) % 24;
+  }, [dynamicSunsetHour, moonDetails.normalizedPhase]);
+
+  // Check if moon is currently visible (above the horizon)
+  const isMoonVisible = useMemo(() => {
+    // If the phase is too close to new moon, moon is essentially invisible
+    if (moonDetails.normalizedPhase < 0.03 || moonDetails.normalizedPhase > 0.97) {
+      return false;
+    }
+    if (moonriseHour < moonsetHour) {
+      return currentHour >= moonriseHour && currentHour < moonsetHour;
+    } else {
+      return currentHour >= moonriseHour || currentHour < moonsetHour;
+    }
+  }, [currentHour, moonriseHour, moonsetHour, moonDetails.normalizedPhase]);
 
   const weatherAtmosphere = visualTheme === "morning"
     ? "shadow-[0_20px_48px_rgba(252,165,89,0.08),0_0_36px_rgba(255,99,132,0.04)]"
@@ -4849,9 +4969,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const isRainy = awareness.weather?.isRainy;
   const isCloudy = awareness.weather?.isCloudy;
   const isFoggy = awareness.weather?.condition?.toLowerCase().includes("fog") || awareness.weather?.condition?.toLowerCase().includes("mist");
-  const isClearNight = visualTheme === "night" && !isCloudy && !isRainy;
+  const isClearNight = skyDarkness > 0.5 && !isCloudy && !isRainy;
   const isHotWeather = awareness.weather?.hotColdState === "hot";
-  const isSunset = awareness.datetime.hour24 >= 17 && awareness.datetime.hour24 < 19;
+  const isSunset = currentHour >= dynamicSunsetHour - 2.0 && currentHour < dynamicSunsetHour + 1.0;
+
   const isThunderstorm = [95, 96, 99].includes(awareness.weather?.weatherCode ?? -1) ||
     (awareness.weather?.condition?.toLowerCase().includes("storm") ?? false) ||
     (awareness.weather?.condition?.toLowerCase().includes("thunder") ?? false);
@@ -5555,17 +5676,23 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     exit={{ opacity: 0, y: -12, scale: 0.965 }}
                     transition={{ type: "spring", damping: 22, stiffness: 420, mass: 0.55 }}
                     className={`pointer-events-auto relative w-[288px] overflow-hidden rounded-[26px] border border-white/10 text-white backdrop-blur-2xl ${weatherAtmosphere}`}
-                      style={{
-                      backgroundImage: visualTheme === "night"
-                        ? `linear-gradient(180deg, rgba(7,7,12,0.98), rgba(10,10,18,0.92)), radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 42%), radial-gradient(circle at 14% 0%, rgba(168,85,247,0.16), transparent 28%)`
-                        : visualTheme === "morning"
-                          ? `linear-gradient(180deg, rgba(255,247,237,0.06), rgba(255,245,240,0.03)), radial-gradient(circle at top right, rgba(255,183,77,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(255,206,102,0.10), transparent 26%)`
-                          : visualTheme === "afternoon"
-                            ? `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`
-                            : `linear-gradient(180deg, rgba(255,244,230,0.05), rgba(255,240,230,0.02)), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(250,204,21,0.10), transparent 26%)`,
+                    style={{
+                      backgroundImage: `linear-gradient(180deg, rgba(7,7,12,0.98), rgba(10,10,18,0.92)), radial-gradient(circle at top right, rgba(99,102,241,0.18), transparent 42%), radial-gradient(circle at 14% 0%, rgba(168,85,247,0.16), transparent 28%)`
                     }}
                   >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)]" />
+                    {/* Day/Evening overlay gradient layer that fades out as it gets dark */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
+                      style={{
+                        backgroundImage: visualTheme === "morning"
+                          ? `linear-gradient(180deg, rgba(255,247,237,0.06), rgba(255,245,240,0.03)), radial-gradient(circle at top right, rgba(255,183,77,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(255,206,102,0.10), transparent 26%)`
+                          : visualTheme === "evening"
+                            ? `linear-gradient(180deg, rgba(255,244,230,0.05), rgba(255,240,230,0.02)), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(250,204,21,0.10), transparent 26%)`
+                            : `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`, // Afternoon
+                        opacity: 1 - skyDarkness,
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)] z-0" />
 
                     {/* CINEMATIC WEATHER THEMES */}
                     <div className="absolute inset-0 pointer-events-none transition-opacity duration-1500 ease-in-out">
@@ -5733,11 +5860,19 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                       )}
                     </div>
 
-                    {visualTheme === "night" ? (
-                      <>
-                        {isClearNight && (
-                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(224,242,254,0.18)_0%,rgba(99,102,241,0.03)_60%,transparent_100%)] mix-blend-screen pointer-events-none" />
-                        )}
+                    {/* Night Sky Elements (fade in with skyDarkness) */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none transition-opacity duration-500 ease-in-out"
+                      style={{ opacity: skyDarkness }}
+                    >
+                      {isClearNight && (
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_85%_15%,rgba(224,242,254,0.18)_0%,rgba(99,102,241,0.03)_60%,transparent_100%)] mix-blend-screen pointer-events-none" />
+                      )}
+                      {/* Moon container controlled by rise/set visibility */}
+                      <div
+                        className="absolute inset-0 pointer-events-none transition-opacity duration-700 ease-in-out"
+                        style={{ opacity: isMoonVisible ? 1 : 0 }}
+                      >
                         <div 
                           className="absolute right-2 top-2 h-16 w-16 rounded-full bg-indigo-400/14 blur-2xl animate-[weatherMoonGlow_4s_ease-in-out_infinite_alternate]" 
                           style={{
@@ -5772,69 +5907,75 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                             </svg>
                           </div>
                         )}
+                      </div>
 
-                        {/* Twinkling Starfield across entire card, avoiding top-right moon area */}
-                        {STATIC_STARS.map((star, index) => {
-                          const size = index % 3 === 0 ? "1.5px" : index % 3 === 1 ? "1px" : "2px";
-                          const delay = index * 0.35;
+                      {/* Twinkling Starfield across entire card, avoiding top-right moon area */}
+                      {STATIC_STARS.map((star, index) => {
+                        const size = index % 3 === 0 ? "1.5px" : index % 3 === 1 ? "1px" : "2px";
+                        const delay = index * 0.35;
 
-                          return (
-                            <span
-                              key={`weather-star-field-${index}`}
-                              className="absolute rounded-full bg-white/85 pointer-events-none animate-[weatherTwinkle_4s_ease-in-out_infinite]"
-                              style={{
-                                right: `${star.right}px`,
-                                top: `${star.top}px`,
-                                width: size,
-                                height: size,
-                                animationDelay: `${delay}s`,
-                                boxShadow: index % 3 === 2 ? "0 0 4px rgba(255, 255, 255, 0.8)" : "none"
-                              }}
-                            />
-                          );
-                        })}
+                        // Stars fade in during the second half of skyDarkness transition
+                        const starOpacity = skyDarkness < 0.2 ? 0 : (skyDarkness - 0.2) / 0.8;
 
+                        return (
+                          <span
+                            key={`weather-star-field-${index}`}
+                            className="absolute rounded-full bg-white/85 pointer-events-none animate-[weatherTwinkle_4s_ease-in-out_infinite]"
+                            style={{
+                              right: `${star.right}px`,
+                              top: `${star.top}px`,
+                              width: size,
+                              height: size,
+                              animationDelay: `${delay}s`,
+                              opacity: starOpacity,
+                              boxShadow: index % 3 === 2 ? "0 0 4px rgba(255, 255, 255, 0.8)" : "none"
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
 
-                      </>
-                    ) : (
-                      <>
-                        {sunDetails && (
-                          <>
-                            {/* Soft atmospheric sun glow spreading across the box */}
-                            <div 
-                              className="absolute inset-0 transition-all duration-1000 pointer-events-none z-0"
-                              style={{
-                                backgroundImage: `radial-gradient(circle at ${sunDetails.left + 16}px ${sunDetails.top + 16}px, ${sunDetails.glowColor} 0%, transparent 65%)`
-                              }}
-                            />
-                            
-                            {/* Dynamic Pulsating Sun Rays (smooth, no shake) */}
-                            <div 
-                              className="absolute h-8 w-8 rounded-full animate-[weatherSunRayPulse_8s_linear_infinite] pointer-events-none z-0"
-                              style={{
-                                left: `${sunDetails.left}px`,
-                                top: `${sunDetails.top}px`,
-                                background: sunDetails.rayColor,
-                                filter: 'blur(8px)',
-                                transform: `scale(${sunDetails.raySize}) translate3d(0,0,0)`,
-                                willChange: 'transform'
-                              }}
-                            />
+                    {/* Day Sky Elements (fade out with skyDarkness) */}
+                    <div 
+                      className="absolute inset-0 pointer-events-none transition-opacity duration-500 ease-in-out"
+                      style={{ opacity: 1 - skyDarkness }}
+                    >
+                      {sunDetails && (
+                        <>
+                          {/* Soft atmospheric sun glow spreading across the box */}
+                          <div 
+                            className="absolute inset-0 transition-all duration-1000 pointer-events-none z-0"
+                            style={{
+                              backgroundImage: `radial-gradient(circle at ${sunDetails.left + 16}px ${sunDetails.top + 16}px, ${sunDetails.glowColor} 0%, transparent 65%)`
+                            }}
+                          />
+                          
+                          {/* Dynamic Pulsating Sun Rays (smooth, no shake) */}
+                          <div 
+                            className="absolute h-8 w-8 rounded-full animate-[weatherSunRayPulse_8s_linear_infinite] pointer-events-none z-0"
+                            style={{
+                              left: `${sunDetails.left}px`,
+                              top: `${sunDetails.top}px`,
+                              background: sunDetails.rayColor,
+                              filter: 'blur(8px)',
+                              transform: `scale(${sunDetails.raySize}) translate3d(0,0,0)`,
+                              willChange: 'transform'
+                            }}
+                          />
 
-                            {/* Core Sun Body (smooth, no shake, real position) */}
-                            <div 
-                              className={`absolute h-8 w-8 rounded-full bg-gradient-to-br ${sunDetails.sunClass} animate-[weatherSunPulse_4s_ease-in-out_infinite] z-0`}
-                              style={{
-                                left: `${sunDetails.left}px`,
-                                top: `${sunDetails.top}px`,
-                                transform: 'translate3d(0,0,0)',
-                                willChange: 'transform'
-                              }}
-                            />
-                          </>
-                        )}
-                      </>
-                    )}
+                          {/* Core Sun Body (smooth, no shake, real position) */}
+                          <div 
+                            className={`absolute h-8 w-8 rounded-full bg-gradient-to-br ${sunDetails.sunClass} animate-[weatherSunPulse_4s_ease-in-out_infinite] z-0`}
+                            style={{
+                              left: `${sunDetails.left}px`,
+                              top: `${sunDetails.top}px`,
+                              transform: 'translate3d(0,0,0)',
+                              willChange: 'transform'
+                            }}
+                          />
+                        </>
+                      )}
+                    </div>
 
                     <div className="relative px-4 py-4">
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
@@ -5939,6 +6080,33 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                           <span className="text-right text-white/38">
                             {awareness.weather?.activeAlert && awareness.weather?.activeAlert !== "No Active Alerts" ? "Warning" : "Normal"}
                           </span>
+                        </div>
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                          {skyDarkness < 0.5 ? (
+                            <>
+                              <span className="inline-flex min-w-0 items-center gap-2">
+                                <Sun className="h-3.5 w-3.5 text-amber-200/80" />
+                                <span className="shrink-0 text-white/34">Sunrise / Sunset</span>
+                                <span className="truncate text-white/78">
+                                  {formatHour(dynamicSunriseHour)} - {formatHour(dynamicSunsetHour)}
+                                </span>
+                              </span>
+                              <span className="text-right text-white/38">Visible</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="inline-flex min-w-0 items-center gap-2">
+                                <Moon className="h-3.5 w-3.5 text-sky-200/80" />
+                                <span className="shrink-0 text-white/34">Moonrise / Moonset</span>
+                                <span className="truncate text-white/78">
+                                  {formatHour(moonriseHour)} - {formatHour(moonsetHour)}
+                                </span>
+                              </span>
+                              <span className="text-right text-white/38">
+                                {isMoonVisible ? "Visible" : "Hidden"}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
 
