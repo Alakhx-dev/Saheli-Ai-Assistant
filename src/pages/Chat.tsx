@@ -6091,7 +6091,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                                   {formatHour(dynamicSunriseHour)} - {formatHour(dynamicSunsetHour)}
                                 </span>
                               </span>
-                              <span className="text-right text-white/38">Visible</span>
+                              <span className="text-right text-white/38" />
                             </>
                           ) : (
                             <>
@@ -6102,9 +6102,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                                   {formatHour(moonriseHour)} - {formatHour(moonsetHour)}
                                 </span>
                               </span>
-                              <span className="text-right text-white/38">
-                                {isMoonVisible ? "Visible" : "Hidden"}
-                              </span>
+                              <span className="text-right text-white/38" />
                             </>
                           )}
                         </div>
