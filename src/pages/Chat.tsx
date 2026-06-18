@@ -9,6 +9,7 @@ import {
   Plus,
   Minus,
   Upload,
+  Share2,
   
   ChevronLeft,
   ChevronRight,
@@ -44,7 +45,7 @@ import {
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
-import { collection, doc, onSnapshot, orderBy, query, setDoc } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, setDoc, addDoc } from "firebase/firestore";
 import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "firebase/storage";
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
@@ -60,6 +61,7 @@ import {
   getChatEmoji,
   saveTemporaryMemories,
   loadTemporaryMemories,
+  updateChatSessionPinStatus,
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
@@ -1869,6 +1871,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     timing: awareness.timing,
   }), [awareness]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [generatedShareLink, setGeneratedShareLink] = useState("");
+  const [isCopying, setIsCopying] = useState(false);
   const [latestSaheliMessage, setLatestSaheliMessage] = useState("");
   const [memoryProfile, setMemoryProfile] = useState<MemoryProfile | null>(createEmptyMemoryProfile());
   const [temporaryMemories, setTemporaryMemories] = useState<string[]>([]);
@@ -3727,6 +3732,96 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     await persistChatTitleUpdate(chatId, trimmed);
   }, [persistChatTitleUpdate]);
 
+  const handlePinChat = useCallback(async (chatId: string) => {
+    try {
+      const chat = chatSessions.find((c) => c.id === chatId);
+      if (!chat) return;
+      const nextPinStatus = !chat.isPinned;
+      
+      await updateChatSessionPinStatus(chatId, nextPinStatus, user);
+      
+      setChatSessions((prev) =>
+        prev.map((c) => (c.id === chatId ? { ...c, isPinned: nextPinStatus } : c))
+      );
+      
+      toast.success(nextPinStatus ? "Chat pinned to top! 📌" : "Chat unpinned! 🔓");
+    } catch (error) {
+      console.error("Failed to pin/unpin chat", error);
+      toast.error("Could not update pin status.");
+    }
+  }, [chatSessions, user]);
+
+  const handleShareChat = useCallback(async (chatId: string) => {
+    const chat = chatSessions.find((c) => c.id === chatId);
+    if (!chat) return;
+
+    setGeneratedShareLink("");
+    setIsCopying(false);
+    setIsShareModalOpen(true);
+
+    try {
+      const chatMessages = await loadChatMessages(chatId, user);
+      const cleanedMessages = chatMessages.map((m) => ({
+        role: m.role,
+        content: m.content || "",
+        image: m.image || null,
+      }));
+
+      const docRef = await addDoc(collection(db, "shared_chats"), {
+        title: chat.title || "Conversation",
+        emoji: chat.emoji || "💬",
+        messages: cleanedMessages,
+        createdAt: Date.now(),
+      });
+
+      const publicUrl = `${window.location.origin}/share/${docRef.id}`;
+      setGeneratedShareLink(publicUrl);
+    } catch (error) {
+      console.error("Failed to share chat", error);
+      toast.error("Failed to generate public share link.");
+      setIsShareModalOpen(false);
+    }
+  }, [chatSessions, user]);
+
+  const handleCopyShareLink = useCallback(async () => {
+    if (!generatedShareLink) return;
+    try {
+      await navigator.clipboard.writeText(generatedShareLink);
+      setIsCopying(true);
+      
+      try {
+        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextCtor) {
+          const context = new AudioContextCtor();
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(540, context.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(200, context.currentTime + 0.08);
+          gain.gain.setValueAtTime(0.0001, context.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.12);
+          oscillator.connect(gain);
+          gain.connect(context.destination);
+          oscillator.start();
+          oscillator.stop(context.currentTime + 0.12);
+          oscillator.onended = () => void context.close();
+        }
+      } catch (e) {}
+
+      toast.success("Public share link copied! 🔗✨");
+      
+      setTimeout(() => {
+        setIsCopying(false);
+      }, 2000);
+    } catch (err) {
+      console.error("Failed to copy", err);
+      toast.error("Could not copy link to clipboard.");
+    }
+  }, [generatedShareLink]);
+
+
+
   const generateFirstChatTitle = useCallback(async (chatId: string, history: ChatMessage[], modelUsed: string) => {
     const currentChat = chatSessionsRef.current.find((chat) => chat.id === chatId);
     const currentTitle = currentChat?.title || "";
@@ -4977,6 +5072,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         onSelectChat={(chatId) => void handleSelectChat(chatId)}
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
         onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
+        onPinChat={(chatId) => void handlePinChat(chatId)}
+        onShareChat={(chatId) => void handleShareChat(chatId)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
         onToggleSidebar={() => setIsSidebarOpen((previous) => !previous)}
         onToggleTtsMute={handleToggleTtsMute}
@@ -4986,6 +5083,75 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         onLogout={() => void handleLogout()}
         className={`${(isSidebarOpen && isIdle) ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
       />
+
+      {/* Premium Glassmorphic Share Dialog Modal */}
+      <AnimatePresence>
+        {isShareModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+          >
+            {/* Click outside backdrop zone to close the modal */}
+            <div 
+              className="absolute inset-0 bg-transparent cursor-default" 
+              onClick={() => setIsShareModalOpen(false)}
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-[32px] border border-white/10 bg-[#0c0c0e]/95 p-6 text-center shadow-[0_25px_50px_rgba(0,0,0,0.8),0_0_30px_rgba(255,105,180,0.15)] backdrop-blur-2xl"
+            >
+              {/* Subtle pink cosmic glow effect inside card */}
+              <div className="absolute -top-10 -left-10 w-24 h-24 bg-pink-500/15 blur-2xl rounded-full pointer-events-none" />
+              
+              <div className="mx-auto w-12 h-12 flex items-center justify-center bg-pink-500/10 border border-pink-500/20 text-pink-400 rounded-full mb-5 shadow-[0_0_15px_rgba(236,72,153,0.15)]">
+                <Share2 className="w-5 h-5 animate-pulse" />
+              </div>
+              
+              <h3 className="text-lg font-bold text-white mb-2" style={{ fontFamily: "'Sour Gummy', cursive" }}>
+                Share this Chat
+              </h3>
+              <p className="text-[11px] text-white/50 leading-relaxed mb-5">
+                Anyone with this public link can view a static snapshot of this conversation (texts and images).
+              </p>
+
+              {/* Link Input & Copy button wrapper */}
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.02] p-1.5 pl-3.5 mb-5 relative">
+                <span className="text-xs text-white/50 truncate select-all flex-1 text-left select-none">
+                  {generatedShareLink || "Generating shared link..."}
+                </span>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleCopyShareLink}
+                  disabled={!generatedShareLink}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider shadow-lg transition-all duration-300 ${
+                    isCopying 
+                      ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                      : "bg-gradient-to-r from-pink-500/20 to-purple-500/20 border border-pink-500/30 text-pink-100 hover:from-pink-500/30 hover:to-purple-500/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                  }`}
+                >
+                  {isCopying ? "Copied! ✓" : "Copy"}
+                </motion.button>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setIsShareModalOpen(false)}
+                className="w-full rounded-xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] px-4 py-3 text-xs font-semibold text-white/60 hover:text-white transition duration-300"
+              >
+                Close
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div 
         className="chat-content relative z-10 flex h-full flex-col transition-all duration-500" 

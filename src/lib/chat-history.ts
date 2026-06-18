@@ -96,6 +96,7 @@ export interface ChatSessionSummary {
   createdAt: number;
   updatedAt: number;
   titleGenerated?: boolean;
+  isPinned?: boolean;
 }
 
 export interface StoredChatMessage extends ChatMessage {
@@ -259,6 +260,7 @@ export async function loadChatSessions(user: User | null): Promise<ChatSessionSu
         createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
         titleGenerated: typeof chat.titleGenerated === "boolean" ? chat.titleGenerated : chat.title !== "New Chat",
+        isPinned: typeof chat.isPinned === "boolean" ? chat.isPinned : false,
       })),
     );
   }
@@ -277,6 +279,7 @@ export async function loadChatSessions(user: User | null): Promise<ChatSessionSu
         titleGenerated: typeof data.titleGenerated === "boolean"
           ? data.titleGenerated
           : (typeof data.title === "string" ? data.title !== "New Chat" : false),
+        isPinned: typeof data.isPinned === "boolean" ? data.isPinned : false,
       };
     }),
   );
@@ -347,6 +350,24 @@ export async function loadTemporaryMemories(chatId: string, user: User | null): 
     console.error("Failed to load temporary memories from Firestore:", err);
   }
   return [];
+}
+
+export async function updateChatSessionPinStatus(chatId: string, isPinned: boolean, user: User | null) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    const existingChat = chats[chatId];
+    if (existingChat) {
+      existingChat.isPinned = isPinned;
+      chats[chatId] = existingChat;
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, "chats", chatId), {
+    isPinned: isPinned,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 

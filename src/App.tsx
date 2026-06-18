@@ -3,6 +3,7 @@ import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth } from "@/lib/firebase";
 import Login from "./pages/Login";
 import Chat from "./pages/Chat";
+import SharedChat from "./pages/SharedChat";
 import CuteLoader from "./components/CuteLoader";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -21,6 +22,7 @@ const App = () => (
       <Route path="/login" element={<Login />} />
       <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
       <Route path="/chat/:chatId" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+      <Route path="/share/:sharedId" element={<SharedChat />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   </BrowserRouter>

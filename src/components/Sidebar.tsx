@@ -1,12 +1,14 @@
 import React, { memo, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2, MoreHorizontal, Pin, Share2 } from "lucide-react";
 import SaheliLogo from "./SaheliLogo";
 
 export interface ChatSessionListItem {
   id: string;
   title: string;
   emoji?: string;
+  isPinned?: boolean;
 }
 
 interface SidebarProps {
@@ -29,6 +31,8 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void | Promise<void>;
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
+  onPinChat?: (chatId: string) => void | Promise<void>;
+  onShareChat?: (chatId: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
   onToggleSidebar: () => void;
   onToggleTtsMute: () => void;
@@ -51,6 +55,8 @@ interface ChatItemProps {
   onCancelEdit: () => void;
   onCommitEdit: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void | Promise<void>;
+  onPinChat?: (chatId: string) => void | Promise<void>;
+  onShareChat?: (chatId: string) => void | Promise<void>;
 }
 
 const ChatItem = memo(function ChatItem({
@@ -65,9 +71,13 @@ const ChatItem = memo(function ChatItem({
   onCancelEdit,
   onCommitEdit,
   onDeleteChat,
+  onPinChat,
+  onShareChat,
 }: ChatItemProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const isEditing = editingId === chat.id;
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     if (!isEditing || !inputRef.current) {
@@ -77,6 +87,25 @@ const ChatItem = memo(function ChatItem({
     inputRef.current.focus();
     inputRef.current.select();
   }, [isEditing]);
+
+  const handleToggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const isDesktop = window.innerWidth > 768;
+
+    if (isDesktop) {
+      setMenuPosition({
+        top: rect.top + window.scrollY,
+        left: 308, // Fits perfectly outside the 300px sidebar area (left: 20px + width: 280px)
+      });
+    } else {
+      setMenuPosition({
+        top: rect.top + rect.height + window.scrollY + 4,
+        left: Math.max(10, rect.right - 135),
+      });
+    }
+    setIsMenuOpen(!isMenuOpen);
+  };
 
   return (
     <motion.div
@@ -143,31 +172,108 @@ const ChatItem = memo(function ChatItem({
         </button>
       )}
 
-      <div className="ml-2 flex items-center gap-1">
+      <div className="ml-2 flex items-center gap-1.5 relative shrink-0">
+        {chat.isPinned && (
+          <Pin className="h-3 w-3 text-pink-400/80 rotate-45 shrink-0" />
+        )}
         {!isEditing ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onStartEdit(chat.id, title);
-            }}
-            aria-label="Rename chat"
-            className="rounded-full p-1.5 text-white/35 opacity-0 transition duration-200 hover:bg-white/10 hover:text-white group-hover:opacity-100"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
+          <>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleToggleMenu}
+              aria-label="Chat options"
+              className={`rounded-full p-1.5 transition-all duration-200 ${
+                isMenuOpen 
+                  ? "bg-white/15 text-pink-300 opacity-100" 
+                  : "text-white/35 opacity-0 hover:bg-white/10 hover:text-white group-hover:opacity-100"
+              }`}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </motion.button>
+
+            {isMenuOpen && createPortal(
+              <>
+                <div
+                  className="fixed inset-0 z-[10000] bg-transparent"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMenuOpen(false);
+                  }}
+                />
+                <AnimatePresence>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, x: -8 }}
+                    animate={{ opacity: 1, scale: 1, x: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, x: -8 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className="fixed z-[10001] min-w-[130px] rounded-xl border border-white/[0.08] bg-[#0f0f11]/95 p-1 shadow-[0_10px_25px_rgba(0,0,0,0.5),0_0_15px_rgba(255,105,180,0.08)] backdrop-blur-2xl"
+                    style={{
+                      top: menuPosition.top,
+                      left: menuPosition.left,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPinChat?.(chat.id);
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                    >
+                      <Pin className="h-3 w-3 text-pink-400 shrink-0" />
+                      <span>{chat.isPinned ? "Unpin" : "Pin"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartEdit(chat.id, title);
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                    >
+                      <Pencil className="h-3 w-3 text-blue-400 shrink-0" />
+                      <span>Rename</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShareChat?.(chat.id);
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                    >
+                      <Share2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                      <span>Share</span>
+                    </button>
+
+                    <div className="my-0.5 border-t border-white/[0.05]" />
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void onDeleteChat(chat.id);
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-red-400 transition hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <Trash2 className="h-3 w-3 text-red-400 shrink-0" />
+                      <span>Delete</span>
+                    </button>
+                  </motion.div>
+                </AnimatePresence>
+              </>
+              , document.body
+            )}
+          </>
         ) : null}
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            void onDeleteChat(chat.id);
-          }}
-          aria-label="Delete chat"
-          className="rounded-full p-1.5 text-red-300/70 opacity-0 transition duration-200 hover:bg-red-500/10 hover:text-red-200 group-hover:opacity-100"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
       </div>
     </motion.div>
   );
@@ -227,6 +333,8 @@ export default function Sidebar(props: SidebarProps) {
     onSelectChat,
     onDeleteChat,
     onRenameChat,
+    onPinChat,
+    onShareChat,
     onCloseSidebar,
     onToggleSidebar,
     onOpenSettings,
@@ -255,6 +363,14 @@ export default function Sidebar(props: SidebarProps) {
     await onRenameChat(chatId, nextTitle);
     handleCancelEdit();
   };
+
+  const sortedSessions = [...chatSessions].sort((a, b) => {
+    const aPinned = !!a.isPinned;
+    const bPinned = !!b.isPinned;
+    if (aPinned && !bPinned) return -1;
+    if (!aPinned && bPinned) return 1;
+    return 0;
+  });
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
 
@@ -327,11 +443,11 @@ export default function Sidebar(props: SidebarProps) {
           <div className="mb-1.5 px-1 text-[9px] font-semibold uppercase tracking-[0.25em] text-white/28">
             {recentChatsLabel}
           </div>
-          {chatSessions.length === 0 ? (
+          {sortedSessions.length === 0 ? (
             <p className="px-2 py-3 text-sm text-white/42">{isGuest ? noChatsGuestLabel : noChatsAccountLabel}</p>
           ) : (
             <div className="space-y-1.5">
-              {chatSessions.map((chat) => (
+              {sortedSessions.map((chat) => (
                 <ChatItem
                   key={chat.id}
                   chat={chat}
@@ -345,6 +461,8 @@ export default function Sidebar(props: SidebarProps) {
                   onCancelEdit={handleCancelEdit}
                   onCommitEdit={handleCommitEdit}
                   onDeleteChat={onDeleteChat}
+                  onPinChat={onPinChat}
+                  onShareChat={onShareChat}
                 />
               ))}
             </div>
