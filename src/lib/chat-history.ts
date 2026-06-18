@@ -201,8 +201,15 @@ export async function saveChatMessage(chatId: string, message: StoredChatMessage
     return;
   }
 
+  const firestoreMessage: Record<string, any> = {};
+  for (const [key, value] of Object.entries(message)) {
+    if (value !== undefined) {
+      firestoreMessage[key] = value;
+    }
+  }
+
   await addDoc(collection(db, "chats", chatId, "messages"), {
-    ...message,
+    ...firestoreMessage,
     createdAtServer: serverTimestamp(),
   });
 

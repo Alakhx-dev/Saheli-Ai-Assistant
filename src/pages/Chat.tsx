@@ -6135,7 +6135,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         <Dialog open={confirmModal?.isOpen ?? false} onOpenChange={(open) => { if (!open) setConfirmModal(null); }}>
           <DialogContent 
             overlayClassName="z-[105] bg-black/40 backdrop-blur-[8px]"
-            className={`z-[110] theme-${activeTheme} flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
+            className={`z-[110] saheli-app-wrapper theme-${activeTheme} flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
             style={{
               background: "rgba(10, 10, 12, 0.45)",
               backdropFilter: "blur(30px)",
@@ -6964,7 +6964,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
         <DialogContent 
           overlayClassName="!bg-black/35 !backdrop-blur-md"
-          className={`z-[100] theme-${activeTheme} w-[min(30rem,calc(100vw-2rem))] max-w-[30rem] overflow-hidden rounded-[48px] sm:rounded-[48px] border border-white/10 bg-[#0d0616]/60 p-6 text-white backdrop-blur-[30px] transition-all duration-300 shadow-[0_32px_90px_rgba(0,0,0,0.8)]`}
+          className={`z-[100] saheli-app-wrapper theme-${activeTheme} w-[min(30rem,calc(100vw-2rem))] max-w-[30rem] overflow-hidden rounded-[48px] sm:rounded-[48px] border border-white/10 bg-[#0d0616]/60 p-6 text-white backdrop-blur-[30px] transition-all duration-300 shadow-[0_32px_90px_rgba(0,0,0,0.8)]`}
           style={activeTheme === "custom" ? getCustomThemeStyles(customColor) : undefined}
         >
           <div className="space-y-5">
