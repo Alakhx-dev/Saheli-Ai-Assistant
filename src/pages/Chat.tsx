@@ -1856,6 +1856,22 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     onConfirm: () => void | Promise<void>;
   } | null>(null);
 
+  const [renameModal, setRenameModal] = useState<{
+    chatId: string;
+    title: string;
+  } | null>(null);
+
+  const [undoToast, setUndoToast] = useState<{
+    id: string;
+    type: "delete-chat" | "rename-chat";
+    message: string;
+    chatId: string;
+    oldTitle?: string;
+    newTitle?: string;
+    chatData?: any;
+    timeoutId?: any;
+  } | null>(null);
+
   const askConfirmation = (title: string, description: string, onConfirm: () => void | Promise<void>) => {
     setConfirmModal({
       isOpen: true,
@@ -3817,21 +3833,97 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     await refreshChatSessions(null);
   };
 
+  const commitUndoToast = async (currentToast: typeof undoToast) => {
+    if (!currentToast) return;
+    try {
+      if (currentToast.type === "delete-chat") {
+        await deleteChatSession(currentToast.chatId, user);
+      } else if (currentToast.type === "rename-chat") {
+        if (currentToast.newTitle) {
+          await persistChatTitleUpdate(currentToast.chatId, currentToast.newTitle);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to commit undo toast action", err);
+    }
+  };
+
+  const handleUndoAction = () => {
+    if (!undoToast) return;
+
+    if (undoToast.type === "delete-chat") {
+      if (undoToast.chatData) {
+        setChatSessions(prev => {
+          const exists = prev.some(c => c.id === undoToast.chatId);
+          if (exists) return prev;
+          return [undoToast.chatData, ...prev];
+        });
+        if (undoToast.chatData.id) {
+          void handleSelectChat(undoToast.chatData.id);
+        }
+      }
+      toast.success("Delete undone 🔄");
+    } else if (undoToast.type === "rename-chat") {
+      if (undoToast.oldTitle) {
+        syncChatSessionsTitle(undoToast.chatId, undoToast.oldTitle);
+      }
+      toast.success("Rename undone 🔄");
+    }
+
+    if (undoToast.timeoutId) {
+      clearTimeout(undoToast.timeoutId);
+    }
+    setUndoToast(null);
+  };
+
+  const handleDismissUndoToast = async () => {
+    if (!undoToast) return;
+    if (undoToast.timeoutId) {
+      clearTimeout(undoToast.timeoutId);
+    }
+    const current = undoToast;
+    setUndoToast(null);
+    await commitUndoToast(current);
+  };
+
   const handleDeleteChat = async (chatId: string) => {
-    if (!window.confirm("Delete this chat permanently?")) {
-      return;
-    }
+    askConfirmation("Delete Chat", "Delete this chat permanently?", async () => {
+      if (undoToast) {
+        await commitUndoToast(undoToast);
+      }
 
-    await deleteChatSession(chatId, user);
+      const chatData = chatSessions.find(c => c.id === chatId);
+      if (!chatData) return;
 
-    if (currentChatId === chatId) {
-      setCurrentChatId(null);
-      setMessages([]);
-      messagesRef.current = [];
-      navigate("/chat", { replace: true });
-    }
+      setChatSessions(prev => prev.filter(c => c.id !== chatId));
 
-    await refreshChatSessions(currentChatId === chatId ? null : currentChatId);
+      if (currentChatId === chatId) {
+        setCurrentChatId(null);
+        setMessages([]);
+        messagesRef.current = [];
+        navigate("/chat", { replace: true });
+      }
+
+      const toastId = Math.random().toString();
+      const timeoutId = setTimeout(() => {
+        setUndoToast(prev => {
+          if (prev && prev.id === toastId) {
+            void commitUndoToast(prev);
+            return null;
+          }
+          return prev;
+        });
+      }, 4000);
+
+      setUndoToast({
+        id: toastId,
+        type: "delete-chat",
+        message: "Your chat has been deleted",
+        chatId,
+        chatData,
+        timeoutId
+      });
+    });
   };
 
   const handleRenameChat = useCallback(async (chatId: string, newTitle: string) => {
@@ -3840,8 +3932,37 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       return;
     }
 
-    await persistChatTitleUpdate(chatId, trimmed);
-  }, [persistChatTitleUpdate]);
+    const chat = chatSessions.find(c => c.id === chatId);
+    const oldTitle = chat?.title || "";
+    if (oldTitle === trimmed) return;
+
+    if (undoToast) {
+      await commitUndoToast(undoToast);
+    }
+
+    syncChatSessionsTitle(chatId, trimmed);
+
+    const toastId = Math.random().toString();
+    const timeoutId = setTimeout(() => {
+      setUndoToast(prev => {
+        if (prev && prev.id === toastId) {
+          void commitUndoToast(prev);
+          return null;
+        }
+        return prev;
+      });
+    }, 4000);
+
+    setUndoToast({
+      id: toastId,
+      type: "rename-chat",
+      message: `Chat renamed to "${trimmed}"`,
+      chatId,
+      oldTitle,
+      newTitle: trimmed,
+      timeoutId
+    });
+  }, [chatSessions, undoToast, syncChatSessionsTitle]);
 
   const handlePinChat = useCallback(async (chatId: string) => {
     try {
@@ -5095,6 +5216,67 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       >
       <div ref={cursorRef} className="cursor-glow" />
       <CinematicAtmosphere layer="ambient" />
+
+      <AnimatePresence>
+        {undoToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -28, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 350, damping: 26 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100000] flex items-center justify-between gap-3.5 w-[max(18rem,min(25rem,90vw))] pl-3.5 pr-3 py-2 rounded-2xl border border-white/[0.12] bg-white/[0.06] backdrop-blur-[24px] text-white overflow-hidden`}
+            style={{
+              boxShadow: `0 15px 35px rgba(0,0,0,0.35), 0 0 15px ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.glow || "rgba(255,0,120,0.08)"}, inset 0 1px 0 rgba(255,255,255,0.15)`,
+            }}
+          >
+            {/* Background glowing blur behind the toast content */}
+            <div className="absolute inset-0 -z-10 bg-gradient-to-r from-white/[0.01] to-transparent pointer-events-none" />
+
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Glowing Indicator Icon */}
+              <div 
+                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-[rgba(var(--theme-primary-rgb),0.2)] animate-pulse"
+                style={{
+                  background: "rgba(var(--theme-primary-rgb), 0.12)",
+                  boxShadow: `0 0 8px ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.glow || "rgba(255,0,120,0.1)"}`,
+                }}
+              >
+                <Sparkles className="h-2.5 w-2.5 text-[var(--theme-light)]" />
+              </div>
+
+              <span className="text-[11px] font-medium tracking-wide text-slate-100 truncate">
+                {undoToast.message}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleUndoAction}
+                className="text-[9px] font-extrabold tracking-wider uppercase border border-[rgba(var(--theme-primary-rgb),0.25)] bg-[rgba(var(--theme-primary-rgb),0.06)] hover:bg-[rgba(var(--theme-primary-rgb),0.15)] hover:border-[rgba(var(--theme-primary-rgb),0.35)] text-white px-2.5 py-1 rounded-full transition-all duration-300 cursor-pointer shadow-[0_1px_4px_rgba(0,0,0,0.15)] active:scale-[0.95]"
+              >
+                Undo
+              </button>
+              <div className="h-3.5 w-[1px] bg-white/10" />
+              <button
+                type="button"
+                onClick={() => void handleDismissUndoToast()}
+                className="p-1 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition-all duration-300 cursor-pointer hover:rotate-90"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {/* Premium Linear Progress Timer Bar at the bottom */}
+            <motion.div 
+              initial={{ width: "100%" }}
+              animate={{ width: "0%" }}
+              transition={{ duration: 4, ease: "linear" }}
+              className="absolute bottom-0 left-0 h-[1.5px] bg-gradient-to-r from-[var(--theme-primary)] via-pink-400 to-purple-500 opacity-60 shadow-[0_0_4px_rgba(var(--theme-primary-rgb),0.3)]"
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       <AnimatePresence>
         {isDraggingActive && (
@@ -5182,7 +5364,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         onCreateChat={() => void handleCreateChat()}
         onSelectChat={(chatId) => void handleSelectChat(chatId)}
         onDeleteChat={(chatId) => void handleDeleteChat(chatId)}
-        onRenameChat={(chatId, title) => void handleRenameChat(chatId, title)}
+        onRenameChat={(chatId, title) => setRenameModal({ chatId, title })}
         onPinChat={(chatId) => void handlePinChat(chatId)}
         onShareChat={(chatId) => void handleShareChat(chatId)}
         onCloseSidebar={() => setIsSidebarOpen(false)}
@@ -5192,6 +5374,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         onOpenProfile={handleOpenProfileFromSettings}
         onOpenSettings={() => setSettingsPanelOpen(true)}
         onLogout={() => void handleLogout()}
+        activeTheme={activeTheme}
+        customColor={customColor}
         className={`${(isSidebarOpen && isIdle) ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
       />
 
@@ -6446,6 +6630,62 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                 Delete
               </button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={renameModal !== null} onOpenChange={(open) => { if (!open) setRenameModal(null); }}>
+          <DialogContent 
+            overlayClassName="z-[105] bg-black/40 backdrop-blur-[8px]"
+            className={`z-[110] saheli-app-wrapper theme-${activeTheme} flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white !outline-none border ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.border || THEME_SLIDER_CARD_CLASSES.pink.border}`}
+            style={{
+              background: "rgba(10, 10, 12, 0.45)",
+              backdropFilter: "blur(30px)",
+              boxShadow: `0 25px 50px rgba(0, 0, 0, 0.65), 0 0 35px ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.glow || "rgba(255, 0, 120, 0.15)"}, inset 0 1px 0 rgba(255,255,255,0.1)`,
+              borderRadius: "28px",
+              ...(activeTheme === "custom" ? getCustomThemeStyles(customColor) : {})
+            }}
+          >
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-lg font-semibold tracking-tight text-white">
+                Rename Chat
+              </DialogTitle>
+              <DialogDescription className="text-sm text-white/60 mt-2 leading-relaxed">
+                Enter a new name for this conversation.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (renameModal && renameModal.title.trim()) {
+                void handleRenameChat(renameModal.chatId, renameModal.title);
+                setRenameModal(null);
+              }
+            }} className="mt-4 flex flex-col gap-4">
+              <input
+                type="text"
+                value={renameModal?.title ?? ""}
+                onChange={(e) => setRenameModal(prev => prev ? { ...prev, title: e.target.value } : null)}
+                placeholder="Chat title"
+                className={`w-full px-4 py-2.5 rounded-xl border border-white/[0.08] bg-black/40 text-sm text-white outline-none placeholder:text-white/30 transition-all duration-300 ${getFocusBorderClassForModal(activeTheme)}`}
+                autoFocus
+              />
+
+              <div className="flex items-center justify-end gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setRenameModal(null)}
+                  className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-[rgba(var(--theme-primary-rgb),0.15)] bg-[rgba(var(--theme-primary-rgb),0.03)] text-[var(--theme-light)] hover:bg-[rgba(var(--theme-primary-rgb),0.1)] hover:border-[rgba(var(--theme-primary-rgb),0.35)] hover:text-white hover:scale-[1.03] active:scale-[0.97] transition-all duration-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.buttonBg || THEME_SLIDER_CARD_CLASSES.pink.buttonBg} ${THEME_SLIDER_CARD_CLASSES[activeTheme]?.buttonText || THEME_SLIDER_CARD_CLASSES.pink.buttonText}`}
+                >
+                  Done
+                </button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
 

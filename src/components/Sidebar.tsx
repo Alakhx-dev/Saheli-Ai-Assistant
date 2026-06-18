@@ -30,7 +30,7 @@ interface SidebarProps {
   onCreateChat: () => void | Promise<void>;
   onSelectChat: (chatId: string) => void | Promise<void>;
   onDeleteChat: (chatId: string) => void | Promise<void>;
-  onRenameChat: (chatId: string, newTitle: string) => void | Promise<void>;
+  onRenameChat?: (chatId: string, title: string) => void;
   onPinChat?: (chatId: string) => void | Promise<void>;
   onShareChat?: (chatId: string) => void | Promise<void>;
   onCloseSidebar?: () => void;
@@ -40,6 +40,8 @@ interface SidebarProps {
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onLogout: () => void | Promise<void>;
+  activeTheme?: string;
+  customColor?: string;
   className?: string;
 }
 
@@ -47,13 +49,10 @@ interface ChatItemProps {
   chat: ChatSessionListItem;
   isActive: boolean;
   title: string;
-  editingId: string | null;
-  editingTitle: string;
+  activeTheme?: string;
+  customColor?: string;
   onSelectChat: (chatId: string) => void | Promise<void>;
-  onStartEdit: (chatId: string, title: string) => void;
-  onEditingTitleChange: (value: string) => void;
-  onCancelEdit: () => void;
-  onCommitEdit: (chatId: string) => void;
+  onRenameChat?: (chatId: string, title: string) => void;
   onDeleteChat: (chatId: string) => void | Promise<void>;
   onPinChat?: (chatId: string) => void | Promise<void>;
   onShareChat?: (chatId: string) => void | Promise<void>;
@@ -63,30 +62,16 @@ const ChatItem = memo(function ChatItem({
   chat,
   isActive,
   title,
-  editingId,
-  editingTitle,
+  activeTheme,
+  customColor,
   onSelectChat,
-  onStartEdit,
-  onEditingTitleChange,
-  onCancelEdit,
-  onCommitEdit,
+  onRenameChat,
   onDeleteChat,
   onPinChat,
   onShareChat,
 }: ChatItemProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const isEditing = editingId === chat.id;
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!isEditing || !inputRef.current) {
-      return;
-    }
-
-    inputRef.current.focus();
-    inputRef.current.select();
-  }, [isEditing]);
 
   const handleToggleMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -125,93 +110,80 @@ const ChatItem = memo(function ChatItem({
       <span className="text-[14px] shrink-0 w-4 h-4 flex items-center justify-center select-none transition duration-300 group-hover:scale-105">
         {chat.emoji || "💬"}
       </span>
-      {isEditing ? (
-        <input
-          ref={inputRef}
-          value={editingTitle}
-          onChange={(event) => onEditingTitleChange(event.target.value)}
-          onBlur={onCancelEdit}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              onCommitEdit(chat.id);
-            }
-            if (event.key === "Escape") {
-              event.preventDefault();
-              onCancelEdit();
-            }
-          }}
-          className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/40"
-          autoFocus
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => void onSelectChat(chat.id)}
-          onDoubleClick={() => onStartEdit(chat.id, title)}
-          className={`min-w-0 flex-1 overflow-hidden text-left text-[13px] tracking-wide transition-all duration-300 ease-out select-none ${
-            isActive 
-              ? "text-pink-100/85 font-medium drop-shadow-[0_0_4px_rgba(244,63,94,0.2)]" 
-              : "text-slate-400/65 hover:text-slate-300/85 group-hover:text-slate-200/85"
-          }`}
-        >
-          <span className="block truncate">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={title}
-                initial={{ opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -2 }}
-                transition={{ duration: 0.18, ease: "easeOut" }}
-                className="block"
-              >
-                {title}
-              </motion.span>
-            </AnimatePresence>
-          </span>
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => void onSelectChat(chat.id)}
+        onDoubleClick={() => onRenameChat?.(chat.id, title)}
+        className={`min-w-0 flex-1 overflow-hidden text-left text-[13px] tracking-wide transition-all duration-300 ease-out select-none ${
+          isActive 
+            ? "text-pink-100/85 font-medium drop-shadow-[0_0_4px_rgba(244,63,94,0.2)]" 
+            : "text-slate-400/65 hover:text-slate-300/85 group-hover:text-slate-200/85"
+        }`}
+      >
+        <span className="block truncate">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={title}
+              initial={{ opacity: 0, y: 2 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -2 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="block"
+            >
+              {title}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+      </button>
 
       <div className="ml-2 flex items-center gap-1.5 relative shrink-0">
         {chat.isPinned && (
           <Pin className="h-3 w-3 text-pink-400/80 rotate-45 shrink-0" />
         )}
-        {!isEditing ? (
-          <>
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleToggleMenu}
-              aria-label="Chat options"
-              className={`rounded-full p-1.5 transition-all duration-200 ${
-                isMenuOpen 
-                  ? "bg-white/15 text-pink-300 opacity-100" 
-                  : "text-white/35 opacity-0 hover:bg-white/10 hover:text-white group-hover:opacity-100"
-              }`}
-            >
-              <MoreHorizontal className="h-3.5 w-3.5" />
-            </motion.button>
+        <>
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleToggleMenu}
+            aria-label="Chat options"
+            className={`rounded-full p-1.5 transition-all duration-200 ${
+              isMenuOpen 
+                ? "bg-white/15 text-pink-300 opacity-100" 
+                : "text-white/35 opacity-0 hover:bg-white/10 hover:text-white group-hover:opacity-100"
+            }`}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </motion.button>
 
-            {isMenuOpen && createPortal(
-              <>
-                <div
-                  className="fixed inset-0 z-[10000] bg-transparent"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsMenuOpen(false);
-                  }}
-                />
-                <AnimatePresence>
+          {isMenuOpen && createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[10000] bg-transparent"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMenuOpen(false);
+                }}
+              />
+              <AnimatePresence>
+                <div 
+                  className={`saheli-app-wrapper theme-${activeTheme || "pink"}`}
+                  style={activeTheme === "custom" && customColor ? getCustomThemeStyles(customColor) : undefined}
+                >
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95, x: -8 }}
                     animate={{ opacity: 1, scale: 1, x: 0 }}
                     exit={{ opacity: 0, scale: 0.95, x: -8 }}
                     transition={{ duration: 0.15, ease: "easeOut" }}
-                    className="fixed z-[10001] min-w-[130px] rounded-xl border border-white/[0.08] bg-[#0f0f11]/95 p-1 shadow-[0_10px_25px_rgba(0,0,0,0.5),0_0_15px_rgba(255,105,180,0.08)] backdrop-blur-2xl"
+                    className="fixed z-[10001] min-w-[130px] rounded-xl border border-[rgba(var(--theme-primary-rgb),0.32)] bg-black/55 p-1 backdrop-blur-2xl"
                     style={{
                       top: menuPosition.top,
                       left: menuPosition.left,
+                      boxShadow: `0 10px 25px rgba(0, 0, 0, 0.5), 0 0 22px ${
+                        activeTheme === "custom"
+                          ? "rgba(var(--theme-primary-rgb), 0.25)"
+                          : THEME_GLOWS[activeTheme || "pink"] || "rgba(255, 105, 180, 0.25)"
+                      }`,
                     }}
                   >
                     <button
@@ -221,9 +193,9 @@ const ChatItem = memo(function ChatItem({
                         onPinChat?.(chat.id);
                         setIsMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-[rgba(var(--theme-primary-rgb),0.08)] hover:text-[var(--theme-light)]"
                     >
-                      <Pin className="h-3 w-3 text-pink-400 shrink-0" />
+                      <Pin className="h-3 w-3 text-[var(--theme-primary)] shrink-0" />
                       <span>{chat.isPinned ? "Unpin" : "Pin"}</span>
                     </button>
 
@@ -231,12 +203,12 @@ const ChatItem = memo(function ChatItem({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onStartEdit(chat.id, title);
+                        onRenameChat?.(chat.id, title);
                         setIsMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-[rgba(var(--theme-primary-rgb),0.08)] hover:text-[var(--theme-light)]"
                     >
-                      <Pencil className="h-3 w-3 text-blue-400 shrink-0" />
+                      <Pencil className="h-3 w-3 text-[var(--theme-primary)] shrink-0" />
                       <span>Rename</span>
                     </button>
 
@@ -247,13 +219,13 @@ const ChatItem = memo(function ChatItem({
                         onShareChat?.(chat.id);
                         setIsMenuOpen(false);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-white/[0.05] hover:text-pink-200"
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] font-medium text-white/80 transition hover:bg-[rgba(var(--theme-primary-rgb),0.08)] hover:text-[var(--theme-light)]"
                     >
                       <Share2 className="h-3 w-3 text-emerald-400 shrink-0" />
                       <span>Share</span>
                     </button>
 
-                    <div className="my-0.5 border-t border-white/[0.05]" />
+                    <div className="my-0.5 border-t border-[rgba(var(--theme-primary-rgb),0.1)]" />
 
                     <button
                       type="button"
@@ -268,12 +240,12 @@ const ChatItem = memo(function ChatItem({
                       <span>Delete</span>
                     </button>
                   </motion.div>
-                </AnimatePresence>
-              </>
-              , document.body
-            )}
-          </>
-        ) : null}
+                </div>
+              </AnimatePresence>
+            </>
+            , document.body
+          )}
+        </>
       </div>
     </motion.div>
   );
@@ -338,31 +310,11 @@ export default function Sidebar(props: SidebarProps) {
     onCloseSidebar,
     onToggleSidebar,
     onOpenSettings,
+    activeTheme,
+    customColor,
     className = "",
   } = props;
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
 
-  const handleStartEdit = (chatId: string, title: string) => {
-    setEditingId(chatId);
-    setEditingTitle(title);
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditingTitle("");
-  };
-
-  const handleCommitEdit = async (chatId: string) => {
-    const nextTitle = editingTitle.trim();
-    if (!nextTitle) {
-      handleCancelEdit();
-      return;
-    }
-
-    await onRenameChat(chatId, nextTitle);
-    handleCancelEdit();
-  };
 
   const sortedSessions = [...chatSessions].sort((a, b) => {
     const aPinned = !!a.isPinned;
@@ -453,13 +405,10 @@ export default function Sidebar(props: SidebarProps) {
                   chat={chat}
                   isActive={currentChatId === chat.id}
                   title={resolveChatTitle(chat.title)}
-                  editingId={editingId}
-                  editingTitle={editingTitle}
+                  activeTheme={activeTheme}
+                  customColor={customColor}
                   onSelectChat={onSelectChat}
-                  onStartEdit={handleStartEdit}
-                  onEditingTitleChange={setEditingTitle}
-                  onCancelEdit={handleCancelEdit}
-                  onCommitEdit={handleCommitEdit}
+                  onRenameChat={onRenameChat}
                   onDeleteChat={onDeleteChat}
                   onPinChat={onPinChat}
                   onShareChat={onShareChat}
@@ -499,3 +448,54 @@ export default function Sidebar(props: SidebarProps) {
     </>
   );
 }
+
+const THEME_GLOWS: Record<string, string> = {
+  pink: "rgba(255, 105, 180, 0.25)",
+  yellow: "rgba(255, 215, 0, 0.25)",
+  blue: "rgba(0, 229, 255, 0.25)",
+  orchid: "rgba(213, 0, 249, 0.25)",
+  peach: "rgba(255, 158, 125, 0.25)",
+  beige: "rgba(212, 184, 149, 0.2)",
+  maroon: "rgba(208, 28, 63, 0.25)",
+  gemini: "rgba(74, 137, 255, 0.25)",
+};
+
+const getCustomThemeStyles = (hex: string) => {
+  const cleanHex = hex.replace("#", "");
+  const r = parseInt(cleanHex.substring(0, 2), 16) || 0;
+  const g = parseInt(cleanHex.substring(2, 4), 16) || 0;
+  const b = parseInt(cleanHex.substring(4, 6), 16) || 0;
+
+  const rNormal = r / 255;
+  const gNormal = g / 255;
+  const bNormal = b / 255;
+  const max = Math.max(rNormal, gNormal, bNormal);
+  const min = Math.min(rNormal, gNormal, bNormal);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rNormal: h = (gNormal - bNormal) / d + (gNormal < bNormal ? 6 : 0); break;
+      case gNormal: h = (bNormal - rNormal) / d + 2; break;
+      case bNormal: h = (rNormal - gNormal) / d + 4; break;
+    }
+    h /= 6;
+  }
+  const hDeg = Math.round(h * 360);
+  const sPct = Math.round(s * 100);
+  const themeLight = `hsl(${hDeg}, ${sPct}%, 88%)`;
+
+  return {
+    "--theme-primary": `#${cleanHex}`,
+    "--theme-primary-rgb": `${r}, ${g}, ${b}`,
+    "--theme-glow": `rgba(${r}, ${g}, ${b}, 0.35)`,
+    "--theme-glow-rgb": `${r}, ${g}, ${b}`,
+    "--theme-border": `rgba(${r}, ${g}, ${b}, 0.22)`,
+    "--theme-soft": `rgba(${r}, ${g}, ${b}, 0.1)`,
+    "--theme-light": themeLight,
+  } as React.CSSProperties;
+};
