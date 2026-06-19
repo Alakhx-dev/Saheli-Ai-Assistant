@@ -72,6 +72,11 @@ export interface CustomProfile {
   description?: string;
 }
 
+export interface AiSelfFact {
+  value: string;
+  updatedAt: string; // ISO String
+}
+
 export interface MemoryProfile {
   preferences: string[];
   facts: string[];
@@ -79,6 +84,7 @@ export interface MemoryProfile {
   chat_history: MemoryChatEntry[];
   images: MemoryImageEntry[];
   customProfile?: CustomProfile;
+  aiSelfProfile?: Record<string, AiSelfFact>;
 }
 
 interface MemoryDocShape {
@@ -86,6 +92,7 @@ interface MemoryDocShape {
   facts?: string[];
   memoryEnabled?: boolean;
   customProfile?: CustomProfile;
+  aiSelfProfile?: Record<string, AiSelfFact>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -415,6 +422,7 @@ function mapMemoryDoc(data: MemoryDocShape | undefined): Omit<MemoryProfile, "ch
     facts: normalizeList(data?.facts, MAX_FACTS),
     memoryEnabled: typeof data?.memoryEnabled === "boolean" ? data.memoryEnabled : true,
     customProfile: data?.customProfile || {},
+    aiSelfProfile: data?.aiSelfProfile || {},
   };
 }
 
@@ -587,18 +595,24 @@ export async function fetchMemory(
 ): Promise<MemoryProfile> {
   if (!user) {
     let customProfile = {};
+    let aiSelfProfile = {};
     try {
       const saved = localStorage.getItem("saheli_guest_custom_profile");
       if (saved) {
         customProfile = JSON.parse(saved);
       }
+      const savedAi = localStorage.getItem("saheli_guest_ai_profile");
+      if (savedAi) {
+        aiSelfProfile = JSON.parse(savedAi);
+      }
     } catch (err) {
-      console.error("Failed to parse guest custom profile:", err);
+      console.error("Failed to parse guest profiles:", err);
     }
     return {
       ...createEmptyMemoryProfile(),
       memoryEnabled: localStorage.getItem(LOCAL_MEMORY_ENABLED_KEY) !== "false",
       customProfile,
+      aiSelfProfile,
     };
   }
 
@@ -647,6 +661,22 @@ export async function setMemoryEnabled(user: User | null, enabled: boolean) {
   await ensureUserMemoryDoc(user);
   await updateDoc(getUserDocRef(user), {
     memoryEnabled: enabled,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function saveAiSelfProfile(
+  user: User | null,
+  profile: Record<string, AiSelfFact>
+) {
+  if (!user) {
+    localStorage.setItem("saheli_guest_ai_profile", JSON.stringify(profile));
+    return;
+  }
+
+  await ensureUserMemoryDoc(user);
+  await updateDoc(getUserDocRef(user), {
+    aiSelfProfile: profile,
     updatedAt: serverTimestamp(),
   });
 }

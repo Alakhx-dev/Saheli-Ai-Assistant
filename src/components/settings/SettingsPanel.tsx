@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -13,7 +13,7 @@ import { characterDb } from "../../utils/indexedDb";
 
 type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
-  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
+  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
   | "incognito" | "api_keys" | "music" | "studio_light";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
@@ -434,6 +434,8 @@ interface SettingsPanelProps {
   memoryEnabled: boolean;
   onMemoryToggle: (enabled: boolean) => void;
   onManageMemory: () => void;
+  aiSelfProfile?: Record<string, { value: string; updatedAt: string }>;
+  onUpdateAiSelfProfile?: (profile: Record<string, { value: string; updatedAt: string }>) => void;
   profileName: string;
   profileSubtext: string;
   profileImageUrl?: string;
@@ -506,6 +508,8 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "chat_memory", label: "Chat Memory", type: "item", parentId: "memory" },
   { id: "image_memory", label: "Image Memory", type: "item", parentId: "memory" },
   { id: "memory_toggle", label: "Memory Auto-Save", type: "item", parentId: "memory" },
+  { id: "custom_profile", label: "Custom Profile", type: "item", parentId: "memory" },
+  { id: "swara_profile", label: "Swara's Profile", type: "item", parentId: "memory" },
 
   { id: "account", label: "Account", type: "tab", parentId: null },
   { id: "profile", label: "Profile Settings", type: "item", parentId: "account" },
@@ -536,6 +540,14 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
   const studioLightItem = cleaned.find(item => item.id === "studio_light");
   if (!studioLightItem) {
     cleaned.push({ id: "studio_light", label: "Studio Light", type: "item", parentId: "personalization" });
+  }
+  const swaraProfileItem = cleaned.find(item => item.id === "swara_profile");
+  if (!swaraProfileItem) {
+    cleaned.push({ id: "swara_profile", label: "Swara's Profile", type: "item", parentId: "memory" });
+  }
+  const customProfileItem = cleaned.find(item => item.id === "custom_profile");
+  if (!customProfileItem) {
+    cleaned.push({ id: "custom_profile", label: "Custom Profile", type: "item", parentId: "memory" });
   }
   return cleaned;
 };
@@ -634,6 +646,8 @@ export default function SettingsPanel({
   memoryEnabled,
   onMemoryToggle,
   onManageMemory,
+  aiSelfProfile = {},
+  onUpdateAiSelfProfile,
   profileName,
   profileSubtext,
   profileImageUrl,
@@ -671,6 +685,133 @@ export default function SettingsPanel({
   onIncognitoModeChange,
 }: SettingsPanelProps) {
   const t = getLang();
+  
+  // States and Handlers for Swara's Self-Persona Profile Facts
+  const [isAddingFact, setIsAddingFact] = useState(false);
+  const [newFactKey, setNewFactKey] = useState("");
+  const [newFactValue, setNewFactValue] = useState("");
+  const [editingFactKey, setEditingFactKey] = useState<string | null>(null);
+  const [editingFactValue, setEditingFactValue] = useState("");
+  const [activeFactIndex, setActiveFactIndex] = useState(0);
+  const [slideDirection, setSlideDirection] = useState<"up" | "down">("up");
+  const swaraScrollRef = useRef<HTMLDivElement>(null);
+
+  const [customAvatar, setCustomAvatar] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(`swara_custom_avatar_base64_${selectedCharacter}`) || null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      setCustomAvatar(localStorage.getItem(`swara_custom_avatar_base64_${selectedCharacter}`) || null);
+    } catch {
+      setCustomAvatar(null);
+    }
+  }, [selectedCharacter]);
+
+  const profileEntries = useMemo(() => Object.entries(aiSelfProfile || {}), [aiSelfProfile]);
+
+  useEffect(() => {
+    const el = swaraScrollRef.current;
+    if (!el || profileEntries.length <= 1) return;
+
+    const handleWheelEvent = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.deltaY > 0) {
+        setSlideDirection("up");
+        setActiveFactIndex((prev) => (prev + 1) % profileEntries.length);
+      } else if (e.deltaY < 0) {
+        setSlideDirection("down");
+        setActiveFactIndex((prev) => (prev - 1 + profileEntries.length) % profileEntries.length);
+      }
+    };
+
+    el.addEventListener("wheel", handleWheelEvent, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", handleWheelEvent);
+    };
+  }, [profileEntries.length, activeSection]);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      try {
+        localStorage.setItem(`swara_custom_avatar_base64_${selectedCharacter}`, base64String);
+        setCustomAvatar(base64String);
+        toast.success("Profile photo updated! 📸");
+      } catch (err) {
+        toast.error("Image file is too large! Please try a smaller image.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteAvatar = () => {
+    try {
+      localStorage.removeItem(`swara_custom_avatar_base64_${selectedCharacter}`);
+      setCustomAvatar(null);
+      toast.success("Profile photo reset to default! 🧹");
+    } catch {
+      setCustomAvatar(null);
+    }
+  };
+
+  const handleAddFact = () => {
+    const key = newFactKey.trim().toLowerCase().replace(/\s+/g, "_");
+    const val = newFactValue.trim();
+    if (!key || !val || !onUpdateAiSelfProfile) return;
+
+    const updated = {
+      ...(aiSelfProfile || {}),
+      [key]: {
+        value: val,
+        updatedAt: new Date().toISOString()
+      }
+    };
+    onUpdateAiSelfProfile(updated);
+    setNewFactKey("");
+    setNewFactValue("");
+    setIsAddingFact(false);
+    toast.success("Added to Swara's profile! 🌸");
+  };
+
+  const handleStartEditFact = (key: string, value: string) => {
+    setEditingFactKey(key);
+    setEditingFactValue(value);
+  };
+
+  const handleSaveEditedFact = (key: string) => {
+    const val = editingFactValue.trim();
+    if (!val || !onUpdateAiSelfProfile) return;
+
+    const updated = {
+      ...(aiSelfProfile || {}),
+      [key]: {
+        value: val,
+        updatedAt: new Date().toISOString()
+      }
+    };
+    onUpdateAiSelfProfile(updated);
+    setEditingFactKey(null);
+    setEditingFactValue("");
+    toast.success("Swara's detail updated! ✨");
+  };
+
+  const handleDeleteFact = (key: string) => {
+    if (!onUpdateAiSelfProfile) return;
+    const updated = { ...(aiSelfProfile || {}) };
+    delete updated[key];
+    onUpdateAiSelfProfile(updated);
+    toast.success("Swara's detail deleted! 🗑️");
+  };
+
   const accountFileRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [showApplyConfirmChar, setShowApplyConfirmChar] = useState<{ id: string; name: string; url: string; timestamp: number } | null>(null);
@@ -3709,9 +3850,10 @@ export default function SettingsPanel({
         );
       }
 
-      case "memory_toggle":
+      case "memory_toggle": {
         return (
-          <motion.div key="memory-toggle-direct" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+          <motion.div key="memory-toggle-direct" className="space-y-4" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+            {/* Memory Auto-Save Toggle */}
             <div className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-white">Memory Auto-Save</p>
@@ -3729,6 +3871,385 @@ export default function SettingsPanel({
             </div>
           </motion.div>
         );
+      }
+
+      case "swara_profile": {
+        const activeCharCard = characterCards.find(c => c.id === selectedCharacter) || characterCards[0];
+        const activeMascotImg = activeCharCard.image;
+
+        const getFactIconAndColor = (factKey: string) => {
+          const k = factKey.toLowerCase();
+          if (k.includes("education") || k.includes("college") || k.includes("study") || k.includes("degree") || k.includes("school") || k.includes("class")) {
+            return { icon: <GraduationCap className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎓" };
+          }
+          if (k.includes("color")) {
+            return { icon: <Palette className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎨" };
+          }
+          if (k.includes("height")) {
+            return { icon: <Ruler className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "📏" };
+          }
+          if (k.includes("location") || k.includes("place") || k.includes("city") || k.includes("town") || k.includes("home") || k.includes("address")) {
+            return { icon: <MapPin className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "📍" };
+          }
+          if (k.includes("birthday") || k.includes("dob") || k.includes("birth")) {
+            return { icon: <CalendarDays className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎂" };
+          }
+          if (k.includes("relationship") || k.includes("status") || k.includes("boyfriend") || k.includes("love") || k.includes("partner")) {
+            return { icon: <Heart className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "💖" };
+          }
+          if (k.includes("age") || k.includes("year")) {
+            return { icon: <Sparkles className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "✨" };
+          }
+          return { icon: <User className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "✨" };
+        };
+
+        const handlePrev = () => {
+          if (profileEntries.length <= 1) return;
+          setSlideDirection("down");
+          setActiveFactIndex((prev) => (prev - 1 + profileEntries.length) % profileEntries.length);
+        };
+
+        const handleNext = () => {
+          if (profileEntries.length <= 1) return;
+          setSlideDirection("up");
+          setActiveFactIndex((prev) => (prev + 1) % profileEntries.length);
+        };
+
+        const activeEntry = profileEntries[activeFactIndex];
+
+        const slideVariants: any = {
+          initial: (dir: "up" | "down") => ({
+            opacity: 0,
+            y: dir === "up" ? 15 : -15
+          }),
+          animate: {
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.22, ease: "easeOut" }
+          },
+          exit: (dir: "up" | "down") => ({
+            opacity: 0,
+            y: dir === "up" ? -15 : 15,
+            transition: { duration: 0.18, ease: "easeIn" }
+          })
+        };
+
+        return (
+          <motion.div 
+            key="swara-profile-direct" 
+            className="space-y-4" 
+            initial={{ opacity: 0, y: 8 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            exit={{ opacity: 0, y: -8 }} 
+            transition={{ duration: 0.12, ease: "easeOut" }}
+          >
+            {/* Inject Scroller hider styles inline */}
+            <style dangerouslySetInnerHTML={{ __html: `
+              .no-scrollbar::-webkit-scrollbar {
+                display: none;
+              }
+              .no-scrollbar {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+              }
+            `}} />
+
+            {/* Identity Card Container (Frosted Cyber-Glass Card) */}
+            <div className="rounded-[32px] border border-pink-500/20 bg-gradient-to-b from-black/80 via-purple-950/20 to-black/90 p-6 backdrop-blur-3xl shadow-[0_25px_60px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.06)] space-y-6 relative overflow-hidden flex flex-col items-center">
+              
+              {/* Soft neon background glows */}
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full filter blur-[60px] pointer-events-none animate-pulse" style={{ animationDuration: "6s" }} />
+              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full filter blur-[60px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
+
+              {/* Cute digital background particles */}
+              <div className="absolute top-6 left-6 text-pink-500/15 text-lg select-none pointer-events-none font-mono">⚡</div>
+              <div className="absolute bottom-6 right-6 text-purple-500/15 text-md select-none pointer-events-none font-mono">✨</div>
+
+              {/* FIXED Top Section: Holographic Circular Avatar & Stats Console */}
+              <div className="flex flex-col items-center text-center relative w-full pb-5 border-b border-white/10 select-none">
+                
+                {/* Holographic Circular Avatar Slot */}
+                <div className="relative group/avatar shrink-0 mb-4 select-none">
+                  {/* Outer breathing tech glow */}
+                  <div className="absolute -inset-2 rounded-full bg-pink-500/10 blur-md animate-pulse pointer-events-none" />
+                  
+                  {/* Spinning Holographic tech-ring */}
+                  <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-[spin_8s_linear_infinite] opacity-75 blur-[0.8px] pointer-events-none" />
+                  
+                  {/* Avatar wrapper */}
+                  <div className="relative w-22 h-22 rounded-full p-[2.5px] bg-black shadow-2xl overflow-hidden flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+                    <img 
+                      src={customAvatar || activeMascotImg} 
+                      alt="Swara" 
+                      className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${!customAvatar ? "scale-[1.6] object-top origin-top" : "scale-100 object-center"}`}
+                    />
+                    
+                    {/* Upload camera overlay */}
+                    <label htmlFor="swara-avatar-upload" className="absolute inset-0 rounded-full bg-black/70 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-300" title="Upload Custom Photo">
+                      <Camera className="w-4 h-4 text-pink-300 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
+                    </label>
+                    <input 
+                      type="file" 
+                      id="swara-avatar-upload" 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={handleAvatarUpload} 
+                    />
+                  </div>
+
+                  {/* Custom avatar reset button (floating reset badge) */}
+                  {customAvatar && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteAvatar}
+                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 border border-white/20 text-white hover:bg-red-600 hover:scale-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(239,68,68,0.5)] z-30 flex items-center justify-center cursor-pointer animate-in zoom-in duration-200"
+                      title="Reset to default mascot"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Cyber Mascot Name (Sleek Gradient Text) */}
+                <h4 className="text-lg font-bold tracking-widest uppercase font-mono text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-pink-200 drop-shadow-[0_0_12px_rgba(236,72,153,0.25)]">
+                  Swara
+                </h4>
+                
+                {/* Slogan subtext */}
+                <p className="text-[10px] text-pink-400 font-mono tracking-widest uppercase mt-1 flex items-center gap-1.5 justify-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
+                  Your cutest bestie 🌸
+                </p>
+
+                {/* RPG Style Bond Affinity meter */}
+                <div className="w-[160px] mt-3.5 space-y-1">
+                  <div className="flex justify-between items-center text-[8px] font-mono tracking-widest text-pink-300/80 uppercase">
+                    <span>Bond Level</span>
+                    <span className="flex items-center gap-0.5 animate-pulse text-pink-300">99% 💖</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-black/60 border border-pink-500/20 rounded-full overflow-hidden p-[1px]">
+                    <div className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]" style={{ width: "99%" }} />
+                  </div>
+                </div>
+
+                {/* Add Detail Plus Button (absolute top right, custom cyber button styling) */}
+                <button
+                  type="button"
+                  onClick={() => setIsAddingFact(true)}
+                  className="absolute top-0 right-0 p-2 rounded-xl border border-pink-500/30 bg-pink-500/10 text-pink-300 hover:text-white hover:bg-pink-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-[0_0_12px_rgba(236,72,153,0.2)] z-30"
+                  title="Add new fact capsule"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Adding Fact Form */}
+              {isAddingFact && (
+                <div className="w-full bg-black/65 border border-pink-500/20 rounded-2xl p-4 space-y-3 shadow-xl relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-purple-600" />
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-pink-400 uppercase tracking-widest block font-mono">Fact Label</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. favorite_color, education, birthday"
+                      value={newFactKey}
+                      onChange={(e) => setNewFactKey(e.target.value)}
+                      className="w-full py-1.5 px-3 text-xs bg-white/5 border border-white/10 focus:border-pink-500/40 rounded-xl text-white outline-none placeholder:text-white/20 font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-bold text-pink-400 uppercase tracking-widest block font-mono">Fact Value</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. black, B.Tech 3rd year"
+                      value={newFactValue}
+                      onChange={(e) => setNewFactValue(e.target.value)}
+                      className="w-full py-1.5 px-3 text-xs bg-white/5 border border-white/10 focus:border-pink-500/40 rounded-xl text-white outline-none placeholder:text-white/20 font-mono"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1 font-mono">
+                    <button
+                      type="button"
+                      onClick={() => { setIsAddingFact(false); setNewFactKey(""); setNewFactValue(""); }}
+                      className="px-3 py-1 text-[10px] border border-white/10 rounded-xl text-white/70 hover:bg-white/5 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddFact}
+                      className="px-3 py-1 text-[10px] font-bold bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl text-white transition shadow-md shadow-pink-500/20"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ROLLING/CAROUSEL Detail Carousel */}
+              <div className="w-full relative flex items-center gap-3.5 select-none py-1">
+                {profileEntries.length === 0 ? (
+                  <div className="w-full text-center py-8 px-4 border border-dashed border-pink-500/25 rounded-3xl bg-pink-500/[0.02] relative">
+                    <p className="text-sm font-mono text-pink-300/40 italic">No details remembered yet.</p>
+                    <p className="text-[10px] text-white/40 mt-2 leading-relaxed max-w-[210px] mx-auto font-mono">
+                      She automatically remembers facts about herself as you talk to her!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Left Scroll Chevron */}
+                    {profileEntries.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={handlePrev}
+                        className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 hover:text-white hover:bg-pink-500/25 transition-all duration-300 active:scale-90 cursor-pointer shrink-0 shadow-sm"
+                      >
+                        <ChevronRight className="h-4.5 w-4.5 rotate-180" />
+                      </button>
+                    )}
+
+                    {/* Smaller Cyber-Glass Card (with Mouse wheel scroll & Up/Down Fade transition animation) */}
+                    <div className="flex-1 min-w-0">
+                      {activeEntry && (
+                        <div 
+                          ref={swaraScrollRef}
+                          className="w-full p-5 rounded-2xl border border-pink-500/20 bg-gradient-to-b from-white/[0.05] via-white/[0.02] to-transparent flex flex-col items-center text-center justify-center relative min-h-[145px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_24px_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-pink-500/35 overflow-hidden"
+                        >
+                          <AnimatePresence initial={false} custom={slideDirection} mode="wait">
+                            <motion.div 
+                              key={activeFactIndex + (editingFactKey ? "-editing" : "-viewing")}
+                              custom={slideDirection}
+                              variants={slideVariants}
+                              initial="initial"
+                              animate="animate"
+                              exit="exit"
+                              className="w-full flex flex-col items-center text-center justify-center animate-in fade-in duration-300"
+                            >
+                              {(() => {
+                                const [key, fact] = activeEntry;
+                                const isEditing = editingFactKey === key;
+                                const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                                const iconMeta = getFactIconAndColor(key);
+
+                                if (isEditing) {
+                                  return (
+                                    <div className="w-full space-y-3">
+                                      <div className="flex items-center justify-center gap-1.5">
+                                        <span className={`p-1.5 rounded-xl border ${iconMeta.color} flex items-center justify-center shrink-0`}>
+                                          {iconMeta.icon}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-pink-300 uppercase tracking-wider block font-mono">{label}</span>
+                                      </div>
+                                      <input
+                                        type="text"
+                                        value={editingFactValue}
+                                        onChange={(e) => setEditingFactValue(e.target.value)}
+                                        className="w-full py-1.5 px-3 bg-black/60 border border-pink-500/30 focus:border-pink-500/50 rounded-xl text-xs text-white text-center outline-none shadow-inner font-mono"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") handleSaveEditedFact(key);
+                                          if (e.key === "Escape") setEditingFactKey(null);
+                                        }}
+                                      />
+                                      <div className="flex justify-center gap-2 pt-0.5 font-mono">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingFactKey(null)}
+                                          className="px-2.5 py-1 text-[9px] border border-white/10 rounded-lg text-white/60 hover:text-white transition"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveEditedFact(key)}
+                                          className="px-2.5 py-1 text-[9px] font-bold bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition shadow-sm"
+                                        >
+                                          Save
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <>
+                                    {/* Icon Badge */}
+                                    <div className={`p-3 rounded-2xl border shrink-0 flex items-center justify-center mb-3 shadow-[0_6px_15px_rgba(236,72,153,0.15)] ${iconMeta.color}`}>
+                                      {iconMeta.icon}
+                                    </div>
+                                    
+                                    {/* Label */}
+                                    <span className="text-[9px] font-bold text-pink-300/80 uppercase tracking-widest font-mono block leading-none">{label}</span>
+                                    
+                                    {/* Value */}
+                                    <span className="text-[15px] text-white font-semibold mt-2.5 block max-w-full px-2 break-words font-sans tracking-wide" title={fact.value}>
+                                      {fact.value}
+                                    </span>
+
+                                    {/* Floating Hover Action Buttons */}
+                                    <div className="absolute top-0 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-pink-950/60 p-1 rounded-lg backdrop-blur-md border border-pink-500/20">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEditFact(key, fact.value)}
+                                        className="p-1 rounded text-pink-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                                        title="Edit fact"
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteFact(key)}
+                                        className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer"
+                                        title="Delete fact"
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </motion.div>
+                          </AnimatePresence>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Scroll Chevron */}
+                    {profileEntries.length > 1 && (
+                      <button 
+                        type="button" 
+                        onClick={handleNext}
+                        className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 hover:text-white hover:bg-pink-500/25 transition-all duration-300 active:scale-90 cursor-pointer shrink-0 shadow-sm"
+                      >
+                        <ChevronRight className="h-4.5 w-4.5" />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Navigation dots at the bottom */}
+              {profileEntries.length > 1 && (
+                <div className="flex justify-center gap-2 mt-1">
+                  {profileEntries.map(([key], index) => (
+                    <button 
+                      type="button"
+                      key={key} 
+                      onClick={() => {
+                        setSlideDirection(index > activeFactIndex ? "up" : "down");
+                        setActiveFactIndex(index);
+                      }}
+                      className={`w-2 h-2 rounded-full transition-all duration-300 ${index === activeFactIndex ? "bg-pink-400 w-4.5 shadow-[0_0_8px_rgba(236,72,153,0.5)]" : "bg-white/20 hover:bg-white/45"}`}
+                    />
+                  ))}
+                </div>
+              )}
+
+            </div>
+          </motion.div>
+        );
+      }
 
       case "incognito":
         return (

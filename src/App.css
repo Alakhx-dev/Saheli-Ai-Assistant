@@ -145,7 +145,7 @@ h1, h2, h3, .font-display {
   -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
   border-radius: 22px 22px 4px 22px !important;
   padding: 0.85rem 1.35rem !important;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease, box-shadow 0.4s ease;
   position: relative;
 }
 
@@ -178,7 +178,7 @@ h1, h2, h3, .font-display {
   -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
   border-radius: 22px 22px 22px 4px !important;
   padding: 0.85rem 1.35rem !important;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease, box-shadow 0.4s ease;
   position: relative;
 }
 

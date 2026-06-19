@@ -10,8 +10,6 @@ import {
   Minus,
   Upload,
   Share2,
-  Check,
-  Copy,
   
   ChevronLeft,
   ChevronRight,
@@ -44,6 +42,8 @@ import {
   ArrowLeft,
   ArrowRight,
   AlignCenter,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { auth, db, resetFirestorePersistence, storage } from "@/lib/firebase";
 import { sendPasswordResetEmail, signOut, updatePassword, updateProfile } from "firebase/auth";
@@ -64,6 +64,9 @@ import {
   saveTemporaryMemories,
   loadTemporaryMemories,
   updateChatSessionPinStatus,
+  deleteChatMessage,
+  editChatMessage,
+  truncateChatMessages,
   type ChatSessionSummary,
   type StoredChatMessage,
 } from "@/lib/chat-history";
@@ -97,6 +100,7 @@ import MemoryModal from "../components/memory/MemoryModal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAppStore } from "@/store/app-store";
 import ThemeTransitionOverlay from "../components/ThemeTransitionOverlay";
+import { renderMessageContent } from "../components/chat/CodeBlock";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -400,7 +404,7 @@ type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
 type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
-  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle"
+  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
   | "incognito" | "api_keys" | "music" | "studio_light";
 
@@ -1117,9 +1121,34 @@ function getMessageKey(msg: ChatMessage, index: number) {
   }
   return `${msg.role}-${index}`;
 }
-const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessage; isNew: boolean; onImageClick?: (url: string) => void }>(
-  function ScrollFadeMessageItem({ msg, isNew, onImageClick }, ref) {
+interface ScrollFadeMessageItemProps {
+  msg: ChatMessage;
+  isNew: boolean;
+  onImageClick?: (url: string) => void;
+  onDeleteMessage?: (messageId: string, idx: number) => void;
+  onEditMessage?: (messageId: string, idx: number, newContent: string) => void;
+  index: number;
+}
+
+const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessageItemProps>(
+  function ScrollFadeMessageItem({ msg, isNew, onImageClick, onDeleteMessage, onEditMessage, index }, ref) {
     const isUser = msg.role === "user";
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(msg.content || "");
+
+    const handleSaveEdit = () => {
+      const trimmed = editContent.trim();
+      if (trimmed && trimmed !== msg.content) {
+        onEditMessage?.(msg.id || "", index, trimmed);
+      }
+      setIsEditing(false);
+    };
+
+    const handleCancelEdit = () => {
+      setEditContent(msg.content || "");
+      setIsEditing(false);
+    };
+
     return (
       <motion.div
         ref={ref}
@@ -1128,158 +1157,137 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, { msg: ChatMessag
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: -8, scale: 0.98 }}
         transition={{ duration: 0.38, ease: [0.22, 0.8, 0.2, 1] }}
-        className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+        className={`flex ${isUser ? "justify-end" : "justify-start"} group/msg w-full`}
         style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
       >
-      <div
-        data-role={isUser ? 'user' : 'assistant'}
-        className={`
-          max-w-[85%] md:max-w-[45%] px-5 py-4 text-sm leading-relaxed font-medium relative transition-all duration-300
-          ${isNew ? "msg-sheen" : ""}
-          ${isUser
-            ? "saheli-premium-user-bubble text-white/95"
-            : "saheli-premium-ai-bubble text-[#fdf2f8]"
-          }
-        `}
-        style={{ 
-          fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
-          letterSpacing: "0.01em",
-        }}
-      >
-        {msg.image && (
-          <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 shadow-lg relative group cursor-pointer max-w-[320px]">
-            <img
-              src={msg.image}
-              alt="Attached content"
-              className="w-full h-auto object-cover max-h-[220px] transition-transform duration-500 ease-out group-hover:scale-105"
-              onClick={() => {
-                if (typeof onImageClick === "function") {
-                  onImageClick(msg.image!);
-                }
-              }}
-            />
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-              <span className="text-white/80 text-[11px] font-medium bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">
-                Click to view
-              </span>
-            </div>
+        <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[85%] md:max-w-[45%]`}>
+          <div
+            data-role={isUser ? 'user' : 'assistant'}
+            className={`
+              w-full px-5 py-4 text-sm leading-relaxed font-medium relative transition-all duration-300
+              ${isNew ? "msg-sheen" : ""}
+              ${isUser
+                ? "saheli-premium-user-bubble text-white/95"
+                : "saheli-premium-ai-bubble text-[#fdf2f8]"
+              }
+            `}
+            style={{ 
+              fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
+              letterSpacing: "0.01em",
+            }}
+          >
+            {msg.image && (
+              <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 shadow-lg relative group cursor-pointer max-w-[320px]">
+                <img
+                  src={msg.image}
+                  alt="Attached content"
+                  className="w-full h-auto object-cover max-h-[220px] transition-transform duration-500 ease-out group-hover:scale-105"
+                  onClick={() => {
+                    if (typeof onImageClick === "function") {
+                      onImageClick(msg.image!);
+                    }
+                  }}
+                />
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                  <span className="text-white/80 text-[11px] font-medium bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">
+                    Click to view
+                  </span>
+                </div>
+              </div>
+            )}
+            {isEditing ? (
+              <div className="w-full space-y-2 min-w-[200px]">
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-pink-500/50 font-medium resize-y min-h-[60px]"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition duration-200 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveEdit}
+                    className="px-2.5 py-1 rounded-md bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:bg-pink-500/30 hover:text-white transition duration-200 cursor-pointer font-semibold"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              msg.content && msg.content.trim() !== "Please analyze this image carefully." && (
+                <div className="select-text">{renderMessageContent(msg.content)}</div>
+              )
+            )}
           </div>
-        )}
-        {msg.content && msg.content.trim() !== "Please analyze this image carefully." && (
-          <MessageContentRenderer text={msg.content} />
-        )}
-      </div>
-    </motion.div>
+
+          {/* Edit & Delete Action Buttons Row */}
+          {isUser && !isEditing && (
+            <div className="flex items-center gap-1.5 mt-1 mr-2 opacity-0 group-hover/msg:opacity-100 transition-opacity duration-200 text-white/35">
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                title="Edit message"
+                className="p-1 rounded hover:bg-white/5 hover:text-white transition cursor-pointer active:scale-90"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDeleteMessage?.(msg.id || "", index)}
+                title="Delete message"
+                className="p-1 rounded hover:bg-white/5 hover:text-red-400 transition cursor-pointer active:scale-90"
+              >
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
     );
-  },
+  }
 );
 
-interface ContentBlock {
-  type: "text" | "code";
-  content: string;
-  language?: string;
-}
 
-function parseMessageContent(text: string): ContentBlock[] {
-  const blocks: ContentBlock[] = [];
-  const regex = /```(\w*)\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    const textBefore = text.slice(lastIndex, match.index);
-    if (textBefore) {
-      blocks.push({ type: "text", content: textBefore });
-    }
-
-    const language = match[1] || "code";
-    const code = match[2];
-    blocks.push({ type: "code", content: code, language });
-
-    lastIndex = regex.lastIndex;
-  }
-
-  const textAfter = text.slice(lastIndex);
-  if (textAfter) {
-    blocks.push({ type: "text", content: textAfter });
-  }
-
-  if (blocks.length === 0 && text) {
-    blocks.push({ type: "text", content: text });
-  }
-
-  return blocks;
-}
-
-const CodeBlockContainer = ({ code, language }: { code: string; language?: string }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      toast.success("Code copied to clipboard! 📋");
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast.error("Failed to copy code.");
-    }
-  };
-
+// Glassmorphic Pulsing Skeleton Loader for Chat switching transitions
+const ChatHistorySkeleton = memo(function ChatHistorySkeleton() {
   return (
-    <div className="my-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/50 shadow-lg text-left w-full font-sans select-none">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.08] bg-white/[0.03]">
-        <span className="text-[10px] font-bold text-white/50 tracking-wider uppercase">
-          {language || "code"}
-        </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white/70 hover:text-white hover:bg-white/5 transition duration-200"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              <span>Copy Code</span>
-            </>
-          )}
-        </button>
-      </div>
-      <div className="p-4 overflow-x-auto font-mono text-[12px] leading-5 text-[#f1f5f9] bg-black/20 select-text">
-        <pre className="whitespace-pre">{code}</pre>
+    <div className="w-full md:w-[85%] lg:w-[80%] mx-auto px-4 md:px-8 space-y-6 py-6 h-full overflow-hidden flex flex-col justify-end">
+      <div className="h-16 md:h-20 flex-shrink-0" />
+      <div className="flex-1 flex flex-col justify-end gap-5">
+        {/* Left Bubble (AI) */}
+        <div className="flex justify-start w-full animate-pulse">
+          <div className="rounded-[24px] rounded-tl-[4px] border border-white/5 bg-white/[0.02] backdrop-blur-md px-5 py-4 w-[60%] space-y-2">
+            <div className="h-3 bg-white/10 rounded-full w-[45%]" />
+            <div className="h-3 bg-white/10 rounded-full w-[85%]" />
+            <div className="h-3 bg-white/10 rounded-full w-[65%]" />
+          </div>
+        </div>
+        {/* Right Bubble (User) */}
+        <div className="flex justify-end w-full animate-pulse">
+          <div className="rounded-[24px] rounded-tr-[4px] border border-white/10 bg-white/[0.05] backdrop-blur-md px-5 py-4 w-[40%] space-y-2">
+            <div className="h-3 bg-white/15 rounded-full w-[70%]" />
+            <div className="h-3 bg-white/15 rounded-full w-[45%]" />
+          </div>
+        </div>
+        {/* Left Bubble (AI) */}
+        <div className="flex justify-start w-full animate-pulse">
+          <div className="rounded-[24px] rounded-tl-[4px] border border-white/5 bg-white/[0.02] backdrop-blur-md px-5 py-4 w-[50%] space-y-2">
+            <div className="h-3 bg-white/10 rounded-full w-[80%]" />
+            <div className="h-3 bg-white/10 rounded-full w-[35%]" />
+          </div>
+        </div>
       </div>
     </div>
   );
-};
+});
 
-const MessageContentRenderer = ({ text }: { text: string }) => {
-  const blocks = useMemo(() => parseMessageContent(text), [text]);
-
-  return (
-    <div className="space-y-2.5 w-full overflow-hidden text-left">
-      {blocks.map((block, i) => {
-        if (block.type === "code") {
-          return (
-            <CodeBlockContainer 
-              key={i} 
-              code={block.content} 
-              language={block.language} 
-            />
-          );
-        }
-        return (
-          <p key={i} className="whitespace-pre-wrap leading-relaxed">
-            {block.content}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
 
 // Scroll Fade Message List Container
 const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
@@ -1289,6 +1297,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   lastMsgCount,
   typingLabel,
   onImageClick,
+  onDeleteMessage,
+  onEditMessage,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -1296,6 +1306,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   lastMsgCount: number;
   typingLabel: string;
   onImageClick?: (url: string) => void;
+  onDeleteMessage?: (messageId: string, idx: number) => void;
+  onEditMessage?: (messageId: string, idx: number, newContent: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1318,34 +1330,35 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
             msg={msg} 
             isNew={idx >= lastMsgCount} 
             onImageClick={onImageClick}
+            onDeleteMessage={onDeleteMessage}
+            onEditMessage={onEditMessage}
+            index={idx}
           />
         ))}
       </AnimatePresence>
-      <div className="min-h-[76px]">
-        <AnimatePresence initial={false} mode="wait">
-          {isLoading ? (
-            <motion.div
-              key="typing-indicator"
-              initial={{ opacity: 0, y: 8, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, transition: { duration: 0 } }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-              className="flex justify-start h-[76px] items-start"
-              style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
-            >
-              <div className="saheli-typing-container flex items-center justify-center">
-                <div className="saheli-typing-dots flex items-center gap-1.5">
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0s' }} />
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0.15s' }} />
-                  <div className="saheli-typing-dot" style={{ animationDelay: '0.3s' }} />
-                </div>
+      <AnimatePresence initial={false} mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="typing-indicator"
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, height: 0, scale: 0.97, transition: { duration: 0.15 } }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="flex justify-start items-start h-12 overflow-hidden"
+            style={{ willChange: "transform, opacity, height", transform: "translateZ(0)" }}
+          >
+            <div className="saheli-typing-container flex items-center justify-center h-10 px-5">
+              <div className="saheli-typing-dots flex items-center gap-1.5">
+                <div className="saheli-typing-dot" style={{ animationDelay: '0s' }} />
+                <div className="saheli-typing-dot" style={{ animationDelay: '0.15s' }} />
+                <div className="saheli-typing-dot" style={{ animationDelay: '0.3s' }} />
               </div>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
-      <div className="h-4" />
+      <div className="h-10 md:h-12" />
       <div ref={messagesEndRef} />
     </div>
   );
@@ -2080,8 +2093,14 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
   const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const [isChatHistoryLoading, setIsChatHistoryLoading] = useState(false);
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const handleScrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    setShowScrollBottom(false);
+  }, []);
   const firstChunkReceivedRef = useRef(false);
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
@@ -2605,6 +2624,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         setIsScrolling(true);
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => setIsScrolling(false), 400);
+
+        // Check if user has scrolled up by more than 250px
+        const isNearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 250;
+        setShowScrollBottom(!isNearBottom);
       }
     };
     window.addEventListener('scroll', handleScroll, true);
@@ -2745,8 +2768,28 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-  }, [messages.length, isLoading]);
+    const snapScroll = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    };
+
+    // 1. Snap instantly
+    snapScroll();
+
+    // 2. Snap on requestAnimationFrame
+    requestAnimationFrame(snapScroll);
+
+    // 3. Snap with fallbacks during animation frames
+    const timers = [
+      setTimeout(snapScroll, 50),
+      setTimeout(snapScroll, 120),
+      setTimeout(snapScroll, 240),
+      setTimeout(snapScroll, 380) // Marks the end of Framer Motion 0.38s exit/enter transition
+    ];
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [messages.length, isLoading, currentChatId]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -2881,6 +2924,24 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       return;
     }
 
+    // Retrieve cached messages if present to allow instant render (0ms delay)
+    const cachedChat = useAppStore.getState().chats.find((c: any) => c.id === nextChatId);
+    const cachedMessages = cachedChat?.messages;
+    const hasCache = cachedMessages && cachedMessages.length > 0;
+
+    setCurrentChatId(nextChatId);
+    currentChatIdRef.current = nextChatId;
+
+    if (hasCache) {
+      setMessages(cachedMessages);
+      messagesRef.current = cachedMessages;
+      setIsChatHistoryLoading(false);
+    } else {
+      setMessages([]);
+      messagesRef.current = [];
+      setIsChatHistoryLoading(true);
+    }
+
     let cancelled = false;
 
     const hydrateActiveChat = async () => {
@@ -2892,22 +2953,32 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         }
 
         const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
-        setCurrentChatId(nextChatId);
         setMessages(normalizedMessages);
         messagesRef.current = normalizedMessages;
         setTemporaryMemories(storedTempMemories);
         setPendingMobileVisionRequest(null);
         pendingMobileVisionRequestRef.current = null;
+        
+        // Preserve messages of other chats in the store instead of wiping them
+        const currentStoreChats = useAppStore.getState().chats;
         setStoreChats(
-          chatSessionsRef.current.map((chat: any) =>
-            chat.id === nextChatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] },
-          ),
+          chatSessionsRef.current.map((chat: any) => {
+            if (chat.id === nextChatId) {
+              return { ...chat, messages: normalizedMessages };
+            }
+            const existing = currentStoreChats.find((c: any) => c.id === chat.id);
+            return { ...chat, messages: existing?.messages ?? [] };
+          })
         );
         setDbStatus(null);
       } catch (error) {
         console.error("Failed to hydrate active chat", error);
         if (!cancelled && isFirestoreConnectivityError(error)) {
           setDbStatus("Connecting to database...");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsChatHistoryLoading(false);
         }
       }
     };
@@ -2953,6 +3024,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         const realtimeMessages = snapshot.docs.map((messageDoc) => {
           const data = messageDoc.data();
           return {
+            id: messageDoc.id,
             role: data.role === "user" ? "user" : "model",
             content: typeof data.content === "string" ? data.content : "",
             image: typeof data.image === "string" ? data.image : undefined,
@@ -3099,6 +3171,132 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       window.removeEventListener("saheli_refresh_memory_state", handleRefresh);
     };
   }, [refreshMemoryState]);
+
+  const handleDeleteChatMessage = async (messageId: string, idx: number) => {
+    if (!currentChatId) return;
+
+    askConfirmation("Delete Message", "Are you sure you want to delete this message?", async () => {
+      try {
+        const messagesToDeleteIds = [messageId];
+        let hasSubsequentModel = false;
+        let modelMsgId = "";
+        
+        if (idx + 1 < messages.length && messages[idx + 1].role === "model") {
+          hasSubsequentModel = true;
+          modelMsgId = messages[idx + 1].id || "";
+          if (modelMsgId) {
+            messagesToDeleteIds.push(modelMsgId);
+          }
+        }
+
+        await deleteChatMessage(currentChatId, messageId, user);
+        if (hasSubsequentModel && modelMsgId) {
+          await deleteChatMessage(currentChatId, modelMsgId, user);
+        }
+
+        setMessages((prev) => {
+          const next = prev.filter((_, i) => i !== idx && !(hasSubsequentModel && i === idx + 1));
+          messagesRef.current = next;
+          return next;
+        });
+
+        toast.success("Message deleted! 🗑️");
+      } catch (err) {
+        console.error("Failed to delete chat message", err);
+        toast.error("Failed to delete message");
+      }
+    });
+  };
+
+  const handleEditChatMessage = async (messageId: string, idx: number, newContent: string) => {
+    if (!currentChatId) return;
+
+    try {
+      setIsLoading(true);
+      submitLockRef.current = true;
+
+      await editChatMessage(currentChatId, messageId, newContent, user);
+
+      const updatedMessages = messages.map((m, i) => {
+        if (i === idx) {
+          return { ...m, content: newContent };
+        }
+        return m;
+      });
+
+      const storedList = updatedMessages.map((m) => ({
+        ...m,
+        createdAt: 0,
+      }));
+      await truncateChatMessages(currentChatId, idx, user, storedList);
+
+      const truncatedHistory = updatedMessages.slice(0, idx + 1);
+      setMessages(truncatedHistory);
+      messagesRef.current = truncatedHistory;
+
+      const userText = newContent;
+      const detectedLang = detectChatLanguage(userText);
+      if (detectedLang) {
+        chatLanguageRef.current = detectedLang;
+      }
+
+      const nextMode = detectChatMode(userText);
+      if (nextMode !== currentMode) {
+        setCurrentMode(nextMode);
+        setModeSwitchNotification(nextMode === "mentor" ? "Mentor mode active" : "Bestie mode active");
+        if (modeNotificationTimeoutRef.current) {
+          clearTimeout(modeNotificationTimeoutRef.current);
+        }
+        modeNotificationTimeoutRef.current = window.setTimeout(() => {
+          setModeSwitchNotification(null);
+        }, 1800);
+      }
+
+      const requestIdentity = getRequestIdentityContext(detectedLang);
+
+      lastMsgCountRef.current = truncatedHistory.length;
+      
+      const responseResult = await streamResponse(
+        userText,
+        currentChatId,
+        truncatedHistory,
+        undefined,
+        undefined,
+        requestIdentity as any,
+        memoryProfile,
+        nextMode,
+      );
+
+      const cleanResponseText = responseResult.text
+        .replace(/\[MUSIC_PLAY:\s*.*?\]/g, "")
+        .replace(/\[MUSIC_STOP\]/g, "")
+        .trim();
+
+      saveFinalMessage(currentChatId, cleanResponseText);
+      
+      const aiMessage = { role: "model" as const, content: cleanResponseText };
+      const finalHistory = [...truncatedHistory, aiMessage];
+
+      void generateFirstChatTitle(currentChatId, finalHistory, responseResult.modelUsed).catch((error) => {
+        console.error("Failed to update chat title", error);
+      });
+
+      void persistChatMessage(currentChatId, {
+        role: "model",
+        content: cleanResponseText,
+        createdAt: Date.now(),
+      }).catch((error) => {
+        console.error("Failed to persist model reply", error);
+      });
+
+    } catch (err) {
+      console.error("Failed to edit chat message", err);
+      toast.error("Failed to regenerate response");
+    } finally {
+      setIsLoading(false);
+      submitLockRef.current = false;
+    }
+  };
 
   const handleDeleteMemoryChat = async (messageId: string) => {
     askConfirmation("Delete Chat Memory", "Are you sure you want to delete this chat memory?", async () => {
@@ -3818,24 +4016,29 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       return;
     }
 
+    if (currentChatId === chatId) {
+      return;
+    }
+
     if (incognitoMode) {
       handleIncognitoModeChange(false);
     }
 
-    const storedMessages = await loadChatMessages(chatId, user);
-    const normalizedMessages = storedMessages.map(({ role, content }) => ({ role, content }));
+    // Load cached messages if we have them to display instantly
+    const cachedChat = useAppStore.getState().chats.find((c: any) => c.id === chatId);
+    const cachedMessages = cachedChat?.messages;
+
+    // Set immediate currentChatId to update sidebar selection highlight instantly
     setCurrentChatId(chatId);
-    currentChatIdRef.current = chatId;
-    setMessages(normalizedMessages);
-    titleEvolutionCheckpointRef.current = {
-      chatId,
-      messageCount: normalizedMessages.length,
-      phaseSignature: getTitleEvolutionSnapshot(normalizedMessages).phaseSignature,
-    };
-    setStoreChats(chatSessionsRef.current.map((chat: any) => (
-      chat.id === chatId ? { ...chat, messages: normalizedMessages } : { ...chat, messages: chat.messages ?? [] }
-    )));
-    messagesRef.current = normalizedMessages;
+
+    if (cachedMessages && cachedMessages.length > 0) {
+      setMessages(cachedMessages);
+      messagesRef.current = cachedMessages;
+    } else {
+      setMessages([]);
+      messagesRef.current = [];
+    }
+
     setPendingMobileVisionRequest(null);
     pendingMobileVisionRequestRef.current = null;
     navigate(`/chat/${chatId}`);
@@ -3930,6 +4133,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       setChatSessions(prev => prev.filter(c => c.id !== chatId));
 
       if (currentChatId === chatId) {
+        sessionStorage.removeItem(ACTIVE_CHAT_SESSION_KEY);
+        currentChatIdRef.current = null;
         setCurrentChatId(null);
         setMessages([]);
         messagesRef.current = [];
@@ -4727,7 +4932,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         undefined,
         requestIdentity as any,
         memoryProfile,
-        currentMode,
+        nextMode,
       );
       responseText = responseResult.text;
       const modelUsed = responseResult.modelUsed;
@@ -6359,7 +6564,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
         <CinematicAtmosphere layer="foreground" />
         <div className="flex-1 min-h-0 p-4 md:p-8 space-y-6 relative z-20">
-          {messages.length === 0 && !isLoading && !submitLockRef.current ? (
+          {isChatHistoryLoading && messages.length === 0 ? (
+            <ChatHistorySkeleton />
+          ) : messages.length === 0 && !isLoading && !submitLockRef.current ? (
             <div className="h-full" />
           ) : (
             <ScrollFadeMessageList
@@ -6369,11 +6576,43 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               lastMsgCount={lastMsgCountRef.current}
               typingLabel={thinkingLabel}
               onImageClick={(imgUrl) => setLightboxImage(imgUrl)}
+              onDeleteMessage={handleDeleteChatMessage}
+              onEditMessage={handleEditChatMessage}
             />
           )}
         </div>
 
         <div className="flex-none px-4 pb-10 pt-6 w-full md:w-[72%] lg:w-[62%] mx-auto group relative mt-auto z-30">
+          {/* Scroll-to-bottom Floating Arrow Button */}
+          <AnimatePresence>
+            {showScrollBottom && (
+              <motion.button
+                key="scroll-bottom-btn"
+                type="button"
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.85 }}
+                transition={{ duration: 0.1, ease: "easeOut" }}
+                onClick={handleScrollToBottom}
+                className="absolute top-[-54px] left-1/2 -translate-x-1/2 z-[45] p-2 rounded-full border border-white/10 bg-white/[0.02] backdrop-blur-[24px] saturate-[180%] flex items-center justify-center transition-all duration-300 cursor-pointer active:scale-90"
+                style={{
+                  borderColor: "rgba(var(--theme-primary-rgb), 0.25)",
+                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.1)",
+                }}
+                whileHover={{
+                  scale: 1.08,
+                  borderColor: "rgba(var(--theme-primary-rgb), 0.5)",
+                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(var(--theme-primary-rgb), 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.15)",
+                }}
+              >
+                <ArrowDown 
+                  className="h-4 w-4 transition-transform duration-300" 
+                  style={{ color: "var(--theme-primary)" }} 
+                />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           {dbStatus ? (
             <div className="mb-2 rounded-xl border border-amber-300/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
               {dbStatus}

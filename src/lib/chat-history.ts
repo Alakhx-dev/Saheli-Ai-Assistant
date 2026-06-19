@@ -288,13 +288,18 @@ export async function loadChatSessions(user: User | null): Promise<ChatSessionSu
 export async function loadChatMessages(chatId: string, user: User | null): Promise<StoredChatMessage[]> {
   if (isGuestMode(user)) {
     const chats = readLocalChats();
-    return chats[chatId]?.messages ?? [];
+    const msgs = chats[chatId]?.messages ?? [];
+    return msgs.map((m, idx) => ({
+      ...m,
+      id: m.id || `${m.createdAt || idx}`
+    }));
   }
 
   const snapshot = await getDocs(query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "asc")));
   return snapshot.docs.map((messageDoc) => {
     const data = messageDoc.data();
     return {
+      id: data.id || messageDoc.id,
       role: data.role === "user" ? "user" : "model",
       content: typeof data.content === "string" ? data.content : "",
       createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
@@ -368,6 +373,64 @@ export async function updateChatSessionPinStatus(chatId: string, isPinned: boole
     isPinned: isPinned,
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function deleteChatMessage(chatId: string, messageId: string, user: User | null) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    const chat = chats[chatId];
+    if (chat) {
+      chat.messages = chat.messages.filter((m, idx) => m.id !== messageId && `${m.createdAt || idx}` !== messageId);
+      chats[chatId] = chat;
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  await deleteDoc(doc(db, "chats", chatId, "messages", messageId));
+}
+
+export async function editChatMessage(chatId: string, messageId: string, newContent: string, user: User | null) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    const chat = chats[chatId];
+    if (chat) {
+      chat.messages = chat.messages.map((m, idx) => {
+        if (m.id === messageId || `${m.createdAt || idx}` === messageId) {
+          return { ...m, content: newContent };
+        }
+        return m;
+      });
+      chats[chatId] = chat;
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  await updateDoc(doc(db, "chats", chatId, "messages", messageId), {
+    content: newContent,
+  });
+}
+
+export async function truncateChatMessages(chatId: string, afterMessageIndex: number, user: User | null, messageList: StoredChatMessage[]) {
+  if (isGuestMode(user)) {
+    const chats = readLocalChats();
+    const chat = chats[chatId];
+    if (chat) {
+      chat.messages = chat.messages.slice(0, afterMessageIndex + 1);
+      chats[chatId] = chat;
+      writeLocalChats(chats);
+    }
+    return;
+  }
+
+  const messagesToDelete = messageList.slice(afterMessageIndex + 1);
+  await Promise.all(messagesToDelete.map((m) => {
+    if (m.id) {
+      return deleteDoc(doc(db, "chats", chatId, "messages", m.id));
+    }
+    return Promise.resolve();
+  }));
 }
 
 

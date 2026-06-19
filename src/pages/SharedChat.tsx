@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import CuteLoader from "@/components/CuteLoader";
-import { Heart, ExternalLink, Calendar, X, AlertTriangle, Check, Copy } from "lucide-react";
+import { Heart, ExternalLink, Calendar, X, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
+import { renderMessageContent } from "@/components/chat/CodeBlock";
 
 interface SharedMessage {
   role: "user" | "model";
@@ -20,112 +20,6 @@ interface SharedChatData {
   messages: SharedMessage[];
 }
 
-interface ContentBlock {
-  type: "text" | "code";
-  content: string;
-  language?: string;
-}
-
-function parseMessageContent(text: string): ContentBlock[] {
-  const blocks: ContentBlock[] = [];
-  const regex = /```(\w*)\n?([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    const textBefore = text.slice(lastIndex, match.index);
-    if (textBefore) {
-      blocks.push({ type: "text", content: textBefore });
-    }
-
-    const language = match[1] || "code";
-    const code = match[2];
-    blocks.push({ type: "code", content: code, language });
-
-    lastIndex = regex.lastIndex;
-  }
-
-  const textAfter = text.slice(lastIndex);
-  if (textAfter) {
-    blocks.push({ type: "text", content: textAfter });
-  }
-
-  if (blocks.length === 0 && text) {
-    blocks.push({ type: "text", content: text });
-  }
-
-  return blocks;
-}
-
-const CodeBlockContainer = ({ code, language }: { code: string; language?: string }) => {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopied(true);
-      toast.success("Code copied to clipboard! 📋");
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      toast.error("Failed to copy code.");
-    }
-  };
-
-  return (
-    <div className="my-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/50 shadow-lg text-left w-full font-sans select-none">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.08] bg-white/[0.03]">
-        <span className="text-[10px] font-bold text-white/50 tracking-wider uppercase">
-          {language || "code"}
-        </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold text-white/70 hover:text-white hover:bg-white/5 transition duration-200"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="text-emerald-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              <span>Copy Code</span>
-            </>
-          )}
-        </button>
-      </div>
-      <div className="p-4 overflow-x-auto font-mono text-[12px] leading-5 text-[#f1f5f9] bg-black/20 select-text">
-        <pre className="whitespace-pre">{code}</pre>
-      </div>
-    </div>
-  );
-};
-
-const MessageContentRenderer = ({ text }: { text: string }) => {
-  const blocks = useMemo(() => parseMessageContent(text), [text]);
-
-  return (
-    <div className="space-y-2.5 w-full overflow-hidden text-left">
-      {blocks.map((block, i) => {
-        if (block.type === "code") {
-          return (
-            <CodeBlockContainer 
-              key={i} 
-              code={block.content} 
-              language={block.language} 
-            />
-          );
-        }
-        return (
-          <p key={i} className="whitespace-pre-wrap leading-relaxed">
-            {block.content}
-          </p>
-        );
-      })}
-    </div>
-  );
-};
 
 export default function SharedChat() {
   const { sharedId } = useParams<{ sharedId: string }>();
@@ -302,7 +196,7 @@ export default function SharedChat() {
                     </div>
                   )}
                   {msg.content && msg.content.trim() !== "Please analyze this image carefully." && (
-                    <MessageContentRenderer text={msg.content} />
+                    <div className="select-text">{renderMessageContent(msg.content)}</div>
                   )}
                 </div>
               </motion.div>

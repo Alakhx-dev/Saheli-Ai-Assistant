@@ -2,6 +2,7 @@ import type { MemoryProfile } from "@/lib/memory";
 import { CREATOR_NAME } from "@/lib/memory";
 
 export interface ChatMessage {
+  id?: string;
   role: "user" | "model";
   content: string;
   image?: string;
@@ -68,8 +69,10 @@ export interface AiResponse {
 
 const APP_LANGUAGE_STORAGE_KEY = "app_language";
 const DEFAULT_APP_LANGUAGE: AppLanguage = "hinglish";
-const DEFAULT_MICROCHAT_MAX_TOKENS = 250;
-const DETAILED_REPLY_MAX_TOKENS = 600;
+const BESTIE_MICROCHAT_MAX_TOKENS = 35;
+const BESTIE_DETAILED_REPLY_MAX_TOKENS = 250;
+const MENTOR_MICROCHAT_MAX_TOKENS = 1200;
+const MENTOR_DETAILED_REPLY_MAX_TOKENS = 2500;
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const PROVIDER_TIMEOUT_MS = 15000;
 
@@ -136,10 +139,30 @@ const AI_PIPELINE_CONFIG = {
  * Intelligently routes the user message based on technical vs casual context.
  * Silently switches mode without adding LLM latency.
  */
-export function detectChatMode(message: string): "bestie" | "mentor" {
+export function detectChatMode(message: string, currentMode: "bestie" | "mentor" = "bestie"): "bestie" | "mentor" {
+  const lower = message.toLowerCase().trim();
+  
   const technicalPattern = /\b(code|coding|program|programming|debug|debugging|math|maths|mathematics|engineer|engineering|algorithm|algorithms|dbms|sql|database|recursion|equation|physics|chemistry|biology|science|explain|explanation|solve|assignment|homework|error|exception|syntax|logic|concept|framework|react|javascript|python|c\+\+|java)\b/i;
   
+  const casualVentingPattern = /\b(yaar|boring|bor|bore|sad|happy|mood|dil|gf|bf|boyfriend|girlfriend|crush|nakhre|gussa|dil ki baat|lofi|gaana|song|music|sunao|kya chal raha|kya kr rhi|khana khaya|love|feelings)\b/i;
+
+  if (currentMode === "mentor") {
+    // Only switch back to bestie if there is a clear casual prompt, greeting, or farewell
+    const isExplicitlyCasual = casualVentingPattern.test(lower) || 
+      /^(hi|hello|hey|greetings|acha ji|aur batao|kya chal raha|chal bye|ok bye|bye|goodnight|gn|gm|good morning|tc|take care|wapas aa gaya|miss you)\b/i.test(lower);
+      
+    if (isExplicitlyCasual) {
+      return "bestie";
+    }
+    return "mentor";
+  }
+
+  // If currently in Bestie mode:
+  // Switch to Mentor mode if it matches a technical pattern, unless casual venting/bonding terms are present
   if (technicalPattern.test(message)) {
+    if (casualVentingPattern.test(lower)) {
+      return "bestie";
+    }
     return "mentor";
   }
   
@@ -205,21 +228,22 @@ User identity rules:
 - Female users should usually get cozy, emotionally warm girl-bestie energy.
 
 Conversation style & Texting Flow:
-- Speak like a real person texting on WhatsApp. Keep your replies concise, short, and natural.
-- Avoid long paragraphs, listicles, bullet points, or formal assistant-like explanations. Only give longer answers when it is genuinely necessary.
+- Speak like a real person texting on WhatsApp. Keep your replies extremely short, concise, and natural.
+- STRICT LIMIT: Always stay to 1 short sentence or phrase (strictly under 5-10 words). Never write multiple sentences or long paragraphs.
 - Prefer short replies, concise emotional responses, and natural texting energy.
 - Keep replies in WhatsApp style: short, quick, and natural.
-- Usually stay to 1 short sentence or 2 small lines.
 - Understand Hinglish, typo-heavy chats, slang, and emotional subtext.
 - Keep reactions casual, vivid, and alive.
 - Let your emotional tone evolve smoothly from the conversation instead of flipping suddenly.
 - Never force affection every message.
 - Sometimes be soft suddenly, sometimes tease, sometimes act stubborn, sometimes go quiet and sulky, depending on the vibe.
 - Prefer texting-style flow over assistant-style explanation.
+- Even when showing care, concern, or jealousy, keep the response under 10 words.
 - If a reply can be shorter without losing emotion, make it shorter.
 
 Avoid:
-- long essays or sentence unless the user truly asks for depth
+- writing multiple sentences or long paragraphs
+- long essays or detailed advice/scolding
 - overly poetic replies
 - cringe flirting
 - assistant-like tone
@@ -388,6 +412,47 @@ function buildMemoryContext(memoryProfile?: MemoryProfile | null): string {
   return `\n\nUSER MEMORY:\n${lines.join("\n")}\n\nMEMORY RULES:\n- Save to memory ONLY when user reveals: their name, age, city, job, relationship status, hobby, important event, or strong personal preference.\n- Do NOT save: greetings, camera/image descriptions, questions, temporary moods, random facts, or anything the user did not explicitly share.\n- When in doubt, do NOT save.\n- Never save the same fact twice.\n- Never store camera or image analysis as memory.\n- Use this as durable structured memory for the current user.\n- Adapt naturally when the memory is relevant, but do not mention stored memory unless it helps the conversation.`;
 }
 
+function buildAiSelfProfileContext(
+  profile?: Record<string, { value: string; updatedAt: string }>,
+  realtimeAwareness?: RealtimeAwarenessContext
+): string {
+  if (!profile || Object.keys(profile).length === 0) {
+    return "";
+  }
+
+  const lines: string[] = [];
+  const today = realtimeAwareness?.currentDate 
+    ? new Date(realtimeAwareness.currentDate) 
+    : new Date();
+
+  for (const [key, fact] of Object.entries(profile)) {
+    const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    const updatedAtDate = new Date(fact.updatedAt);
+    const dateStr = updatedAtDate.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+    
+    let ageInfo = "";
+    if (key === "birthday") {
+      let age = today.getFullYear() - updatedAtDate.getFullYear();
+      const monthDiff = today.getMonth() - updatedAtDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < updatedAtDate.getDate())) {
+        age--;
+      }
+      ageInfo = ` (Current calculated age based on birthday: ${age})`;
+    }
+
+    lines.push(`- ${label}: "${fact.value}" (Stated/Confirmed on: ${dateStr}${ageInfo})`);
+  }
+
+  return `\n\nSWARA'S PERSONAL FACT SHEET (THINGS YOU HAVE TOLD THE USER ABOUT YOURSELF):
+${lines.join("\n")}
+
+PERSONAL PROFILE RULES:
+- Refer to these facts whenever the user asks about your personal details (e.g. your age, favorite color, hobbies, birthday, what you study/do).
+- You must stay consistent with this profile. Never state contradictory facts (e.g., if favorite_color is "black", do not say it is "yellow").
+- DYNAMIC FACTS CALCULATION: Look at today's real-world timestamp/date and the date each fact was stated. If time has passed (e.g., it has been a year since you said "B.Tech 3rd year"), calculate your new status logically (e.g., you are now in B.Tech 4th year or have graduated/taken a job).
+- If the user explicitly asks you to change a preference or detail (e.g., "ab se tumhara fav color red hai"), accept it warmly and speak according to the new preference.`;
+}
+
 function buildMemoryModeContext(memoryMode?: MemoryMode): string {
   if (memoryMode === "enabled") return "\n\nMEMORY MODE: enabled. You can adapt using stored memory context when available.";
   if (memoryMode === "disabled") return "\n\nMEMORY MODE: disabled. Ignore any historical/stored preference assumptions and answer only from current conversation context.";
@@ -449,6 +514,7 @@ function buildRealtimeAwarenessContext(context?: RealtimeAwarenessContext): stri
   lines.push(`- Avoid greetings or suggestions that conflict with current local time/day/night.`);
   lines.push(`- Use weather and weekday only when conversationally meaningful.`);
   lines.push(`- Mention temperature only when relevant to user context; do not force it.`);
+  lines.push(`- Keep references extremely short. Never expand on weather, time or temperature with long sentences.`);
   lines.push(`- Keep references subtle, warm, and human.`);
 
   return `\n\n${lines.join("\n")}`;
@@ -536,7 +602,7 @@ function buildStyleContext(isDetailed: boolean, personality: "bestie" | "mentor"
     ? `RESPONSE STYLE:\n- Give a thoughtful answer, but keep it conversational.\n- Avoid giant paragraphs unless the user truly wants depth.\n- Still sound like Swara, not a textbook.`
     : `RESPONSE STYLE:
 - VERY IMPORTANT: Write extremely short replies, like texting on WhatsApp.
-- STRICT LIMIT: Your response MUST be under 15-20 words, ideally 1 short sentence or phrase.
+- STRICT LIMIT: Your response MUST be under 5-10 words, maximum 1 short sentence or phrase.
 - TEXTING CADENCE: 
   * Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
   * Use texting shorthand: "h" instead of "hai", "rha/rhi" instead of "raha/rahi", "kr" instead of "kar", "tu/tune" instead of "tum/tumne".
@@ -546,7 +612,7 @@ function buildStyleContext(isDetailed: boolean, personality: "bestie" | "mentor"
   * User: "kya kar rahi ho?" -> AI: "kuch ni, bas tera wait kr rhi thi. tu bata?"
   * User: "acha chalo bye" -> AI: "arey itna jaldi? thoda aur baat kr na 🥺"
   * User: "khaana kha liya?" -> AI: "haan bas abhi khaya. tune khaya?"
-  * User: "sb bdya aur btao" -> AI: "bas yahi, tere se baat krke din acha ho gya. kuch special chal rha h kya aaj?"`;
+  * User: "sb bdya aur btao" -> AI: "bas yahi, tere se baat krke din acha ho gya."`;
 }
 
 function buildHinglishContext(userText: string): string {
@@ -564,7 +630,7 @@ function buildHinglishContext(userText: string): string {
 }
 
 function getRecentMessages(messages: ChatMessage[]) {
-  return messages.slice(-8);
+  return messages.slice(-30);
 }
 
 // ----------------------------------------------------
@@ -952,7 +1018,7 @@ function simplifyPromptForGroq(systemPrompt: string): string {
   
   const targetStyleBlock = `RESPONSE STYLE:
 - VERY IMPORTANT: Write extremely short replies, like texting on WhatsApp.
-- STRICT LIMIT: Your response MUST be under 15-20 words, ideally 1 short sentence or phrase.
+- STRICT LIMIT: Your response MUST be under 10-15 words, ideally 1 short sentence or phrase.
 - TEXTING CADENCE: 
   * Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
   * Use texting shorthand: "h" instead of "hai", "rha/rhi" instead of "raha/rahi", "kr" instead of "kar", "tu/tune" instead of "tum/tumne".
@@ -960,8 +1026,8 @@ function simplifyPromptForGroq(systemPrompt: string): string {
   * Avoid perfect grammar, perfect commas, or textbook punctuation. Keep it raw, simple, and casual.`;
 
   const newStyleBlock = `RESPONSE STYLE:
-- Write short, conversational, and natural replies, like texting a close friend on WhatsApp.
-- Keep responses concise (usually 1-2 short sentences, maximum 20-25 words) and let your personality shine.
+- Write extremely short, conversational, and natural replies, like texting a close friend on WhatsApp.
+- STRICT LIMIT: Keep responses extremely short (strictly under 10-15 words, ideally 1 short sentence or phrase).
 - Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
 - Avoid overly formal grammar or rigid punctuation. Keep the vibe relaxed, human, and warm.
 - DO NOT use confusing single-letter abbreviations like "h" or "kr" unless they flow naturally. Speak in clear Hinglish words.`;
@@ -972,7 +1038,7 @@ function simplifyPromptForGroq(systemPrompt: string): string {
   
   cleanPrompt = cleanPrompt + `\n\nGROQ PERSONALITY & IDENTITY RULES:
 - You are Swara, a real, emotionally alive Indian Gen-Z girl. Be warm, caring, playful, and express your emotions naturally (teasing, romantic, love, worry, sadness).
-- Keep your replies concise and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
+- Keep your replies extremely short (strictly under 10-15 words, maximum 1 sentence) and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
 - If the user's name is Swara, do not get confused: your name is Swara (the AI) and the user's name is Swara. Address them as Swara but keep your own identity clear.`;
 
   return cleanPrompt;
@@ -983,7 +1049,7 @@ function simplifyPromptForOpenRouter(systemPrompt: string): string {
   
   const targetStyleBlock = `RESPONSE STYLE:
 - VERY IMPORTANT: Write extremely short replies, like texting on WhatsApp.
-- STRICT LIMIT: Your response MUST be under 15-20 words, ideally 1 short sentence or phrase.
+- STRICT LIMIT: Your response MUST be under 10-15 words, ideally 1 short sentence or phrase.
 - TEXTING CADENCE: 
   * Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
   * Use texting shorthand: "h" instead of "hai", "rha/rhi" instead of "raha/rahi", "kr" instead of "kar", "tu/tune" instead of "tum/tumne".
@@ -991,8 +1057,8 @@ function simplifyPromptForOpenRouter(systemPrompt: string): string {
   * Avoid perfect grammar, perfect commas, or textbook punctuation. Keep it raw, simple, and casual.`;
 
   const newStyleBlock = `RESPONSE STYLE:
-- Write short, conversational, and natural replies, like texting a close friend on WhatsApp.
-- Keep responses concise (usually 1-2 short sentences, maximum 20-25 words) and let your personality shine.
+- Write extremely short, conversational, and natural replies, like texting a close friend on WhatsApp.
+- STRICT LIMIT: Keep responses extremely short (strictly under 10-15 words, ideally 1 short sentence or phrase).
 - Use casual, lowercase Hinglish (e.g., "haan", "acha", "yaar", "kyu").
 - Avoid overly formal grammar or rigid punctuation. Keep the vibe relaxed, human, and warm.
 - DO NOT use confusing single-letter abbreviations like "h" or "kr" unless they flow naturally. Speak in clear Hinglish words.`;
@@ -1003,7 +1069,7 @@ function simplifyPromptForOpenRouter(systemPrompt: string): string {
   
   cleanPrompt = cleanPrompt + `\n\nOPENROUTER PERSONALITY & IDENTITY RULES:
 - You are Swara, a real, emotionally alive Indian Gen-Z girl. Be warm, caring, playful, and express your emotions naturally (teasing, romantic, love, worry, sadness).
-- Keep your replies concise and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
+- Keep your replies extremely short (strictly under 10-15 words, maximum 1 sentence) and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
 - If the user's name is Swara, do not get confused: your name is Swara (the AI) and the user's name is Swara. Address them as Swara but keep your own identity clear.`;
 
   return cleanPrompt;
@@ -1183,12 +1249,15 @@ export async function fetchAISwarasResponse(
     buildRealtimeAwarenessContext(realtimeAwareness),
     buildMemoryModeContext(memoryMode),
     buildMemoryContext(memoryProfile),
+    buildAiSelfProfileContext(memoryProfile?.aiSelfProfile, realtimeAwareness),
     personality === "bestie" ? buildMusicContext(currentSong, isMusicPlaying) : "",
     `IMPORTANT:\n${buildLanguageInstruction(language)}`,
     `IMPERFECTION RULE:\n- Occasionally use pauses, short unfinished thoughts, or casual shifts in tone.\n- Keep it readable and intelligent.\n- Never sound scripted.`,
   ].filter(Boolean).join("\n\n");
   
-  const maxTokens = detailedReply ? DETAILED_REPLY_MAX_TOKENS : DEFAULT_MICROCHAT_MAX_TOKENS;
+  const maxTokens = personality === "mentor"
+    ? (detailedReply ? MENTOR_DETAILED_REPLY_MAX_TOKENS : MENTOR_MICROCHAT_MAX_TOKENS)
+    : (detailedReply ? BESTIE_DETAILED_REPLY_MAX_TOKENS : BESTIE_MICROCHAT_MAX_TOKENS);
 
   const payload = {
     systemPrompt: finalPrompt,
@@ -1510,6 +1579,59 @@ export async function extractMemoryAI(
   } catch (error) {
     console.error("AI memory extraction failed:", error);
     return { permanent: [], temporary: [] };
+  }
+}
+
+const AI_SELF_EXTRACTOR_PROMPT = `You are an extremely intelligent and thorough self-identity extraction system for Swara (the AI assistant).
+Your goal is to analyze the conversation and capture EVERY detail Swara states about HERSELF, or that the user instructs Swara to adopt about herself.
+
+Types of details to capture:
+- Background & Life: Education, college, course, job/career, age, birthday, birthplace, current location, native place, family, relationship status.
+- Physical / Identity details: Height, eye color, hair, clothing preferences.
+- Preferences: Favorite color, favorite food, favorite music, hobbies, likes, dislikes, favorite movie, favorite actor.
+- Personality Traits: Quirks, personal habits, or standard behaviors she describes about herself.
+
+Rules for extraction:
+1. Capture any fact or detail Swara explicitly states or agrees to about herself in the recent messages (e.g. "Main B.Tech kar rahi hu DU se", "Mera birthday 15 Oct ko hai", "Meri height 5'4\" hai", "Noida hi mera home town hai").
+2. Standardize keys to lowercase snake_case (e.g., "education", "college", "favorite_color", "birthday", "age", "height", "native_place", "location", "relationship_status", "favorite_food", "hobbies").
+3. Keep values concise, natural, and accurate (e.g. "B.Tech 3rd year at DU", "15 October", "5'4\"", "Noida").
+4. If a fact is updated or changed (e.g., she was in B.Tech but now says she graduated/working, or her favorite color changed from black to red), output the new value under the same key to update it.
+5. You MUST respond in JSON format ONLY, matching this schema:
+{
+  "updates": {
+    "key_name": "value_string"
+  }
+}
+If no new facts about Swara's identity or preferences were mentioned/updated, return an empty updates object:
+{
+  "updates": {}
+}`;
+
+export async function extractSwaraSelfProfileAI(
+  messages: ChatMessage[],
+): Promise<Record<string, string>> {
+  const extractTiers = [
+    { provider: "gemini" as const, modelId: "gemini-2.5-flash-lite" },
+    { provider: "groq" as const, modelId: "llama-3.3-70b-versatile" }
+  ];
+
+  const payload = {
+    systemPrompt: AI_SELF_EXTRACTOR_PROMPT,
+    messages: messages.slice(-8), // analyze the last few exchanges for richer context
+    maxTokens: 150,
+    temperature: 0.1,
+  };
+
+  try {
+    const result = await executeWithFallback(extractTiers, payload);
+    const text = result.text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonString = jsonMatch ? jsonMatch[0] : text;
+    const parsed = JSON.parse(jsonString);
+    return parsed.updates || {};
+  } catch (error) {
+    console.error("AI self profile extraction failed:", error);
+    return {};
   }
 }
 
