@@ -1153,9 +1153,9 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessage
       <motion.div
         ref={ref}
         layout={false}
-        initial={isNew ? { opacity: 0, y: 10, scale: 0.96 } : false}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        initial={isNew ? { opacity: 0, scale: 0.96 } : false}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.38, ease: [0.22, 0.8, 0.2, 1] }}
         className={`flex ${isUser ? "justify-end" : "justify-start"} group/msg w-full`}
         style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
@@ -1342,10 +1342,10 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
             key="typing-indicator"
             initial={{ opacity: 0, y: 6, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, height: 0, scale: 0.97, transition: { duration: 0.15 } }}
+            exit={{ opacity: 0, transition: { duration: 0 } }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="flex justify-start items-start h-12 overflow-hidden"
-            style={{ willChange: "transform, opacity, height", transform: "translateZ(0)" }}
+            style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
           >
             <div className="saheli-typing-container flex items-center justify-center h-10 px-5">
               <div className="saheli-typing-dots flex items-center gap-1.5">
@@ -2098,7 +2098,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleScrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
     setShowScrollBottom(false);
   }, []);
   const firstChunkReceivedRef = useRef(false);
