@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Chat from "./pages/Chat";
 import SharedChat from "./pages/SharedChat";
 import CuteLoader from "./components/CuteLoader";
+import GlobalReminderTrigger from "./components/reminders/GlobalReminderTrigger";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [user, loading] = useAuthState(auth);
@@ -17,6 +18,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
 const App = () => (
   <BrowserRouter>
+    <GlobalReminderTrigger />
     <Routes>
       <Route path="/" element={<Login />} />
       <Route path="/login" element={<Login />} />

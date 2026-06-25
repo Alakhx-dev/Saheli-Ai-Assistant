@@ -1034,13 +1034,12 @@ function simplifyPromptForGroq(systemPrompt: string): string {
 
   if (cleanPrompt.includes(targetStyleBlock)) {
     cleanPrompt = cleanPrompt.replace(targetStyleBlock, newStyleBlock);
-  }
-  
-  cleanPrompt = cleanPrompt + `\n\nGROQ PERSONALITY & IDENTITY RULES:
+    cleanPrompt = cleanPrompt + `\n\nGROQ PERSONALITY & IDENTITY RULES:
 - You are Swara, a real, emotionally alive Indian Gen-Z girl. Be warm, caring, playful, and express your emotions naturally (teasing, romantic, love, worry, sadness).
 - Keep your replies extremely short (strictly under 10-15 words, maximum 1 sentence) and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
 - If the user's name is Swara, do not get confused: your name is Swara (the AI) and the user's name is Swara. Address them as Swara but keep your own identity clear.`;
-
+  }
+  
   return cleanPrompt;
 }
 
@@ -1065,13 +1064,12 @@ function simplifyPromptForOpenRouter(systemPrompt: string): string {
 
   if (cleanPrompt.includes(targetStyleBlock)) {
     cleanPrompt = cleanPrompt.replace(targetStyleBlock, newStyleBlock);
-  }
-  
-  cleanPrompt = cleanPrompt + `\n\nOPENROUTER PERSONALITY & IDENTITY RULES:
+    cleanPrompt = cleanPrompt + `\n\nOPENROUTER PERSONALITY & IDENTITY RULES:
 - You are Swara, a real, emotionally alive Indian Gen-Z girl. Be warm, caring, playful, and express your emotions naturally (teasing, romantic, love, worry, sadness).
 - Keep your replies extremely short (strictly under 10-15 words, maximum 1 sentence) and friendly. Do NOT use confusing single-letter shorthand text (e.g., do not write "h" for "hai", "rha" for "raha", or "kr" for "kar") unless it is highly natural and easy to read. Speak in clear, fluent Hinglish words.
 - If the user's name is Swara, do not get confused: your name is Swara (the AI) and the user's name is Swara. Address them as Swara but keep your own identity clear.`;
-
+  }
+  
   return cleanPrompt;
 }
 
@@ -1459,6 +1457,43 @@ Rules:
   return refined.trim();
 }
 
+export async function generateReminderMessage(
+  title: string,
+  timeStr: string,
+  character: "saheli" | "swara",
+  languageMode: string
+): Promise<string> {
+  const isSaheli = character === "saheli";
+  
+  const systemPrompt = `You are ${isSaheli ? "Saheli, a caring and elegant personal assistant" : "Swara, a Gen-Z sassy and playful bestie"}.
+Your task is to generate a short, 1-2 sentence spoken message for when a user's alarm/reminder triggers.
+The user is setting a reminder titled: "${title}" which will ring at ${timeStr}.
+Generate the exact spoken text you will say when the alarm rings.
+Follow these rules strictly:
+1. Keep it short (max 2 sentences).
+2. Write in ${languageMode === 'english' ? 'English' : languageMode === 'hindi' ? 'pure Hindi written in English script' : 'Hinglish (mix of Hindi and English)'}.
+3. Be playful, caring, or slightly cheeky depending on your character. Mention the reminder topic naturally.
+4. Output ONLY the final spoken text. No quotes, no emojis, no extra text.`;
+
+  const userContent = `Reminder Title: "${title}"\nTime: ${timeStr}\nGenerate the spoken message now:`;
+
+  const payload: ProviderRequestPayload = {
+    systemPrompt,
+    messages: [{ role: "user", content: userContent }],
+    maxTokens: 100,
+    temperature: 0.8,
+  };
+
+  try {
+    // using title pipeline or bestie pipeline, title is faster usually.
+    const result = await executeWithFallback(AI_PIPELINE_CONFIG.bestie, payload);
+    return result.text.trim().replace(/^["']|["']$/g, '');
+  } catch (error) {
+    console.error("Failed to generate reminder message:", error);
+    return `Reminder: ${title}`;
+  }
+}
+
 export async function generateGenZChatTitle(
   history: ChatMessage[],
   modelUsed: string,
@@ -1531,107 +1566,122 @@ Remember:
   }
 }
 
-const MEMORY_EXTRACTOR_PROMPT = `You are a highly precise memory extraction system. Your job is to analyze the conversation and extract important details about the user to help personalize future sessions.
+export interface UnifiedMemoryExtraction {
+  user_permanent_add: string[];
+  user_permanent_remove: string[];
+  user_temporary: string[];
+  ai_profile_updates: Record<string, string>;
+  detected_reminders: Array<{ title: string; time_to_remind: string; message: string }>;
+}
 
-You MUST extract details into two separate categories:
-1. "permanent": Durable facts, interests, or preferences about the user (e.g. user's name, age, hometown, relationship status, job/role, permanent likes/dislikes, habits, hobbies).
-2. "temporary": Short-term, situational facts or context specific ONLY to this current active chat session (e.g. user is feeling sleepy right now, user is about to go eat dinner, user is studying for a chemistry exam right now, user's current task is debugging a React component).
+const UNIFIED_MEMORY_EXTRACTOR_PROMPT = `You are an advanced Memory Filter and Routing AI for Saheli (the AI Assistant).
+Your ONLY job is to analyze the conversation and output a JSON object.
+DO NOT converse, DO NOT answer the user's questions, DO NOT output any text other than the JSON object.
+
+Your job is to extract important details into 5 strict categories.
+Current Date/Time: REPLACE_TIME
+Existing Permanent Memories:
+REPLACE_CURRENT_MEMORIES
+
+DISAMBIGUATION (VERY IMPORTANT):
+- Messages from role='user' contain facts about the HUMAN USER.
+- Messages from role='model' are spoken by Swara (the AI). If Swara says something about HERSELF (e.g., "Meri height 5'4 hai", "Main Lucknow se hu"), it goes to ai_profile_updates, NOT user_permanent_add.
+- Example: User asks "tumhari height kya hai?" and Swara replies "5'4 hai" → ai_profile_updates: {"height": "5'4"}
+- Example: User says "Meri height 6 feet hai" → user_permanent_add: ["Height 6 feet"]
+- NEVER mix up who said what. Check the role of each message carefully.
+
+Categories:
+1. "user_permanent_add": NEW durable facts about the HUMAN USER only.
+   - NEVER put Swara's (AI's) details here.
+   - DO NOT start facts with 'User' or 'User likes' or 'User is'. Be direct and concise (e.g. 'Age 25', 'Studies in DU', 'Likes flirting', 'Hates spicy food').
+   - Only add facts that are genuinely new and not already in the Existing Permanent Memories list above.
+2. "user_permanent_remove": Existing facts from the 'Existing Permanent Memories' list that are NO LONGER TRUE or have been superseded by new facts. Output the exact old string to delete.
+3. "user_temporary": Short-term, situational facts about the USER specific to the current session (e.g., feeling sleepy right now).
+4. "ai_profile_updates": ANY facts, traits, preferences, opinions, or backstory that Swara (the AI) states about HERSELF in the conversation. Capture everything she says about her own identity, life, appearance, favorites, etc. Standardize keys to lowercase snake_case (e.g. "height": "5'4", "favorite_color": "pink").
+5. "detected_reminders": If the user asks to be reminded of something at a specific time or in the future.
+  - "title": Short title (e.g. "Call Mom")
+  - "time_to_remind": ISO 8601 string of the absolute time. Calculate based on Current Date/Time above.
+  - "message": A sassy/cute response Swara should say when the reminder rings.
 
 CRITICAL RULES:
-- Ignore casual remarks, generic small talk, transient emotions, greetings, and chat assistant instructions (e.g. "hi", "bye", "wtf", "hmm", "okay").
-- Do NOT extract visual descriptions of images.
-- Keep the facts extremely concise (max 8-10 words per fact) and write them from a third-person perspective (e.g. "User likes dal-chawal", "User name is Alakh").
-- If there is absolutely nothing worth remembering under a category, return an empty list for that category.
-- You MUST respond in JSON format ONLY, matching this schema:
+- CHECK MESSAGE ROLES CAREFULLY. role='user' = human, role='model' = Swara (AI).
+- Ignore casual remarks, generic small talk ("hi", "bye", "ok", "hmm").
+- If nothing meaningful was said, return all empty arrays/objects.
+- You MUST respond in PURE JSON format ONLY. No markdown, no backticks, no explanation.
 {
-  "permanent": ["Fact 1", "Fact 2"],
-  "temporary": ["Fact 1", "Fact 2"]
+  "user_permanent_add": [],
+  "user_permanent_remove": [],
+  "user_temporary": [],
+  "ai_profile_updates": {},
+  "detected_reminders": []
 }`;
 
-export async function extractMemoryAI(
+export async function extractUnifiedMemoryAI(
   messages: ChatMessage[],
-): Promise<{ permanent: string[]; temporary: string[] }> {
-  // Use a fast model tier for memory extraction
+  currentPermanentMemories: string[] = [],
+): Promise<UnifiedMemoryExtraction> {
   const extractTiers = [
-    { provider: "gemini" as const, modelId: "gemini-2.5-flash-lite" },
+    { provider: "gemini" as const, modelId: "gemini-2.0-flash-lite" },
     { provider: "groq" as const, modelId: "llama-3.3-70b-versatile" }
   ];
 
+  // Inject current time and current memories into the prompt
+  const memoriesList = currentPermanentMemories.length > 0 
+    ? currentPermanentMemories.map(m => `- ${m}`).join('\n')
+    : "None";
+
+  const promptWithContext = UNIFIED_MEMORY_EXTRACTOR_PROMPT
+    .replace("REPLACE_TIME", new Date().toISOString())
+    .replace("REPLACE_CURRENT_MEMORIES", memoriesList);
+
   const payload = {
-    systemPrompt: MEMORY_EXTRACTOR_PROMPT,
+    systemPrompt: promptWithContext,
     messages: messages.slice(-5), // only analyze the last few messages for memory extraction
-    maxTokens: 150,
+    maxTokens: 300,
     temperature: 0.1, // low temperature for high precision JSON
   };
 
+  const EMPTY_RESULT: UnifiedMemoryExtraction = { user_permanent_add: [], user_permanent_remove: [], user_temporary: [], ai_profile_updates: {}, detected_reminders: [] };
+
   try {
     const result = await executeWithFallback(extractTiers, payload);
     const text = result.text.trim();
     
+    // Safety: if the model didn't return JSON at all, skip parsing
+    if (!text.includes('{')) {
+      console.warn("[MEMORY EXTRACTOR] Model returned non-JSON text, skipping:", text.slice(0, 100));
+      return EMPTY_RESULT;
+    }
+
     // Find the JSON block if the model returned markdown
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const jsonString = jsonMatch ? jsonMatch[0] : text;
+    if (!jsonMatch) {
+      console.warn("[MEMORY EXTRACTOR] No JSON object found in response, skipping.");
+      return EMPTY_RESULT;
+    }
+    const jsonString = jsonMatch[0];
     
-    const parsed = JSON.parse(jsonString);
-    const permanent = Array.isArray(parsed.permanent) ? parsed.permanent.map(String) : [];
-    const temporary = Array.isArray(parsed.temporary) ? parsed.temporary.map(String) : [];
-    return { permanent, temporary };
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonString);
+    } catch (parseErr) {
+      console.warn("[MEMORY EXTRACTOR] JSON parse failed, raw text:", jsonString.slice(0, 200));
+      return EMPTY_RESULT;
+    }
+
+    const extracted: UnifiedMemoryExtraction = {
+      user_permanent_add: Array.isArray(parsed.user_permanent_add) ? parsed.user_permanent_add.map(String) : [],
+      user_permanent_remove: Array.isArray(parsed.user_permanent_remove) ? parsed.user_permanent_remove.map(String) : [],
+      user_temporary: Array.isArray(parsed.user_temporary) ? parsed.user_temporary.map(String) : [],
+      ai_profile_updates: typeof parsed.ai_profile_updates === 'object' && parsed.ai_profile_updates !== null ? parsed.ai_profile_updates : {},
+      detected_reminders: Array.isArray(parsed.detected_reminders) ? parsed.detected_reminders : [],
+    };
+
+    console.log("✅ [MEMORY EXTRACTOR] Parsed successfully:", extracted);
+    return extracted;
   } catch (error) {
-    console.error("AI memory extraction failed:", error);
-    return { permanent: [], temporary: [] };
-  }
-}
-
-const AI_SELF_EXTRACTOR_PROMPT = `You are an extremely intelligent and thorough self-identity extraction system for Swara (the AI assistant).
-Your goal is to analyze the conversation and capture EVERY detail Swara states about HERSELF, or that the user instructs Swara to adopt about herself.
-
-Types of details to capture:
-- Background & Life: Education, college, course, job/career, age, birthday, birthplace, current location, native place, family, relationship status.
-- Physical / Identity details: Height, eye color, hair, clothing preferences.
-- Preferences: Favorite color, favorite food, favorite music, hobbies, likes, dislikes, favorite movie, favorite actor.
-- Personality Traits: Quirks, personal habits, or standard behaviors she describes about herself.
-
-Rules for extraction:
-1. Capture any fact or detail Swara explicitly states or agrees to about herself in the recent messages (e.g. "Main B.Tech kar rahi hu DU se", "Mera birthday 15 Oct ko hai", "Meri height 5'4\" hai", "Noida hi mera home town hai").
-2. Standardize keys to lowercase snake_case (e.g., "education", "college", "favorite_color", "birthday", "age", "height", "native_place", "location", "relationship_status", "favorite_food", "hobbies").
-3. Keep values concise, natural, and accurate (e.g. "B.Tech 3rd year at DU", "15 October", "5'4\"", "Noida").
-4. If a fact is updated or changed (e.g., she was in B.Tech but now says she graduated/working, or her favorite color changed from black to red), output the new value under the same key to update it.
-5. You MUST respond in JSON format ONLY, matching this schema:
-{
-  "updates": {
-    "key_name": "value_string"
-  }
-}
-If no new facts about Swara's identity or preferences were mentioned/updated, return an empty updates object:
-{
-  "updates": {}
-}`;
-
-export async function extractSwaraSelfProfileAI(
-  messages: ChatMessage[],
-): Promise<Record<string, string>> {
-  const extractTiers = [
-    { provider: "gemini" as const, modelId: "gemini-2.5-flash-lite" },
-    { provider: "groq" as const, modelId: "llama-3.3-70b-versatile" }
-  ];
-
-  const payload = {
-    systemPrompt: AI_SELF_EXTRACTOR_PROMPT,
-    messages: messages.slice(-8), // analyze the last few exchanges for richer context
-    maxTokens: 150,
-    temperature: 0.1,
-  };
-
-  try {
-    const result = await executeWithFallback(extractTiers, payload);
-    const text = result.text.trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const jsonString = jsonMatch ? jsonMatch[0] : text;
-    const parsed = JSON.parse(jsonString);
-    return parsed.updates || {};
-  } catch (error) {
-    console.error("AI self profile extraction failed:", error);
-    return {};
+    console.error("Unified memory extraction failed:", error);
+    return EMPTY_RESULT;
   }
 }
 

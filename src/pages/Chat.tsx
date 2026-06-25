@@ -52,7 +52,8 @@ import { getDownloadURL, ref as storageRef, uploadString, uploadBytes } from "fi
 import { useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { toast } from "sonner";
-import { sendMessage, detectChatMode, extractMemoryAI, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
+import { useReminderStore, type AssistantReminder } from "@/store/reminder-store";
+import { sendMessage, detectChatMode, extractUnifiedMemoryAI, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
 import {
   createChatSession,
   deleteChatSession,
@@ -85,6 +86,8 @@ import {
   saveImage,
   saveMemoryFields,
   setMemoryEnabled,
+  saveAiSelfProfile,
+  addReminderWithSync,
   type MemoryProfile,
 } from "@/lib/memory";
 import { detectMemory, saveImageMemoryDB, saveMemoryToDB, saveVisionImageMemory } from "@/lib/chatService";
@@ -406,7 +409,7 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light";
+  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders";
 
 
 // Canonical image map — single source of truth for character assets
@@ -1153,9 +1156,9 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessage
       <motion.div
         ref={ref}
         layout={false}
-        initial={isNew ? { opacity: 0, scale: 0.96 } : false}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.98 }}
+        initial={isNew ? { opacity: 0 } : false}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         transition={{ duration: 0.38, ease: [0.22, 0.8, 0.2, 1] }}
         className={`flex ${isUser ? "justify-end" : "justify-start"} group/msg w-full`}
         style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
@@ -1316,7 +1319,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
       ref={containerRef}
       className="w-full md:w-[85%] lg:w-[80%] mx-auto px-4 md:px-8 space-y-3 overflow-y-auto h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       style={{
-        overflowAnchor: "none",
+        overflowAnchor: "auto",
         scrollBehavior: "auto",
         contain: "content",
         WebkitOverflowScrolling: "touch",
@@ -1340,8 +1343,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
         {isLoading ? (
           <motion.div
             key="typing-indicator"
-            initial={{ opacity: 0, y: 6, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0 } }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="flex justify-start items-start h-12 overflow-hidden"
@@ -1843,6 +1846,28 @@ export default function Chat() {
     };
   }, []);
 
+  // Music Ducking for Reminders
+  useEffect(() => {
+    const handleReminderActive = () => {
+      if (audioRef.current) {
+        audioRef.current.volume = 0.1;
+      }
+    };
+    const handleReminderDismissed = () => {
+      if (audioRef.current) {
+        audioRef.current.volume = musicVolume;
+      }
+    };
+
+    window.addEventListener("saheli_reminder_active", handleReminderActive);
+    window.addEventListener("saheli_reminder_dismissed", handleReminderDismissed);
+
+    return () => {
+      window.removeEventListener("saheli_reminder_active", handleReminderActive);
+      window.removeEventListener("saheli_reminder_dismissed", handleReminderDismissed);
+    };
+  }, [musicVolume]);
+
   // Pre-resolve next song in queue in background to minimize network latency
   useEffect(() => {
     if (!currentMusicSong || musicQueue.length <= 1) return;
@@ -1930,7 +1955,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   };
 
   interface PendingDelete {
-    type: "chat" | "image" | "clear-chat" | "clear-image";
+    type: "chat" | "image" | "clear-chat" | "clear-image" | "clear-all";
     id?: string;
     chatItem?: any;
     imageItem?: any;
@@ -1959,6 +1984,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         await clearAllMemory(user, "chat");
       } else if (currentPending.type === "clear-image") {
         await clearAllMemory(user, "image");
+      } else if (currentPending.type === "clear-all") {
+        await clearAllMemory(user);
       }
       await refreshMemoryState();
     } catch (error) {
@@ -1972,6 +1999,15 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
     setPendingDelete(newPending);
   };
+
+  // Auto-commit pending deletes after 5 seconds to prevent them from being lost on page refresh
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const timer = setTimeout(() => {
+      void commitPendingDeletes();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [pendingDelete]);
 
   const handleUndoDelete = async () => {
     setPendingDelete(null);
@@ -2296,7 +2332,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     refreshCustomCharacters();
 
     const userDocRef = doc(db, "users", user.uid);
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+    const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.activeCharacter) {
@@ -2307,7 +2343,18 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       console.error("Error listening to user document: ", error);
     });
 
-    return () => unsubscribe();
+    const remindersRef = collection(db, "users", user.uid, "reminders");
+    const unsubscribeReminders = onSnapshot(remindersRef, (snapshot) => {
+      const fbReminders = snapshot.docs.map(d => d.data() as AssistantReminder);
+      useReminderStore.getState().setReminders(fbReminders);
+    }, (error) => {
+      console.error("Error listening to reminders: ", error);
+    });
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeReminders();
+    };
   }, [user, refreshCustomCharacters]);
 
   const selectedCharacterRef = useRef(selectedCharacter);
@@ -2769,7 +2816,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   useEffect(() => {
     const snapScroll = () => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      const el = messagesEndRef.current;
+      if (el && el.parentElement) {
+        el.parentElement.scrollTop = el.parentElement.scrollHeight;
+      }
     };
 
     // 1. Snap instantly
@@ -3371,7 +3421,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     let confirmMsg = "Clear all memory (chats + images + facts + preferences)?";
     if (type === "chat") {
       title = "Clear Chat Memory";
-      confirmMsg = "Clear all chat memory (chats + facts + preferences)?";
+      confirmMsg = "Clear all chat memory?";
     } else if (type === "image") {
       title = "Clear Image Memory";
       confirmMsg = "Clear all image memory?";
@@ -3429,13 +3479,17 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         );
       } else {
         await queuePendingDelete({
-          type: "clear-chat",
-          clearedChats: memoryProfile?.chat_history || []
+          type: "clear-all",
+          clearedChats: memoryProfile?.chat_history || [],
+          clearedImages: memoryProfile?.images || []
         });
         setMemoryProfile(prev => prev ? {
           ...prev,
           chat_history: [],
-          images: []
+          images: [],
+          preferences: [],
+          facts: [],
+          aiSelfProfile: {}
         } : null);
         setSelectedMemoryImage(null);
         setMemoryStatus(
@@ -4721,22 +4775,39 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   const handleAIMemoryExtraction = useCallback(async (chatId: string, history: ChatMessage[]) => {
     try {
-      const result = await extractMemoryAI(history);
-      if (!result.permanent.length && !result.temporary.length) {
+      const currentFacts = memoryProfile?.facts || [];
+      const result = await extractUnifiedMemoryAI(history, currentFacts);
+      
+      const hasPermanentAdd = result.user_permanent_add.length > 0;
+      const hasPermanentRemove = result.user_permanent_remove.length > 0;
+      const hasTemporary = result.user_temporary.length > 0;
+      const hasAiProfile = Object.keys(result.ai_profile_updates).length > 0;
+      const hasReminders = result.detected_reminders.length > 0;
+
+      if (!hasPermanentAdd && !hasPermanentRemove && !hasTemporary && !hasAiProfile && !hasReminders) {
         return;
       }
 
-      console.log("🧠 [MEMORY EXTRACTION AI] Extracted:", result);
+      console.log("🚀 [MEMORY EXTRACTION AI] Extracted:", result);
 
       // 1. Process permanent memories
-      if (result.permanent.length) {
+      if (hasPermanentAdd || hasPermanentRemove) {
         setMemoryProfile((prev) => {
           const currentProfile = prev ?? createEmptyMemoryProfile();
-          // Filter duplicates
-          const newFacts = result.permanent.filter(fact => !currentProfile.facts.includes(fact));
-          if (!newFacts.length) return currentProfile;
+          
+          let updatedFacts = [...currentProfile.facts];
 
-          const updatedFacts = [...newFacts, ...currentProfile.facts];
+          // Process Removals first
+          if (hasPermanentRemove) {
+            updatedFacts = updatedFacts.filter(fact => !result.user_permanent_remove.includes(fact));
+          }
+
+          // Process Additions
+          if (hasPermanentAdd) {
+            const newFacts = result.user_permanent_add.filter(fact => !updatedFacts.includes(fact));
+            updatedFacts = [...newFacts, ...updatedFacts];
+          }
+
           const nextMemoryFields = {
             preferences: currentProfile.preferences,
             facts: updatedFacts,
@@ -4781,9 +4852,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       }
 
       // 2. Process temporary memories
-      if (result.temporary.length) {
+      if (hasTemporary) {
         setTemporaryMemories((prev) => {
-          const updated = [...result.temporary, ...prev];
+          const updated = [...result.user_temporary, ...prev];
           
           // Persist to DB or localStorage
           void saveTemporaryMemories(chatId, updated, user).catch((err) => {
@@ -4793,10 +4864,55 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           return updated;
         });
       }
+
+      // 3. Process AI Profile Updates
+      if (hasAiProfile) {
+        setMemoryProfile((prev) => {
+          const currentProfile = prev ?? createEmptyMemoryProfile();
+          const currentAiProfile = currentProfile.aiSelfProfile || {};
+          
+          const newAiProfile = { ...currentAiProfile };
+          const now = new Date().toISOString();
+          
+          for (const [key, value] of Object.entries(result.ai_profile_updates)) {
+            newAiProfile[key] = { value, updatedAt: now };
+          }
+
+          const updatedProfile = {
+            ...currentProfile,
+            aiSelfProfile: newAiProfile,
+          };
+
+          setTimeout(() => setStoreMemory(updatedProfile), 0);
+
+          if (user) {
+            void saveAiSelfProfile(user, newAiProfile).catch(err => {
+              console.error("Failed to save AI self profile:", err);
+            });
+          }
+
+          return updatedProfile;
+        });
+      }
+
+      // 4. Process Detected Reminders
+      if (hasReminders) {
+        for (const reminder of result.detected_reminders) {
+          const dueTime = new Date(reminder.time_to_remind).getTime();
+          if (isNaN(dueTime)) continue; // skip invalid dates
+          
+          await addReminderWithSync(user, {
+            title: reminder.title,
+            message: reminder.message,
+            dueTime,
+          });
+        }
+      }
+
     } catch (err) {
       console.error("Failed to extract or save AI memory:", err);
     }
-  }, [user, setMemoryProfile, setTemporaryMemories, setStoreMemory]);
+  }, [user, memoryProfile, setMemoryProfile, setTemporaryMemories, setStoreMemory]);
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -6973,6 +7089,17 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           }}
           incognitoMode={incognitoMode}
           onIncognitoModeChange={handleIncognitoModeChange}
+          aiSelfProfile={memoryProfile?.aiSelfProfile}
+          onUpdateAiSelfProfile={(profile) => {
+            setMemoryProfile((prev) => {
+              const updated = { ...(prev ?? createEmptyMemoryProfile()), aiSelfProfile: profile };
+              setTimeout(() => setStoreMemory(updated), 0);
+              if (user) {
+                void saveAiSelfProfile(user, profile).catch(err => console.error("Failed to save AI self profile:", err));
+              }
+              return updated;
+            });
+          }}
         />
 
         <MemoryModal

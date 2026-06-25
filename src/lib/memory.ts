@@ -16,10 +16,12 @@ import {
 import type { User } from "firebase/auth";
 import { db } from "@/lib/firebase";
 import { shouldSaveToMemory } from "@/lib/shouldSaveToMemory";
+import { useReminderStore, type AssistantReminder } from "@/store/reminder-store";
 
 const USERS_COLLECTION = "users";
 const CHAT_HISTORY_COLLECTION = "chat_history";
 const IMAGES_COLLECTION = "images";
+const REMINDERS_COLLECTION = "reminders";
 const LOCAL_MEMORY_ENABLED_KEY = "memory_enabled_guest";
 
 const MAX_IMAGE_HISTORY = 60;
@@ -416,6 +418,80 @@ function getImagesCollection(user: User) {
   return collection(db, USERS_COLLECTION, user.uid, IMAGES_COLLECTION);
 }
 
+function getRemindersCollection(user: User) {
+  return collection(db, USERS_COLLECTION, user.uid, REMINDERS_COLLECTION);
+}
+
+export async function fetchRemindersFromFirebase(user: User | null): Promise<AssistantReminder[]> {
+  if (!user) return [];
+  try {
+    const snapshot = await getDocs(getRemindersCollection(user));
+    return snapshot.docs.map(doc => doc.data() as AssistantReminder);
+  } catch (err) {
+    console.error("Failed to fetch reminders:", err);
+    return [];
+  }
+}
+
+export async function saveReminderToFirebase(user: User | null, reminder: AssistantReminder) {
+  if (!user) return;
+  try {
+    await setDoc(doc(getRemindersCollection(user), reminder.id), reminder);
+  } catch (err) {
+    console.error("Failed to save reminder:", err);
+  }
+}
+
+export async function deleteReminderFromFirebase(user: User | null, reminderId: string) {
+  if (!user) return;
+  try {
+    await deleteDoc(doc(getRemindersCollection(user), reminderId));
+  } catch (err) {
+    console.error("Failed to delete reminder:", err);
+  }
+}
+
+export async function addReminderWithSync(user: User | null, reminderData: Omit<AssistantReminder, "id" | "createdAt" | "isCompleted">) {
+  const newReminder: AssistantReminder = {
+    ...reminderData,
+    id: Math.random().toString(36).substring(2, 9),
+    createdAt: Date.now(),
+    isCompleted: false,
+  };
+
+  useReminderStore.getState().addReminder(newReminder);
+  if (user) {
+    await saveReminderToFirebase(user, newReminder);
+  }
+}
+
+export async function updateReminderWithSync(user: User | null, id: string, updates: Partial<AssistantReminder>) {
+  useReminderStore.getState().updateReminder(id, updates);
+  if (user) {
+    const existing = useReminderStore.getState().reminders.find(r => r.id === id);
+    if (existing) {
+      await saveReminderToFirebase(user, existing);
+    }
+  }
+}
+
+export async function deleteReminderWithSync(user: User | null, id: string) {
+  useReminderStore.getState().deleteReminder(id);
+  if (user) {
+    await deleteReminderFromFirebase(user, id);
+  }
+}
+
+export async function markReminderCompletedWithSync(user: User | null, id: string) {
+  useReminderStore.getState().markCompleted(id);
+  if (user) {
+    const existing = useReminderStore.getState().reminders.find(r => r.id === id);
+    if (existing) {
+      await saveReminderToFirebase(user, existing);
+    }
+  }
+}
+
 function mapMemoryDoc(data: MemoryDocShape | undefined): Omit<MemoryProfile, "chat_history" | "images"> {
   return {
     preferences: normalizeList(data?.preferences, MAX_PREFERENCES),
@@ -801,11 +877,15 @@ export async function clearAllMemory(user: User | null, type?: "chat" | "image")
 
   if (!type || type === "chat") {
     const chatSnapshot = await getDocs(query(getChatHistoryCollection(user), limit(500)));
+    promises.push(...chatSnapshot.docs.map((entry) => deleteDoc(entry.ref)));
+  }
+
+  if (!type) {
     promises.push(
-      ...chatSnapshot.docs.map((entry) => deleteDoc(entry.ref)),
       updateDoc(getUserDocRef(user), {
         preferences: [],
         facts: [],
+        aiSelfProfile: {},
         updatedAt: serverTimestamp(),
       })
     );

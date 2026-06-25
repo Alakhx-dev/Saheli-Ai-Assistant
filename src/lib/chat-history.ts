@@ -323,37 +323,33 @@ export async function deleteChatSession(chatId: string, user: User | null) {
 }
 
 export async function saveTemporaryMemories(chatId: string, memories: string[], user: User | null) {
-  if (isGuestMode(user)) {
-    const chats = readLocalChats();
-    const existingChat = chats[chatId];
-    if (existingChat) {
-      existingChat.temporaryMemories = memories;
-      chats[chatId] = existingChat;
-      writeLocalChats(chats);
-    }
-    return;
+  // Temporary memories are LOCAL-ONLY (per user request).
+  // They persist only within the current browser session and are tied to this chat.
+  const chats = readLocalChats();
+  const existingChat = chats[chatId];
+  if (existingChat) {
+    existingChat.temporaryMemories = memories;
+    chats[chatId] = existingChat;
+    writeLocalChats(chats);
+  } else {
+    // If the chat doesn't exist in local (logged-in user), store separately
+    const key = `temp_memories_${chatId}`;
+    localStorage.setItem(key, JSON.stringify(memories));
   }
-
-  await updateDoc(doc(db, "chats", chatId), {
-    temporaryMemories: memories,
-  });
 }
 
 export async function loadTemporaryMemories(chatId: string, user: User | null): Promise<string[]> {
-  if (isGuestMode(user)) {
-    const chats = readLocalChats();
-    return chats[chatId]?.temporaryMemories ?? [];
-  }
-
+  // Temporary memories are LOCAL-ONLY
+  const chats = readLocalChats();
+  const fromChat = chats[chatId]?.temporaryMemories;
+  if (fromChat && fromChat.length > 0) return fromChat;
+  
+  // Fallback: check the standalone key (for logged-in users whose chat is in Firebase)
   try {
-    const snapshot = await getDoc(doc(db, "chats", chatId));
-    if (snapshot.exists()) {
-      const data = snapshot.data();
-      return Array.isArray(data?.temporaryMemories) ? data.temporaryMemories : [];
-    }
-  } catch (err) {
-    console.error("Failed to load temporary memories from Firestore:", err);
-  }
+    const key = `temp_memories_${chatId}`;
+    const stored = localStorage.getItem(key);
+    if (stored) return JSON.parse(stored);
+  } catch {}
   return [];
 }
 

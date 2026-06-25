@@ -10,12 +10,13 @@ import { auth, db, storage } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { characterDb } from "../../utils/indexedDb";
+import ReminderManager from "../reminders/ReminderManager";
 
 type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light";
+  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 // Helper to convert hex string (#RRGGBB) to HSV
@@ -497,6 +498,7 @@ export interface ConfigItem {
 
 export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "personalization", label: "Personalization", type: "tab", parentId: null },
+  { id: "reminders", label: "Assistant Reminders", type: "item", parentId: null },
   { id: "character", label: "Character Selection", type: "item", parentId: "personalization" },
   { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "personalization" },
   { id: "color", label: "Theme Color", type: "item", parentId: "personalization" },
@@ -548,6 +550,12 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
   const customProfileItem = cleaned.find(item => item.id === "custom_profile");
   if (!customProfileItem) {
     cleaned.push({ id: "custom_profile", label: "Custom Profile", type: "item", parentId: "memory" });
+  }
+  const remindersItem = cleaned.find(item => item.id === "reminders");
+  if (!remindersItem) {
+    cleaned.push({ id: "reminders", label: "Assistant Reminders", type: "item", parentId: null });
+  } else {
+    remindersItem.type = "item";
   }
   return cleaned;
 };
@@ -3058,6 +3066,14 @@ export default function SettingsPanel({
 
   const renderItemContent = (itemId: string, isCompact: boolean) => {
     switch (itemId) {
+      case "reminders":
+        return (
+          <motion.div key="reminders" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+            <SectionShell label="Personal Assistant" title="Reminders" description="Manage what Saheli remembers to remind you about." compact={isCompact}>
+              <ReminderManager />
+            </SectionShell>
+          </motion.div>
+        );
       case "character": {
         const uploadBtnThemeClasses = {
           pink: "hover:border-pink-500/35 text-pink-300",
@@ -3943,309 +3959,158 @@ export default function SettingsPanel({
             exit={{ opacity: 0, y: -8 }} 
             transition={{ duration: 0.12, ease: "easeOut" }}
           >
-            {/* Inject Scroller hider styles inline */}
+            {/* Inject styles */}
             <style dangerouslySetInnerHTML={{ __html: `
-              .no-scrollbar::-webkit-scrollbar {
-                display: none;
-              }
-              .no-scrollbar {
-                -ms-overflow-style: none;
-                scrollbar-width: none;
-              }
+              .no-scrollbar::-webkit-scrollbar { display: none; }
+              .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+              @keyframes swaraShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+              @keyframes swaraFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
+              @keyframes swaraBorderPulse { 0%, 100% { border-color: rgba(236,72,153,0.15); } 50% { border-color: rgba(168,85,247,0.25); } }
+              .swara-float { animation: swaraFloat 4s ease-in-out infinite; }
             `}} />
 
-            {/* Identity Card Container (Frosted Cyber-Glass Card) */}
-            <div className="rounded-[32px] border border-pink-500/20 bg-gradient-to-b from-black/80 via-purple-950/20 to-black/90 p-6 backdrop-blur-3xl shadow-[0_25px_60px_rgba(0,0,0,0.85),inset_0_1px_1px_rgba(255,255,255,0.06)] space-y-6 relative overflow-hidden flex flex-col items-center">
+            {/* ═══ Premium Identity Card ═══ */}
+            <div className="rounded-[28px] border border-pink-500/15 bg-gradient-to-b from-[#0d0515] via-[#120a22] to-[#0a0610] backdrop-blur-3xl shadow-[0_30px_80px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.04)] relative overflow-hidden" style={{ animation: "swaraBorderPulse 4s ease-in-out infinite" }}>
               
-              {/* Soft neon background glows */}
-              <div className="absolute -top-24 -right-24 w-48 h-48 bg-pink-500/10 rounded-full filter blur-[60px] pointer-events-none animate-pulse" style={{ animationDuration: "6s" }} />
-              <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-purple-500/10 rounded-full filter blur-[60px] pointer-events-none animate-pulse" style={{ animationDuration: "8s" }} />
+              {/* BG orbs */}
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-pink-500/8 rounded-full filter blur-[50px] pointer-events-none swara-float" />
+              <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-purple-600/8 rounded-full filter blur-[50px] pointer-events-none" style={{ animation: "swaraFloat 7s ease-in-out infinite reverse" }} />
 
-              {/* Cute digital background particles */}
-              <div className="absolute top-6 left-6 text-pink-500/15 text-lg select-none pointer-events-none font-mono">⚡</div>
-              <div className="absolute bottom-6 right-6 text-purple-500/15 text-md select-none pointer-events-none font-mono">✨</div>
-
-              {/* FIXED Top Section: Holographic Circular Avatar & Stats Console */}
-              <div className="flex flex-col items-center text-center relative w-full pb-5 border-b border-white/10 select-none">
+              {/* ─── Hero ─── */}
+              <div className="relative pt-7 pb-5 px-6 flex flex-col items-center text-center">
                 
-                {/* Holographic Circular Avatar Slot */}
-                <div className="relative group/avatar shrink-0 mb-4 select-none">
-                  {/* Outer breathing tech glow */}
-                  <div className="absolute -inset-2 rounded-full bg-pink-500/10 blur-md animate-pulse pointer-events-none" />
-                  
-                  {/* Spinning Holographic tech-ring */}
-                  <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-[spin_8s_linear_infinite] opacity-75 blur-[0.8px] pointer-events-none" />
-                  
-                  {/* Avatar wrapper */}
-                  <div className="relative w-22 h-22 rounded-full p-[2.5px] bg-black shadow-2xl overflow-hidden flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
-                    <img 
-                      src={customAvatar || activeMascotImg} 
-                      alt="Swara" 
-                      className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${!customAvatar ? "scale-[1.6] object-top origin-top" : "scale-100 object-center"}`}
-                    />
-                    
-                    {/* Upload camera overlay */}
-                    <label htmlFor="swara-avatar-upload" className="absolute inset-0 rounded-full bg-black/70 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-300" title="Upload Custom Photo">
-                      <Camera className="w-4 h-4 text-pink-300 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
+                {/* Avatar */}
+                <div className="relative group/avatar shrink-0 mb-4 select-none swara-float">
+                  <div className="absolute -inset-3 rounded-full opacity-50 pointer-events-none" style={{ background: "conic-gradient(from 0deg, #ec4899, #a855f7, #06b6d4, #ec4899)", animation: "spin 6s linear infinite", filter: "blur(8px)" }} />
+                  <div className="absolute -inset-1.5 rounded-full bg-gradient-to-br from-pink-500/25 via-purple-500/15 to-cyan-500/25 pointer-events-none" />
+                  <div className="relative w-[88px] h-[88px] rounded-full p-[3px] bg-[#0d0515] shadow-[0_0_30px_rgba(236,72,153,0.15)] overflow-hidden">
+                    <img src={customAvatar || activeMascotImg} alt="Swara" className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${!customAvatar ? "scale-[1.6] object-top origin-top" : "scale-100 object-center"}`} />
+                    <label htmlFor="swara-avatar-upload" className="absolute inset-0 rounded-full bg-black/70 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-300">
+                      <Camera className="w-4.5 h-4.5 text-pink-300 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
                     </label>
-                    <input 
-                      type="file" 
-                      id="swara-avatar-upload" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={handleAvatarUpload} 
-                    />
+                    <input type="file" id="swara-avatar-upload" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                   </div>
-
-                  {/* Custom avatar reset button (floating reset badge) */}
                   {customAvatar && (
-                    <button
-                      type="button"
-                      onClick={handleDeleteAvatar}
-                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 border border-white/20 text-white hover:bg-red-600 hover:scale-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(239,68,68,0.5)] z-30 flex items-center justify-center cursor-pointer animate-in zoom-in duration-200"
-                      title="Reset to default mascot"
-                    >
+                    <button type="button" onClick={handleDeleteAvatar} className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500/90 border border-red-400/30 text-white hover:bg-red-400 hover:scale-110 active:scale-95 transition-all shadow-[0_0_12px_rgba(239,68,68,0.5)] z-30 flex items-center justify-center cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
 
-                {/* Cyber Mascot Name (Sleek Gradient Text) */}
-                <h4 className="text-lg font-bold tracking-widest uppercase font-mono text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-purple-300 to-pink-200 drop-shadow-[0_0_12px_rgba(236,72,153,0.25)]">
-                  Swara
+                {/* Name */}
+                <h4 className="text-xl font-black tracking-[0.2em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-200 to-pink-300" style={{ backgroundSize: "200% auto", animation: "swaraShimmer 4s linear infinite" }}>
+                  SWARA
                 </h4>
                 
-                {/* Slogan subtext */}
-                <p className="text-[10px] text-pink-400 font-mono tracking-widest uppercase mt-1 flex items-center gap-1.5 justify-center">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping inline-block" />
-                  Your cutest bestie 🌸
-                </p>
+                {/* Status */}
+                <div className="mt-2 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06]">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                  </span>
+                  <span className="text-[10px] font-medium text-white/50 tracking-wider uppercase">Your AI Bestie</span>
+                </div>
 
-                {/* RPG Style Bond Affinity meter */}
-                <div className="w-[160px] mt-3.5 space-y-1">
-                  <div className="flex justify-between items-center text-[8px] font-mono tracking-widest text-pink-300/80 uppercase">
-                    <span>Bond Level</span>
-                    <span className="flex items-center gap-0.5 animate-pulse text-pink-300">99% 💖</span>
+                {/* Bond meter */}
+                <div className="w-[180px] mt-4 space-y-1.5">
+                  <div className="flex justify-between items-center text-[9px] font-semibold tracking-[0.15em] uppercase">
+                    <span className="text-white/30">Bond Level</span>
+                    <span className="text-pink-300/70 flex items-center gap-1">99% 💗</span>
                   </div>
-                  <div className="h-1.5 w-full bg-black/60 border border-pink-500/20 rounded-full overflow-hidden p-[1px]">
-                    <div className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]" style={{ width: "99%" }} />
+                  <div className="h-[5px] w-full bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.06]">
+                    <div className="h-full rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.5)]" style={{ width: "99%" }} />
                   </div>
                 </div>
 
-                {/* Add Detail Plus Button (absolute top right, custom cyber button styling) */}
-                <button
-                  type="button"
-                  onClick={() => setIsAddingFact(true)}
-                  className="absolute top-0 right-0 p-2 rounded-xl border border-pink-500/30 bg-pink-500/10 text-pink-300 hover:text-white hover:bg-pink-500/25 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shadow-[0_0_12px_rgba(236,72,153,0.2)] z-30"
-                  title="Add new fact capsule"
-                >
+                {/* Add button */}
+                <button type="button" onClick={() => setIsAddingFact(true)} className="absolute top-5 right-5 p-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/40 hover:text-pink-300 hover:border-pink-500/30 hover:bg-pink-500/10 hover:shadow-[0_0_20px_rgba(236,72,153,0.15)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer" title="Add new detail">
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
 
-              {/* Adding Fact Form */}
-              {isAddingFact && (
-                <div className="w-full bg-black/65 border border-pink-500/20 rounded-2xl p-4 space-y-3 shadow-xl relative overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500 to-purple-600" />
-                  
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-bold text-pink-400 uppercase tracking-widest block font-mono">Fact Label</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. favorite_color, education, birthday"
-                      value={newFactKey}
-                      onChange={(e) => setNewFactKey(e.target.value)}
-                      className="w-full py-1.5 px-3 text-xs bg-white/5 border border-white/10 focus:border-pink-500/40 rounded-xl text-white outline-none placeholder:text-white/20 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-bold text-pink-400 uppercase tracking-widest block font-mono">Fact Value</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. black, B.Tech 3rd year"
-                      value={newFactValue}
-                      onChange={(e) => setNewFactValue(e.target.value)}
-                      className="w-full py-1.5 px-3 text-xs bg-white/5 border border-white/10 focus:border-pink-500/40 rounded-xl text-white outline-none placeholder:text-white/20 font-mono"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-1 font-mono">
-                    <button
-                      type="button"
-                      onClick={() => { setIsAddingFact(false); setNewFactKey(""); setNewFactValue(""); }}
-                      className="px-3 py-1 text-[10px] border border-white/10 rounded-xl text-white/70 hover:bg-white/5 transition"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddFact}
-                      className="px-3 py-1 text-[10px] font-bold bg-gradient-to-r from-pink-500 to-purple-600 rounded-xl text-white transition shadow-md shadow-pink-500/20"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-              )}
+              {/* Separator */}
+              <div className="mx-6 h-px bg-gradient-to-r from-transparent via-pink-500/15 to-transparent" />
 
-              {/* ROLLING/CAROUSEL Detail Carousel */}
-              <div className="w-full relative flex items-center gap-3.5 select-none py-1">
+              {/* ─── Facts Section ─── */}
+              <div className="px-5 pt-4 pb-5">
+                
+                {/* Add form */}
+                {isAddingFact && (
+                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-4 bg-white/[0.02] border border-pink-500/15 rounded-2xl p-4 space-y-3 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500/60 via-purple-500/60 to-pink-500/60" />
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold text-pink-400/70 uppercase tracking-[0.15em] block">Detail Name</label>
+                      <input type="text" placeholder="e.g. favorite_color, height" value={newFactKey} onChange={(e) => setNewFactKey(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.03] border border-white/[0.08] focus:border-pink-500/30 rounded-xl text-white outline-none placeholder:text-white/15 transition-colors" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-bold text-pink-400/70 uppercase tracking-[0.15em] block">Value</label>
+                      <input type="text" placeholder="e.g. pink, 5'4" value={newFactValue} onChange={(e) => setNewFactValue(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.03] border border-white/[0.08] focus:border-pink-500/30 rounded-xl text-white outline-none placeholder:text-white/15 transition-colors" />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button type="button" onClick={() => { setIsAddingFact(false); setNewFactKey(""); setNewFactValue(""); }} className="px-3.5 py-1.5 text-[10px] font-medium border border-white/[0.08] rounded-xl text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all">Cancel</button>
+                      <button type="button" onClick={handleAddFact} className="px-3.5 py-1.5 text-[10px] font-bold bg-gradient-to-r from-pink-500/80 to-purple-500/80 hover:from-pink-500 hover:to-purple-500 rounded-xl text-white transition-all shadow-[0_4px_15px_rgba(236,72,153,0.2)]">Save ✨</button>
+                    </div>
+                  </motion.div>
+                )}
+
                 {profileEntries.length === 0 ? (
-                  <div className="w-full text-center py-8 px-4 border border-dashed border-pink-500/25 rounded-3xl bg-pink-500/[0.02] relative">
-                    <p className="text-sm font-mono text-pink-300/40 italic">No details remembered yet.</p>
-                    <p className="text-[10px] text-white/40 mt-2 leading-relaxed max-w-[210px] mx-auto font-mono">
-                      She automatically remembers facts about herself as you talk to her!
+                  /* Empty state */
+                  <div className="text-center py-8 px-4 relative">
+                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center swara-float">
+                      <Sparkles className="w-6 h-6 text-pink-400/40" />
+                    </div>
+                    <p className="text-sm font-medium text-white/25">No memories yet</p>
+                    <p className="text-[11px] text-white/15 mt-1.5 leading-relaxed max-w-[220px] mx-auto">
+                      Chat with Swara and she'll automatically remember things about herself here ✨
                     </p>
                   </div>
                 ) : (
-                  <>
-                    {/* Left Scroll Chevron */}
-                    {profileEntries.length > 1 && (
-                      <button 
-                        type="button" 
-                        onClick={handlePrev}
-                        className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 hover:text-white hover:bg-pink-500/25 transition-all duration-300 active:scale-90 cursor-pointer shrink-0 shadow-sm"
-                      >
-                        <ChevronRight className="h-4.5 w-4.5 rotate-180" />
-                      </button>
-                    )}
+                  /* Facts list */
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5">
+                    {profileEntries.map(([key, fact], index) => {
+                      const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+                      const iconMeta = getFactIconAndColor(key);
+                      const isEditing = editingFactKey === key;
 
-                    {/* Smaller Cyber-Glass Card (with Mouse wheel scroll & Up/Down Fade transition animation) */}
-                    <div className="flex-1 min-w-0">
-                      {activeEntry && (
-                        <div 
-                          ref={swaraScrollRef}
-                          className="w-full p-5 rounded-2xl border border-pink-500/20 bg-gradient-to-b from-white/[0.05] via-white/[0.02] to-transparent flex flex-col items-center text-center justify-center relative min-h-[145px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_12px_24px_rgba(0,0,0,0.5)] transition-all duration-300 hover:border-pink-500/35 overflow-hidden"
-                        >
-                          <AnimatePresence initial={false} custom={slideDirection} mode="wait">
-                            <motion.div 
-                              key={activeFactIndex + (editingFactKey ? "-editing" : "-viewing")}
-                              custom={slideDirection}
-                              variants={slideVariants}
-                              initial="initial"
-                              animate="animate"
-                              exit="exit"
-                              className="w-full flex flex-col items-center text-center justify-center animate-in fade-in duration-300"
-                            >
-                              {(() => {
-                                const [key, fact] = activeEntry;
-                                const isEditing = editingFactKey === key;
-                                const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
-                                const iconMeta = getFactIconAndColor(key);
+                      return (
+                        <motion.div key={key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.2 }} className="group/fact relative">
+                          {isEditing ? (
+                            <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-pink-500/20 space-y-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`p-1.5 rounded-lg border ${iconMeta.color} flex items-center justify-center shrink-0`}>{iconMeta.icon}</span>
+                                <span className="text-[10px] font-bold text-pink-300/70 uppercase tracking-wider">{label}</span>
+                              </div>
+                              <input type="text" value={editingFactValue} onChange={(e) => setEditingFactValue(e.target.value)} className="w-full py-1.5 px-3 bg-black/40 border border-pink-500/25 focus:border-pink-500/40 rounded-xl text-xs text-white outline-none" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditedFact(key); if (e.key === "Escape") setEditingFactKey(null); }} />
+                              <div className="flex justify-end gap-2">
+                                <button type="button" onClick={() => setEditingFactKey(null)} className="px-2.5 py-1 text-[9px] border border-white/[0.08] rounded-lg text-white/50 hover:text-white transition">Cancel</button>
+                                <button type="button" onClick={() => handleSaveEditedFact(key)} className="px-2.5 py-1 text-[9px] font-bold bg-emerald-500/80 hover:bg-emerald-500 rounded-lg text-white transition">Save</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-pink-500/15 hover:bg-white/[0.04] transition-all duration-300 group-hover/fact:shadow-[0_4px_20px_rgba(236,72,153,0.06)]">
+                              <div className={`p-2 rounded-xl border shrink-0 flex items-center justify-center transition-all duration-300 group-hover/fact:scale-105 ${iconMeta.color}`}>{iconMeta.icon}</div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-[9px] font-semibold text-white/25 uppercase tracking-[0.15em] leading-none">{label}</p>
+                                <p className="text-[13px] font-medium text-white/85 mt-1 truncate" title={fact.value}>{fact.value}</p>
+                              </div>
+                              <div className="flex items-center gap-1 opacity-0 group-hover/fact:opacity-100 transition-opacity duration-200 shrink-0">
+                                <button type="button" onClick={() => handleStartEditFact(key, fact.value)} className="p-1.5 rounded-lg text-white/30 hover:text-pink-300 hover:bg-pink-500/10 transition-all cursor-pointer" title="Edit"><Pencil className="h-3 w-3" /></button>
+                                <button type="button" onClick={() => handleDeleteFact(key)} className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer" title="Delete"><Trash2 className="h-3 w-3" /></button>
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                                if (isEditing) {
-                                  return (
-                                    <div className="w-full space-y-3">
-                                      <div className="flex items-center justify-center gap-1.5">
-                                        <span className={`p-1.5 rounded-xl border ${iconMeta.color} flex items-center justify-center shrink-0`}>
-                                          {iconMeta.icon}
-                                        </span>
-                                        <span className="text-[10px] font-bold text-pink-300 uppercase tracking-wider block font-mono">{label}</span>
-                                      </div>
-                                      <input
-                                        type="text"
-                                        value={editingFactValue}
-                                        onChange={(e) => setEditingFactValue(e.target.value)}
-                                        className="w-full py-1.5 px-3 bg-black/60 border border-pink-500/30 focus:border-pink-500/50 rounded-xl text-xs text-white text-center outline-none shadow-inner font-mono"
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter") handleSaveEditedFact(key);
-                                          if (e.key === "Escape") setEditingFactKey(null);
-                                        }}
-                                      />
-                                      <div className="flex justify-center gap-2 pt-0.5 font-mono">
-                                        <button
-                                          type="button"
-                                          onClick={() => setEditingFactKey(null)}
-                                          className="px-2.5 py-1 text-[9px] border border-white/10 rounded-lg text-white/60 hover:text-white transition"
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleSaveEditedFact(key)}
-                                          className="px-2.5 py-1 text-[9px] font-bold bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white transition shadow-sm"
-                                        >
-                                          Save
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <>
-                                    {/* Icon Badge */}
-                                    <div className={`p-3 rounded-2xl border shrink-0 flex items-center justify-center mb-3 shadow-[0_6px_15px_rgba(236,72,153,0.15)] ${iconMeta.color}`}>
-                                      {iconMeta.icon}
-                                    </div>
-                                    
-                                    {/* Label */}
-                                    <span className="text-[9px] font-bold text-pink-300/80 uppercase tracking-widest font-mono block leading-none">{label}</span>
-                                    
-                                    {/* Value */}
-                                    <span className="text-[15px] text-white font-semibold mt-2.5 block max-w-full px-2 break-words font-sans tracking-wide" title={fact.value}>
-                                      {fact.value}
-                                    </span>
-
-                                    {/* Floating Hover Action Buttons */}
-                                    <div className="absolute top-0 right-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-pink-950/60 p-1 rounded-lg backdrop-blur-md border border-pink-500/20">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleStartEditFact(key, fact.value)}
-                                        className="p-1 rounded text-pink-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                                        title="Edit fact"
-                                      >
-                                        <Pencil className="h-3 w-3" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteFact(key)}
-                                        className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10 transition cursor-pointer"
-                                        title="Delete fact"
-                                      >
-                                        <Trash2 className="h-3 w-3" />
-                                      </button>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </motion.div>
-                          </AnimatePresence>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right Scroll Chevron */}
-                    {profileEntries.length > 1 && (
-                      <button 
-                        type="button" 
-                        onClick={handleNext}
-                        className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-300 hover:text-white hover:bg-pink-500/25 transition-all duration-300 active:scale-90 cursor-pointer shrink-0 shadow-sm"
-                      >
-                        <ChevronRight className="h-4.5 w-4.5" />
-                      </button>
-                    )}
-                  </>
+                {profileEntries.length > 0 && (
+                  <div className="mt-3 flex justify-center">
+                    <span className="text-[9px] font-medium text-white/15 tracking-wider uppercase">{profileEntries.length} {profileEntries.length === 1 ? "memory" : "memories"} saved</span>
+                  </div>
                 )}
               </div>
-
-              {/* Navigation dots at the bottom */}
-              {profileEntries.length > 1 && (
-                <div className="flex justify-center gap-2 mt-1">
-                  {profileEntries.map(([key], index) => (
-                    <button 
-                      type="button"
-                      key={key} 
-                      onClick={() => {
-                        setSlideDirection(index > activeFactIndex ? "up" : "down");
-                        setActiveFactIndex(index);
-                      }}
-                      className={`w-2 h-2 rounded-full transition-all duration-300 ${index === activeFactIndex ? "bg-pink-400 w-4.5 shadow-[0_0_8px_rgba(236,72,153,0.5)]" : "bg-white/20 hover:bg-white/45"}`}
-                    />
-                  ))}
-                </div>
-              )}
-
             </div>
           </motion.div>
         );
@@ -4567,6 +4432,7 @@ export default function SettingsPanel({
   const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
     { id: "personalization" as const, label: "Personalization" },
+    { id: "reminders" as const, label: "Reminders" },
     { id: "memory" as const, label: "Memory" },
     { id: "account" as const, label: "Account" },
     { id: "appearance" as const, label: "Personality" },
