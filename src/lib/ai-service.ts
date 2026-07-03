@@ -1579,7 +1579,8 @@ Your ONLY job is to analyze the conversation and output a JSON object.
 DO NOT converse, DO NOT answer the user's questions, DO NOT output any text other than the JSON object.
 
 Your job is to extract important details into 5 strict categories.
-Current Date/Time: REPLACE_TIME
+Current Date/Time (ISO): REPLACE_TIME_ISO
+Current Date/Time (Human-Readable): REPLACE_TIME_HUMAN
 Existing Permanent Memories:
 REPLACE_CURRENT_MEMORIES
 
@@ -1600,8 +1601,16 @@ Categories:
 4. "ai_profile_updates": ANY facts, traits, preferences, opinions, or backstory that Swara (the AI) states about HERSELF in the conversation. Capture everything she says about her own identity, life, appearance, favorites, etc. Standardize keys to lowercase snake_case (e.g. "height": "5'4", "favorite_color": "pink").
 5. "detected_reminders": If the user asks to be reminded of something at a specific time or in the future.
   - "title": Short title (e.g. "Call Mom")
-  - "time_to_remind": ISO 8601 string of the absolute time. Calculate based on Current Date/Time above.
+  - "time_to_remind": ISO 8601 string of the ABSOLUTE FUTURE time. Calculate carefully based on Current Date/Time above.
   - "message": A sassy/cute response Swara should say when the reminder rings.
+
+  REMINDER TIME RULES (CRITICAL — follow precisely):
+  - The time_to_remind MUST ALWAYS be a FUTURE timestamp. NEVER set it to the current time or any past time.
+  - If user says "8 ko 12 bje" or "8 tarikh ko 12 baje", that means the 8th of the current month (or next month if the 8th has already passed) at 12:00.
+  - If user says "1 min baad" or "5 min baad", add that many minutes to the current time.
+  - If user says "kal" that means tomorrow. "parso" means day after tomorrow.
+  - If user says "8 ko train hai, 12 bje reminder set kr dena", set reminder for 8th at 12:00, NOT for right now.
+  - Double check: the resulting time_to_remind ISO string must be AFTER the Current Date/Time shown above.
 
 CRITICAL RULES:
 - CHECK MESSAGE ROLES CAREFULLY. role='user' = human, role='model' = Swara (AI).
@@ -1630,8 +1639,15 @@ export async function extractUnifiedMemoryAI(
     ? currentPermanentMemories.map(m => `- ${m}`).join('\n')
     : "None";
 
+  const now = new Date();
+  const humanReadableTime = now.toLocaleString('en-IN', { 
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', 
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' 
+  });
+
   const promptWithContext = UNIFIED_MEMORY_EXTRACTOR_PROMPT
-    .replace("REPLACE_TIME", new Date().toISOString())
+    .replace("REPLACE_TIME_ISO", now.toISOString())
+    .replace("REPLACE_TIME_HUMAN", humanReadableTime)
     .replace("REPLACE_CURRENT_MEMORIES", memoriesList);
 
   const payload = {

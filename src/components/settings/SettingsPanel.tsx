@@ -3896,64 +3896,33 @@ export default function SettingsPanel({
         const getFactIconAndColor = (factKey: string) => {
           const k = factKey.toLowerCase();
           if (k.includes("education") || k.includes("college") || k.includes("study") || k.includes("degree") || k.includes("school") || k.includes("class")) {
-            return { icon: <GraduationCap className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎓" };
+            return { icon: <GraduationCap className="h-4 w-4" />, gradient: "from-violet-500/20 to-indigo-500/10", border: "border-violet-500/25", text: "text-violet-300", emoji: "🎓" };
           }
           if (k.includes("color")) {
-            return { icon: <Palette className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎨" };
+            return { icon: <Palette className="h-4 w-4" />, gradient: "from-rose-500/20 to-pink-500/10", border: "border-rose-500/25", text: "text-rose-300", emoji: "🎨" };
           }
           if (k.includes("height")) {
-            return { icon: <Ruler className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "📏" };
+            return { icon: <Ruler className="h-4 w-4" />, gradient: "from-cyan-500/20 to-teal-500/10", border: "border-cyan-500/25", text: "text-cyan-300", emoji: "📏" };
           }
           if (k.includes("location") || k.includes("place") || k.includes("city") || k.includes("town") || k.includes("home") || k.includes("address")) {
-            return { icon: <MapPin className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "📍" };
+            return { icon: <MapPin className="h-4 w-4" />, gradient: "from-amber-500/20 to-orange-500/10", border: "border-amber-500/25", text: "text-amber-300", emoji: "📍" };
           }
           if (k.includes("birthday") || k.includes("dob") || k.includes("birth")) {
-            return { icon: <CalendarDays className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "🎂" };
+            return { icon: <CalendarDays className="h-4 w-4" />, gradient: "from-fuchsia-500/20 to-pink-500/10", border: "border-fuchsia-500/25", text: "text-fuchsia-300", emoji: "🎂" };
           }
           if (k.includes("relationship") || k.includes("status") || k.includes("boyfriend") || k.includes("love") || k.includes("partner")) {
-            return { icon: <Heart className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "💖" };
+            return { icon: <Heart className="h-4 w-4" />, gradient: "from-pink-500/20 to-rose-500/10", border: "border-pink-500/25", text: "text-pink-300", emoji: "💖" };
           }
           if (k.includes("age") || k.includes("year")) {
-            return { icon: <Sparkles className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "✨" };
+            return { icon: <Sparkles className="h-4 w-4" />, gradient: "from-purple-500/20 to-violet-500/10", border: "border-purple-500/25", text: "text-purple-300", emoji: "✨" };
           }
-          return { icon: <User className="h-[20px] w-[20px]" />, color: "text-pink-300 bg-pink-500/10 border-pink-500/20", emoji: "✨" };
-        };
-
-        const handlePrev = () => {
-          if (profileEntries.length <= 1) return;
-          setSlideDirection("down");
-          setActiveFactIndex((prev) => (prev - 1 + profileEntries.length) % profileEntries.length);
-        };
-
-        const handleNext = () => {
-          if (profileEntries.length <= 1) return;
-          setSlideDirection("up");
-          setActiveFactIndex((prev) => (prev + 1) % profileEntries.length);
-        };
-
-        const activeEntry = profileEntries[activeFactIndex];
-
-        const slideVariants: any = {
-          initial: (dir: "up" | "down") => ({
-            opacity: 0,
-            y: dir === "up" ? 15 : -15
-          }),
-          animate: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.22, ease: "easeOut" }
-          },
-          exit: (dir: "up" | "down") => ({
-            opacity: 0,
-            y: dir === "up" ? -15 : 15,
-            transition: { duration: 0.18, ease: "easeIn" }
-          })
+          return { icon: <User className="h-4 w-4" />, gradient: "from-sky-500/20 to-blue-500/10", border: "border-sky-500/25", text: "text-sky-300", emoji: "✨" };
         };
 
         return (
           <motion.div 
             key="swara-profile-direct" 
-            className="space-y-4" 
+            className="space-y-0" 
             initial={{ opacity: 0, y: 8 }} 
             animate={{ opacity: 1, y: 0 }} 
             exit={{ opacity: 0, y: -8 }} 
@@ -3963,139 +3932,149 @@ export default function SettingsPanel({
             <style dangerouslySetInnerHTML={{ __html: `
               .no-scrollbar::-webkit-scrollbar { display: none; }
               .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-              @keyframes swaraShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-              @keyframes swaraFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
-              @keyframes swaraBorderPulse { 0%, 100% { border-color: rgba(236,72,153,0.15); } 50% { border-color: rgba(168,85,247,0.25); } }
-              .swara-float { animation: swaraFloat 4s ease-in-out infinite; }
+              @keyframes swaraOrbFloat { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(8px, -6px) scale(1.05); } }
+              @keyframes swaraOrbFloat2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-6px, 5px) scale(1.08); } }
+              @keyframes swaraRingRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+              @keyframes swaraPulseGlow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.7; } }
+              @keyframes swaraBreath { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+              @keyframes swaraBarShine { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
             `}} />
 
-            {/* ═══ Premium Identity Card ═══ */}
-            <div className="rounded-[28px] border border-pink-500/15 bg-gradient-to-b from-[#0d0515] via-[#120a22] to-[#0a0610] backdrop-blur-3xl shadow-[0_30px_80px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.04)] relative overflow-hidden" style={{ animation: "swaraBorderPulse 4s ease-in-out infinite" }}>
+            {/* ═══ Premium Profile Card ═══ */}
+            <div className="rounded-[24px] border border-white/[0.06] bg-gradient-to-b from-[#0e0618]/95 via-[#110b1f]/90 to-[#0c0714]/95 backdrop-blur-3xl shadow-[0_24px_64px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.03)] relative overflow-hidden">
               
-              {/* BG orbs */}
-              <div className="absolute -top-20 -right-20 w-40 h-40 bg-pink-500/8 rounded-full filter blur-[50px] pointer-events-none swara-float" />
-              <div className="absolute -bottom-16 -left-16 w-36 h-36 bg-purple-600/8 rounded-full filter blur-[50px] pointer-events-none" style={{ animation: "swaraFloat 7s ease-in-out infinite reverse" }} />
+              {/* Ambient orbs */}
+              <div className="absolute -top-16 -right-16 w-44 h-44 rounded-full pointer-events-none opacity-60" style={{ background: "radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 70%)", animation: "swaraOrbFloat 8s ease-in-out infinite" }} />
+              <div className="absolute -bottom-12 -left-12 w-36 h-36 rounded-full pointer-events-none opacity-50" style={{ background: "radial-gradient(circle, rgba(236,72,153,0.1) 0%, transparent 70%)", animation: "swaraOrbFloat2 10s ease-in-out infinite" }} />
+              <div className="absolute top-1/2 right-0 w-24 h-24 rounded-full pointer-events-none opacity-30" style={{ background: "radial-gradient(circle, rgba(6,182,212,0.08) 0%, transparent 70%)", animation: "swaraOrbFloat 12s ease-in-out infinite reverse" }} />
 
-              {/* ─── Hero ─── */}
-              <div className="relative pt-7 pb-5 px-6 flex flex-col items-center text-center">
+              {/* Top accent line */}
+              <div className="absolute top-0 left-[15%] right-[15%] h-[1px] bg-gradient-to-r from-transparent via-purple-400/30 to-transparent" />
+
+              {/* ─── Hero Section ─── */}
+              <div className="relative pt-8 pb-6 px-6 flex flex-col items-center text-center">
                 
-                {/* Avatar */}
-                <div className="relative group/avatar shrink-0 mb-4 select-none swara-float">
-                  <div className="absolute -inset-3 rounded-full opacity-50 pointer-events-none" style={{ background: "conic-gradient(from 0deg, #ec4899, #a855f7, #06b6d4, #ec4899)", animation: "spin 6s linear infinite", filter: "blur(8px)" }} />
-                  <div className="absolute -inset-1.5 rounded-full bg-gradient-to-br from-pink-500/25 via-purple-500/15 to-cyan-500/25 pointer-events-none" />
-                  <div className="relative w-[88px] h-[88px] rounded-full p-[3px] bg-[#0d0515] shadow-[0_0_30px_rgba(236,72,153,0.15)] overflow-hidden">
+                {/* Add button */}
+                <button type="button" onClick={() => setIsAddingFact(true)} className="absolute top-4 right-4 p-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] text-white/30 hover:text-purple-300 hover:border-purple-500/25 hover:bg-purple-500/8 hover:shadow-[0_0_24px_rgba(168,85,247,0.12)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer backdrop-blur-md" title="Add new detail">
+                  <Plus className="h-4 w-4" />
+                </button>
+
+                {/* Avatar with animated ring */}
+                <div className="relative group/avatar shrink-0 mb-5 select-none" style={{ animation: "swaraBreath 5s ease-in-out infinite" }}>
+                  {/* Rotating conic gradient ring */}
+                  <div className="absolute -inset-[6px] rounded-full opacity-40 pointer-events-none" style={{ background: "conic-gradient(from 0deg, #a855f7, #ec4899, #06b6d4, #8b5cf6, #a855f7)", animation: "swaraRingRotate 8s linear infinite", filter: "blur(6px)" }} />
+                  {/* Inner ring glow */}
+                  <div className="absolute -inset-[3px] rounded-full pointer-events-none" style={{ background: "conic-gradient(from 180deg, rgba(168,85,247,0.2), rgba(236,72,153,0.15), rgba(6,182,212,0.2), rgba(168,85,247,0.2))", animation: "swaraRingRotate 8s linear infinite" }} />
+                  
+                  <div className="relative w-[82px] h-[82px] rounded-full p-[2.5px] bg-[#0e0618] shadow-[0_0_24px_rgba(168,85,247,0.12)] overflow-hidden">
                     <img src={customAvatar || activeMascotImg} alt="Swara" className={`w-full h-full rounded-full object-cover transition-transform duration-500 ${!customAvatar ? "scale-[1.6] object-top origin-top" : "scale-100 object-center"}`} />
-                    <label htmlFor="swara-avatar-upload" className="absolute inset-0 rounded-full bg-black/70 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-300">
-                      <Camera className="w-4.5 h-4.5 text-pink-300 drop-shadow-[0_0_8px_rgba(236,72,153,0.6)]" />
+                    <label htmlFor="swara-avatar-upload" className="absolute inset-0 rounded-full bg-black/65 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center cursor-pointer transition-opacity duration-300 backdrop-blur-sm">
+                      <Camera className="w-4 h-4 text-purple-300 drop-shadow-[0_0_6px_rgba(168,85,247,0.5)]" />
                     </label>
                     <input type="file" id="swara-avatar-upload" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
                   </div>
                   {customAvatar && (
-                    <button type="button" onClick={handleDeleteAvatar} className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500/90 border border-red-400/30 text-white hover:bg-red-400 hover:scale-110 active:scale-95 transition-all shadow-[0_0_12px_rgba(239,68,68,0.5)] z-30 flex items-center justify-center cursor-pointer">
+                    <button type="button" onClick={handleDeleteAvatar} className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-red-500/90 border border-red-400/30 text-white hover:bg-red-400 hover:scale-110 active:scale-95 transition-all shadow-[0_0_10px_rgba(239,68,68,0.4)] z-30 flex items-center justify-center cursor-pointer">
                       <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
 
                 {/* Name */}
-                <h4 className="text-xl font-black tracking-[0.2em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-pink-300 via-purple-200 to-pink-300" style={{ backgroundSize: "200% auto", animation: "swaraShimmer 4s linear infinite" }}>
+                <h4 className="text-lg font-extrabold tracking-[0.18em] uppercase text-transparent bg-clip-text bg-gradient-to-r from-purple-300 via-white/90 to-pink-300">
                   SWARA
                 </h4>
                 
-                {/* Status */}
-                <div className="mt-2 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.03] border border-white/[0.06]">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                {/* Status pill */}
+                <div className="mt-2.5 flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.02] border border-white/[0.05]">
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
                   </span>
-                  <span className="text-[10px] font-medium text-white/50 tracking-wider uppercase">Your AI Bestie</span>
+                  <span className="text-[9px] font-medium text-white/40 tracking-[0.15em] uppercase">Your AI Bestie</span>
                 </div>
 
                 {/* Bond meter */}
-                <div className="w-[180px] mt-4 space-y-1.5">
-                  <div className="flex justify-between items-center text-[9px] font-semibold tracking-[0.15em] uppercase">
-                    <span className="text-white/30">Bond Level</span>
-                    <span className="text-pink-300/70 flex items-center gap-1">99% 💗</span>
+                <div className="w-full max-w-[200px] mt-5 space-y-2">
+                  <div className="flex justify-between items-center text-[8px] font-semibold tracking-[0.18em] uppercase">
+                    <span className="text-white/25">Bond Level</span>
+                    <span className="text-purple-300/60 flex items-center gap-1">99% 💗</span>
                   </div>
-                  <div className="h-[5px] w-full bg-white/[0.04] rounded-full overflow-hidden border border-white/[0.06]">
-                    <div className="h-full rounded-full bg-gradient-to-r from-pink-500 via-purple-500 to-pink-400 shadow-[0_0_12px_rgba(236,72,153,0.5)]" style={{ width: "99%" }} />
+                  <div className="h-[4px] w-full bg-white/[0.03] rounded-full overflow-hidden border border-white/[0.04] relative">
+                    <div className="h-full rounded-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.4)]" style={{ width: "99%" }} />
+                    <div className="absolute inset-0 w-[30%] h-full bg-gradient-to-r from-transparent via-white/25 to-transparent rounded-full" style={{ animation: "swaraBarShine 3s ease-in-out infinite" }} />
                   </div>
                 </div>
-
-                {/* Add button */}
-                <button type="button" onClick={() => setIsAddingFact(true)} className="absolute top-5 right-5 p-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/40 hover:text-pink-300 hover:border-pink-500/30 hover:bg-pink-500/10 hover:shadow-[0_0_20px_rgba(236,72,153,0.15)] hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer" title="Add new detail">
-                  <Plus className="h-4 w-4" />
-                </button>
               </div>
 
               {/* Separator */}
-              <div className="mx-6 h-px bg-gradient-to-r from-transparent via-pink-500/15 to-transparent" />
+              <div className="mx-8 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
 
-              {/* ─── Facts Section ─── */}
-              <div className="px-5 pt-4 pb-5">
+              {/* ─── Memories Section ─── */}
+              <div className="px-5 pt-5 pb-5">
                 
                 {/* Add form */}
                 {isAddingFact && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-4 bg-white/[0.02] border border-pink-500/15 rounded-2xl p-4 space-y-3 relative overflow-hidden">
-                    <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-pink-500/60 via-purple-500/60 to-pink-500/60" />
+                  <motion.div initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="mb-4 bg-gradient-to-br from-purple-500/[0.04] to-pink-500/[0.02] border border-purple-500/15 rounded-2xl p-4 space-y-3 relative overflow-hidden backdrop-blur-sm">
+                    <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-purple-400/50 to-transparent" />
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-pink-400/70 uppercase tracking-[0.15em] block">Detail Name</label>
-                      <input type="text" placeholder="e.g. favorite_color, height" value={newFactKey} onChange={(e) => setNewFactKey(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.03] border border-white/[0.08] focus:border-pink-500/30 rounded-xl text-white outline-none placeholder:text-white/15 transition-colors" />
+                      <label className="text-[8px] font-bold text-purple-300/60 uppercase tracking-[0.18em] block">Detail Name</label>
+                      <input type="text" placeholder="e.g. favorite_color, height" value={newFactKey} onChange={(e) => setNewFactKey(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.02] border border-white/[0.06] focus:border-purple-500/25 rounded-xl text-white outline-none placeholder:text-white/12 transition-all duration-300 focus:bg-white/[0.04] focus:shadow-[0_0_12px_rgba(168,85,247,0.08)]" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-[9px] font-bold text-pink-400/70 uppercase tracking-[0.15em] block">Value</label>
-                      <input type="text" placeholder="e.g. pink, 5'4" value={newFactValue} onChange={(e) => setNewFactValue(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.03] border border-white/[0.08] focus:border-pink-500/30 rounded-xl text-white outline-none placeholder:text-white/15 transition-colors" />
+                      <label className="text-[8px] font-bold text-purple-300/60 uppercase tracking-[0.18em] block">Value</label>
+                      <input type="text" placeholder="e.g. pink, 5'4" value={newFactValue} onChange={(e) => setNewFactValue(e.target.value)} className="w-full py-2 px-3 text-xs bg-white/[0.02] border border-white/[0.06] focus:border-purple-500/25 rounded-xl text-white outline-none placeholder:text-white/12 transition-all duration-300 focus:bg-white/[0.04] focus:shadow-[0_0_12px_rgba(168,85,247,0.08)]" />
                     </div>
-                    <div className="flex justify-end gap-2 pt-1">
-                      <button type="button" onClick={() => { setIsAddingFact(false); setNewFactKey(""); setNewFactValue(""); }} className="px-3.5 py-1.5 text-[10px] font-medium border border-white/[0.08] rounded-xl text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all">Cancel</button>
-                      <button type="button" onClick={handleAddFact} className="px-3.5 py-1.5 text-[10px] font-bold bg-gradient-to-r from-pink-500/80 to-purple-500/80 hover:from-pink-500 hover:to-purple-500 rounded-xl text-white transition-all shadow-[0_4px_15px_rgba(236,72,153,0.2)]">Save ✨</button>
+                    <div className="flex justify-end gap-2 pt-0.5">
+                      <button type="button" onClick={() => { setIsAddingFact(false); setNewFactKey(""); setNewFactValue(""); }} className="px-3 py-1.5 text-[10px] font-medium border border-white/[0.06] rounded-xl text-white/40 hover:text-white/70 hover:bg-white/[0.03] transition-all duration-200">Cancel</button>
+                      <button type="button" onClick={handleAddFact} className="px-3.5 py-1.5 text-[10px] font-bold bg-gradient-to-r from-purple-500/70 to-pink-500/70 hover:from-purple-500/90 hover:to-pink-500/90 rounded-xl text-white transition-all duration-300 shadow-[0_2px_12px_rgba(168,85,247,0.2)] hover:shadow-[0_4px_20px_rgba(168,85,247,0.3)]">Save ✨</button>
                     </div>
                   </motion.div>
                 )}
 
                 {profileEntries.length === 0 ? (
                   /* Empty state */
-                  <div className="text-center py-8 px-4 relative">
-                    <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center swara-float">
-                      <Sparkles className="w-6 h-6 text-pink-400/40" />
+                  <div className="text-center py-10 px-4 relative">
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/[0.06] to-pink-500/[0.04] border border-white/[0.05] flex items-center justify-center" style={{ animation: "swaraBreath 4s ease-in-out infinite" }}>
+                      <Sparkles className="w-5 h-5 text-purple-400/35" />
                     </div>
-                    <p className="text-sm font-medium text-white/25">No memories yet</p>
-                    <p className="text-[11px] text-white/15 mt-1.5 leading-relaxed max-w-[220px] mx-auto">
+                    <p className="text-[13px] font-medium text-white/20">No memories yet</p>
+                    <p className="text-[10px] text-white/12 mt-1.5 leading-relaxed max-w-[210px] mx-auto">
                       Chat with Swara and she'll automatically remember things about herself here ✨
                     </p>
                   </div>
                 ) : (
                   /* Facts list */
-                  <div className="space-y-2 max-h-[300px] overflow-y-auto no-scrollbar pr-0.5">
+                  <div className="space-y-2 max-h-[320px] overflow-y-auto no-scrollbar pr-0.5">
                     {profileEntries.map(([key, fact], index) => {
                       const label = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
                       const iconMeta = getFactIconAndColor(key);
                       const isEditing = editingFactKey === key;
 
                       return (
-                        <motion.div key={key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.05, duration: 0.2 }} className="group/fact relative">
+                        <motion.div key={key} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.04, duration: 0.25, ease: "easeOut" }} className="group/fact relative">
                           {isEditing ? (
-                            <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-pink-500/20 space-y-2.5">
-                              <div className="flex items-center gap-2">
-                                <span className={`p-1.5 rounded-lg border ${iconMeta.color} flex items-center justify-center shrink-0`}>{iconMeta.icon}</span>
-                                <span className="text-[10px] font-bold text-pink-300/70 uppercase tracking-wider">{label}</span>
+                            <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-purple-500/20 space-y-2.5 backdrop-blur-sm">
+                              <div className="flex items-center gap-2.5">
+                                <span className={`p-1.5 rounded-xl border bg-gradient-to-br ${iconMeta.gradient} ${iconMeta.border} ${iconMeta.text} flex items-center justify-center shrink-0`}>{iconMeta.icon}</span>
+                                <span className="text-[9px] font-bold text-purple-300/60 uppercase tracking-[0.12em]">{label}</span>
                               </div>
-                              <input type="text" value={editingFactValue} onChange={(e) => setEditingFactValue(e.target.value)} className="w-full py-1.5 px-3 bg-black/40 border border-pink-500/25 focus:border-pink-500/40 rounded-xl text-xs text-white outline-none" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditedFact(key); if (e.key === "Escape") setEditingFactKey(null); }} />
+                              <input type="text" value={editingFactValue} onChange={(e) => setEditingFactValue(e.target.value)} className="w-full py-1.5 px-3 bg-white/[0.02] border border-purple-500/20 focus:border-purple-500/35 rounded-xl text-xs text-white outline-none transition-all duration-200 focus:shadow-[0_0_12px_rgba(168,85,247,0.08)]" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleSaveEditedFact(key); if (e.key === "Escape") setEditingFactKey(null); }} />
                               <div className="flex justify-end gap-2">
-                                <button type="button" onClick={() => setEditingFactKey(null)} className="px-2.5 py-1 text-[9px] border border-white/[0.08] rounded-lg text-white/50 hover:text-white transition">Cancel</button>
-                                <button type="button" onClick={() => handleSaveEditedFact(key)} className="px-2.5 py-1 text-[9px] font-bold bg-emerald-500/80 hover:bg-emerald-500 rounded-lg text-white transition">Save</button>
+                                <button type="button" onClick={() => setEditingFactKey(null)} className="px-2.5 py-1 text-[9px] border border-white/[0.06] rounded-lg text-white/40 hover:text-white/70 transition-all duration-200">Cancel</button>
+                                <button type="button" onClick={() => handleSaveEditedFact(key)} className="px-2.5 py-1 text-[9px] font-bold bg-emerald-500/70 hover:bg-emerald-500/90 rounded-lg text-white transition-all duration-200 shadow-[0_2px_8px_rgba(16,185,129,0.15)]">Save</button>
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:border-pink-500/15 hover:bg-white/[0.04] transition-all duration-300 group-hover/fact:shadow-[0_4px_20px_rgba(236,72,153,0.06)]">
-                              <div className={`p-2 rounded-xl border shrink-0 flex items-center justify-center transition-all duration-300 group-hover/fact:scale-105 ${iconMeta.color}`}>{iconMeta.icon}</div>
+                            <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/[0.015] border border-white/[0.04] hover:border-white/[0.08] hover:bg-white/[0.03] transition-all duration-300 group-hover/fact:shadow-[0_4px_24px_rgba(0,0,0,0.15)]">
+                              <div className={`p-2 rounded-xl border shrink-0 flex items-center justify-center transition-all duration-300 group-hover/fact:scale-105 bg-gradient-to-br ${iconMeta.gradient} ${iconMeta.border} ${iconMeta.text}`}>{iconMeta.icon}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[9px] font-semibold text-white/25 uppercase tracking-[0.15em] leading-none">{label}</p>
-                                <p className="text-[13px] font-medium text-white/85 mt-1 truncate" title={fact.value}>{fact.value}</p>
+                                <p className="text-[8px] font-semibold text-white/20 uppercase tracking-[0.16em] leading-none">{label}</p>
+                                <p className="text-[13px] font-medium text-white/80 mt-1.5 truncate" title={fact.value}>{fact.value}</p>
                               </div>
-                              <div className="flex items-center gap-1 opacity-0 group-hover/fact:opacity-100 transition-opacity duration-200 shrink-0">
-                                <button type="button" onClick={() => handleStartEditFact(key, fact.value)} className="p-1.5 rounded-lg text-white/30 hover:text-pink-300 hover:bg-pink-500/10 transition-all cursor-pointer" title="Edit"><Pencil className="h-3 w-3" /></button>
-                                <button type="button" onClick={() => handleDeleteFact(key)} className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer" title="Delete"><Trash2 className="h-3 w-3" /></button>
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover/fact:opacity-100 transition-all duration-250 shrink-0 translate-x-1 group-hover/fact:translate-x-0">
+                                <button type="button" onClick={() => handleStartEditFact(key, fact.value)} className="p-1.5 rounded-lg text-white/25 hover:text-purple-300 hover:bg-purple-500/10 transition-all duration-200 cursor-pointer" title="Edit"><Pencil className="h-3 w-3" /></button>
+                                <button type="button" onClick={() => handleDeleteFact(key)} className="p-1.5 rounded-lg text-white/25 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 cursor-pointer" title="Delete"><Trash2 className="h-3 w-3" /></button>
                               </div>
                             </div>
                           )}
@@ -4106,8 +4085,8 @@ export default function SettingsPanel({
                 )}
 
                 {profileEntries.length > 0 && (
-                  <div className="mt-3 flex justify-center">
-                    <span className="text-[9px] font-medium text-white/15 tracking-wider uppercase">{profileEntries.length} {profileEntries.length === 1 ? "memory" : "memories"} saved</span>
+                  <div className="mt-4 flex justify-center">
+                    <span className="text-[8px] font-medium text-white/10 tracking-[0.2em] uppercase">{profileEntries.length} {profileEntries.length === 1 ? "memory" : "memories"} saved</span>
                   </div>
                 )}
               </div>

@@ -1156,12 +1156,11 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessage
       <motion.div
         ref={ref}
         layout={false}
-        initial={isNew ? { opacity: 0 } : false}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.38, ease: [0.22, 0.8, 0.2, 1] }}
+        initial={isNew ? { opacity: 0, scale: 0.97 } : false}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, transition: { duration: 0 } }}
+        transition={isNew ? { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] } : { duration: 0 }}
         className={`flex ${isUser ? "justify-end" : "justify-start"} group/msg w-full`}
-        style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
       >
         <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[85%] md:max-w-[45%]`}>
           <div
@@ -1348,7 +1347,6 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
             exit={{ opacity: 0, transition: { duration: 0 } }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="flex justify-start items-start h-12 overflow-hidden"
-            style={{ willChange: "transform, opacity", transform: "translateZ(0)" }}
           >
             <div className="saheli-typing-container flex items-center justify-center h-10 px-5">
               <div className="saheli-typing-dots flex items-center gap-1.5">
@@ -2828,16 +2826,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     // 2. Snap on requestAnimationFrame
     requestAnimationFrame(snapScroll);
 
-    // 3. Snap with fallbacks during animation frames
-    const timers = [
-      setTimeout(snapScroll, 50),
-      setTimeout(snapScroll, 120),
-      setTimeout(snapScroll, 240),
-      setTimeout(snapScroll, 380) // Marks the end of Framer Motion 0.38s exit/enter transition
-    ];
+    // 3. Single delayed fallback for dynamic content (images, code blocks)
+    const timer = setTimeout(snapScroll, 120);
 
     return () => {
-      timers.forEach(clearTimeout);
+      clearTimeout(timer);
     };
   }, [messages.length, isLoading, currentChatId]);
 
@@ -4897,14 +4890,26 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
       // 4. Process Detected Reminders
       if (hasReminders) {
+        const now = Date.now();
         for (const reminder of result.detected_reminders) {
           const dueTime = new Date(reminder.time_to_remind).getTime();
           if (isNaN(dueTime)) continue; // skip invalid dates
+
+          // If the AI returned a time in the past (more than 30s ago), skip it entirely.
+          // This prevents reminders from firing immediately due to bad AI date parsing.
+          if (dueTime < now - 30_000) {
+            console.warn("[REMINDER] Skipping AI-detected reminder with past dueTime:", reminder.title, reminder.time_to_remind);
+            continue;
+          }
+
+          // If dueTime is within the next 30 seconds, push it out to 1 minute from now
+          // to avoid "instant" reminders caused by slight time miscalculations.
+          const safeDueTime = dueTime < now + 30_000 ? now + 60_000 : dueTime;
           
           await addReminderWithSync(user, {
             title: reminder.title,
             message: reminder.message,
-            dueTime,
+            dueTime: safeDueTime,
           });
         }
       }
