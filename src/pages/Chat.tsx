@@ -409,7 +409,7 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders";
+  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders" | "general" | "naming_theme";
 
 
 // Canonical image map — single source of truth for character assets

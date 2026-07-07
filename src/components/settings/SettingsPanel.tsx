@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, ChevronLeft, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -16,7 +16,7 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders";
+  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders" | "general" | "naming_theme";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
 
 // Helper to convert hex string (#RRGGBB) to HSV
@@ -496,34 +496,85 @@ export interface ConfigItem {
   parentId: SettingsSectionId | null;
 }
 
+export type NamingTheme = "basic" | "cute" | "professional" | "bestie" | "custom";
+
+export const NAMING_THEMES: Record<Exclude<NamingTheme, "custom">, Record<string, string>> = {
+  basic: {
+    general: "General Settings",
+    personalization: "Personalization",
+    memory: "Memory",
+    about: "Privacy",
+    account: "Account",
+    reminders: "Assistant Reminders",
+    music: "Music System",
+    appearance: "Personality",
+    naming_theme: "Vibe Changer",
+  },
+  cute: {
+    general: "Cuteness Corner 🎀",
+    personalization: "Swara's Makeup 💄",
+    memory: "Stored Smiles 🥰",
+    about: "Silent Bubble 🫧",
+    account: "My Vibe Card 🪪",
+    reminders: "Swara's Notes 📝",
+    music: "Swara's Jukebox 🪩",
+    appearance: "Personality",
+    naming_theme: "Vibe Changer",
+  },
+  professional: {
+    general: "Core Preferences",
+    personalization: "Aesthetics & Style",
+    memory: "Data & Storage",
+    about: "Security & Keys",
+    account: "User Account",
+    reminders: "Task Notifications",
+    music: "Audio System",
+    appearance: "Personality",
+    naming_theme: "Vibe Changer",
+  },
+  bestie: {
+    general: "Bestie Corner",
+    personalization: "Dressing Room",
+    memory: "Stored Gossips",
+    about: "Saitani Mode",
+    account: "Member Card",
+    reminders: "Swara's Sticky Notes",
+    music: "Our Jam Session",
+    appearance: "Personality",
+    naming_theme: "Vibe Changer",
+  }
+};
+
 export const DEFAULT_LAYOUT: ConfigItem[] = [
-  { id: "personalization", label: "Personalization", type: "tab", parentId: null },
-  { id: "reminders", label: "Assistant Reminders", type: "item", parentId: null },
+  { id: "general", label: "Bestie Essentials", type: "tab", parentId: null },
+  { id: "appearance", label: "Personality", type: "item", parentId: "general" },
+  { id: "naming_theme", label: "Vibe Changer", type: "item", parentId: "general" },
+  { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "general" },
+
+  { id: "personalization", label: "Swara Makeover", type: "tab", parentId: null },
   { id: "character", label: "Character Selection", type: "item", parentId: "personalization" },
-  { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "personalization" },
   { id: "color", label: "Theme Color", type: "item", parentId: "personalization" },
   { id: "studio_light", label: "Studio Light", type: "item", parentId: "personalization" },
   { id: "customization", label: "Customization", type: "item", parentId: "personalization" },
-  { id: "music", label: "Music System", type: "item", parentId: null },
 
-  { id: "memory", label: "Memory", type: "tab", parentId: null },
+  { id: "memory", label: "Sweet Memory", type: "tab", parentId: null },
   { id: "chat_memory", label: "Chat Memory", type: "item", parentId: "memory" },
   { id: "image_memory", label: "Image Memory", type: "item", parentId: "memory" },
   { id: "memory_toggle", label: "Memory Auto-Save", type: "item", parentId: "memory" },
   { id: "custom_profile", label: "Custom Profile", type: "item", parentId: "memory" },
   { id: "swara_profile", label: "Swara's Profile", type: "item", parentId: "memory" },
 
-  { id: "account", label: "Account", type: "tab", parentId: null },
+  { id: "about", label: "Safe Space", type: "tab", parentId: null },
+  { id: "incognito", label: "Incognito Mode", type: "item", parentId: "about" },
+  { id: "api_keys", label: "Custom API Keys", type: "item", parentId: "about" },
+
+  { id: "account", label: "User Hub", type: "tab", parentId: null },
   { id: "profile", label: "Profile Settings", type: "item", parentId: "account" },
   { id: "password", label: "Change Password", type: "item", parentId: "account" },
   { id: "logout", label: "Logout", type: "item", parentId: "account" },
 
-  { id: "appearance", label: "Personality", type: "tab", parentId: null },
-  { id: "bestie_mentor", label: "Interaction Style", type: "item", parentId: "appearance" },
-
-  { id: "about", label: "Privacy", type: "tab", parentId: null },
-  { id: "incognito", label: "Incognito Mode", type: "item", parentId: "about" },
-  { id: "api_keys", label: "Custom API Keys", type: "item", parentId: "about" },
+  { id: "reminders", label: "Swara's Alerts", type: "item", parentId: null },
+  { id: "music", label: "Saheli Beats", type: "item", parentId: null },
 ];
 
 const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
@@ -535,9 +586,13 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
   );
   const musicItem = cleaned.find(item => item.id === "music");
   if (!musicItem) {
-    cleaned.push({ id: "music", label: "Music System", type: "item", parentId: null });
+    cleaned.push({ id: "music", label: "Saheli Beats", type: "item", parentId: null });
   } else if (musicItem.parentId === "personalization") {
     musicItem.parentId = null;
+  } else {
+    if (musicItem.label === "Music System") {
+      musicItem.label = "Saheli Beats";
+    }
   }
   const studioLightItem = cleaned.find(item => item.id === "studio_light");
   if (!studioLightItem) {
@@ -553,10 +608,56 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
   }
   const remindersItem = cleaned.find(item => item.id === "reminders");
   if (!remindersItem) {
-    cleaned.push({ id: "reminders", label: "Assistant Reminders", type: "item", parentId: null });
+    cleaned.push({ id: "reminders", label: "Swara's Alerts", type: "item", parentId: null });
   } else {
     remindersItem.type = "item";
+    if (remindersItem.label === "Assistant Reminders") {
+      remindersItem.label = "Swara's Alerts";
+    }
   }
+  const namingThemeItem = cleaned.find(item => item.id === "naming_theme");
+  if (!namingThemeItem) {
+    cleaned.push({ id: "naming_theme", label: "Vibe Changer", type: "item", parentId: "general" });
+  }
+
+  const realtimeItem = cleaned.find(item => item.id === "realtime");
+  if (!realtimeItem) {
+    cleaned.push({ id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "general" });
+  } else {
+    realtimeItem.parentId = "general";
+  }
+
+  // Force layout migration if they have the old default order, or if they are missing 'general', or if 'general' label is still 'General Settings' or 'Bestie Basics', or if 'personalization' label is 'Personalization', or if 'memory' label is 'Memory', or if 'about' label is 'Privacy', or if 'account' label is 'Account', or if 'appearance' is parentId null (i.e. still top-level), or if 'general' is not at the top (idx 0)
+  const generalItem = cleaned.find(item => item.id === "general");
+  const personalizationItem = cleaned.find(item => item.id === "personalization");
+  const memoryItem = cleaned.find(item => item.id === "memory");
+  const aboutItem = cleaned.find(item => item.id === "about");
+  const accountItem = cleaned.find(item => item.id === "account");
+  const namingThemeItemObj = cleaned.find(item => item.id === "naming_theme");
+  const isAppearanceTab = cleaned.some(item => item.id === "appearance" && item.parentId === null);
+  const parentIds = cleaned.filter(item => item.parentId === null).map(item => item.id);
+  const isGeneralFirst = parentIds[0] === "general";
+  
+  if (
+    !generalItem || 
+    generalItem.label === "General Settings" || 
+    generalItem.label === "Bestie Basics" || 
+    !personalizationItem || 
+    personalizationItem.label === "Personalization" || 
+    !memoryItem ||
+    memoryItem.label === "Memory" ||
+    !aboutItem ||
+    aboutItem.label === "Privacy" ||
+    !accountItem ||
+    accountItem.label === "Account" ||
+    !namingThemeItemObj ||
+    namingThemeItemObj.label === "Menu Style" ||
+    isAppearanceTab || 
+    !isGeneralFirst
+  ) {
+    return DEFAULT_LAYOUT;
+  }
+
   return cleaned;
 };
 
@@ -693,6 +794,60 @@ export default function SettingsPanel({
   onIncognitoModeChange,
 }: SettingsPanelProps) {
   const t = getLang();
+
+  const [namingTheme, setNamingTheme] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_naming_theme");
+      if (saved) {
+        return saved;
+      }
+    }
+    return "cute";
+  });
+
+  interface CustomTheme {
+    id: string;
+    name: string;
+    labels: Record<string, string>;
+  }
+
+  const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = window.localStorage.getItem("saheli_saved_custom_themes");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return [];
+  });
+
+  const [customThemeName, setCustomThemeName] = useState("");
+  const [formCustomNames, setFormCustomNames] = useState<Record<string, string>>({
+    general: "",
+    personalization: "",
+    memory: "",
+    about: "",
+    account: "",
+    reminders: "",
+    music: "",
+  });
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [themeToDelete, setThemeToDelete] = useState<CustomTheme | null>(null);
+
+  const getLabel = (itemId: string, defaultLabel: string) => {
+    if (namingTheme.startsWith("custom_")) {
+      const activeTheme = customThemes.find(t => t.id === namingTheme);
+      if (activeTheme) {
+        return activeTheme.labels[itemId] || defaultLabel;
+      }
+    }
+    return NAMING_THEMES[namingTheme as NamingTheme]?.[itemId] || defaultLabel;
+  };
   
   // States and Handlers for Swara's Self-Persona Profile Facts
   const [isAddingFact, setIsAddingFact] = useState(false);
@@ -1987,7 +2142,7 @@ export default function SettingsPanel({
                           {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         </button>
                       )}
-                      <span>{item.label}</span>
+                      <span>{getLabel(item.id, item.label)}</span>
                     </div>
                     <span className="text-[9px] uppercase tracking-wider text-white/30 bg-white/5 px-1.5 py-0.5 rounded-md">
                       {item.type}
@@ -2147,7 +2302,7 @@ export default function SettingsPanel({
                     >
                       <div className="flex items-center gap-1.5 truncate">
                         <GripVertical className="h-3 w-3 text-white/30 shrink-0" />
-                        <span className="font-medium truncate">{item.label}</span>
+                        <span className="font-medium truncate">{getLabel(item.id, item.label)}</span>
                       </div>
                       <span className={`text-[7px] uppercase tracking-wide px-0.5 rounded font-semibold border shrink-0 ${
                         isTabItem 
@@ -3089,7 +3244,7 @@ export default function SettingsPanel({
 
         return (
           <motion.div key="personalization-character" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
-            <SectionShell label="Personalization" title="Character Selection" description="Select your AI companion." compact={isCompact}>
+            <SectionShell label="Swara Makeover" title="Character Selection" description="Select your AI companion." compact={isCompact}>
               <div className="flex flex-col gap-2 max-h-[175px] overflow-y-auto pr-1 no-scrollbar">
                 {characterCards.filter((card) => !deletedDefaultIds.includes(card.id)).map((card) => {
                   const active = selectedCharacter === card.id;
@@ -3594,6 +3749,7 @@ export default function SettingsPanel({
           </motion.div>
         );
 
+      case "appearance":
       case "bestie_mentor":
         return (
           <motion.div key="appearance-bestie-mentor" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
@@ -3633,6 +3789,366 @@ export default function SettingsPanel({
             </SectionShell>
           </motion.div>
         );
+
+      case "naming_theme": {
+        const presets = [
+          { id: "basic", title: "Classic Mode", icon: "⚙️", preview: "Memory, Privacy, Profile, Account, Assistant Reminders, Music System" },
+          { id: "cute", title: "Cute Swara", icon: "✨", preview: "Cuteness Corner 🎀, Swara's Makeup 💄, Stored Smiles 🥰, Silent Bubble 🫧, My Vibe Card 🪪, Swara's Notes 📝, Swara's Jukebox 🪩" },
+          { id: "professional", title: "Professional", icon: "💼", preview: "Core Preferences, Aesthetics & Style, Data & Storage, Security & Keys, User Account, Task Notifications, Audio System" },
+          { id: "bestie", title: "Bestie Magic", icon: "🦋", preview: "Bestie Corner, Dressing Room, Stored Gossips, BFF Trust, BFF Member Card, Swara's Sticky Notes, Our Jam Session" }
+        ] as const;
+
+        const themesList = [
+          ...presets.map(p => ({ id: p.id, title: p.title, icon: p.icon, preview: p.preview })),
+          ...customThemes.map(t => {
+            const previews = Object.values(t.labels).filter(val => val.trim() !== "");
+            const previewText = previews.length > 0 ? previews.join(", ") : "Custom button names mapping";
+            return {
+              id: t.id,
+              title: t.name,
+              icon: "🎨",
+              preview: previewText
+            };
+          }),
+          { id: "custom_create", title: "Create New Vibe", icon: "✍️", preview: "Create your own customized naming theme!" }
+        ];
+
+        const getActiveCardClasses = (themeId: string) => {
+          const isActive = themeId === "custom_create" ? isCreating : (namingTheme === themeId);
+          if (!isActive) {
+            return "border-white/10 bg-white/[0.02] text-white/60 hover:border-white/20 hover:bg-white/[0.04]";
+          }
+          switch (selectedColor) {
+            case "yellow": return "border-yellow-500/50 bg-yellow-500/10 text-white shadow-[0_0_15px_rgba(234,179,8,0.15)]";
+            case "blue": return "border-cyan-500/50 bg-cyan-500/10 text-white shadow-[0_0_15px_rgba(6,182,212,0.15)]";
+            case "orchid": return "border-purple-500/50 bg-purple-500/10 text-white shadow-[0_0_15px_rgba(168,85,247,0.15)]";
+            case "peach": return "border-orange-500/50 bg-orange-500/10 text-white shadow-[0_0_15px_rgba(249,115,22,0.15)]";
+            case "beige": return "border-amber-500/40 bg-amber-500/10 text-white shadow-[0_0_15px_rgba(217,119,6,0.15)]";
+            case "maroon": return "border-red-500/50 bg-red-500/10 text-white shadow-[0_0_15px_rgba(220,38,38,0.15)]";
+            case "gemini": return "border-blue-500/50 bg-blue-500/10 text-white shadow-[0_0_15px_rgba(37,99,235,0.15)]";
+            case "pink":
+            default:
+              return "border-pink-500/50 bg-pink-500/10 text-white shadow-[0_0_15px_rgba(236,72,153,0.15)]";
+          }
+        };
+
+        const activeCheckColor = {
+          pink: "text-pink-400",
+          yellow: "text-yellow-400",
+          blue: "text-cyan-400",
+          orchid: "text-purple-400",
+          peach: "text-orange-400",
+          beige: "text-amber-400",
+          maroon: "text-red-400",
+          gemini: "text-blue-400"
+        }[selectedColor] || "text-pink-400";
+
+        const getFocusBorderColor = () => {
+          switch (selectedColor) {
+            case "yellow": return "focus:border-yellow-400 focus:shadow-[0_0_10px_rgba(234,179,8,0.2)]";
+            case "blue": return "focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.2)]";
+            case "orchid": return "focus:border-purple-400 focus:shadow-[0_0_10px_rgba(168,85,247,0.2)]";
+            case "peach": return "focus:border-orange-400 focus:shadow-[0_0_10px_rgba(249,115,22,0.2)]";
+            case "beige": return "focus:border-amber-400 focus:shadow-[0_0_10px_rgba(217,119,6,0.15)]";
+            case "maroon": return "focus:border-red-400 focus:shadow-[0_0_10px_rgba(220,38,38,0.2)]";
+            case "gemini": return "focus:border-blue-400 focus:shadow-[0_0_10px_rgba(37,99,235,0.2)]";
+            case "pink":
+            default:
+              return "focus:border-pink-400 focus:shadow-[0_0_10px_rgba(236,72,153,0.2)]";
+          }
+        };
+
+        const getPremiumBackBtnClasses = () => {
+          switch (selectedColor) {
+            case "yellow": return "border-yellow-500/20 bg-yellow-500/[0.04] text-yellow-400 hover:bg-yellow-500/15 hover:border-yellow-500/50 hover:shadow-[0_0_12px_rgba(234,179,8,0.2)]";
+            case "blue": return "border-cyan-500/20 bg-cyan-500/[0.04] text-cyan-400 hover:bg-cyan-500/15 hover:border-cyan-500/50 hover:shadow-[0_0_12px_rgba(6,182,212,0.2)]";
+            case "orchid": return "border-purple-500/20 bg-purple-500/[0.04] text-purple-400 hover:bg-purple-500/15 hover:border-purple-500/50 hover:shadow-[0_0_12px_rgba(168,85,247,0.2)]";
+            case "peach": return "border-orange-500/20 bg-orange-500/[0.04] text-orange-400 hover:bg-orange-500/15 hover:border-orange-500/50 hover:shadow-[0_0_12px_rgba(249,115,22,0.2)]";
+            case "beige": return "border-amber-500/15 bg-amber-500/[0.02] text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/40 hover:shadow-[0_0_12px_rgba(217,119,6,0.15)]";
+            case "maroon": return "border-red-500/20 bg-red-500/[0.04] text-red-400 hover:bg-red-500/15 hover:border-red-500/50 hover:shadow-[0_0_12px_rgba(220,38,38,0.2)]";
+            case "gemini": return "border-blue-500/20 bg-blue-500/[0.04] text-blue-400 hover:bg-blue-500/15 hover:border-blue-500/50 hover:shadow-[0_0_12px_rgba(37,99,235,0.2)]";
+            case "pink":
+            default:
+              return "border-pink-500/20 bg-pink-500/[0.04] text-pink-400 hover:bg-pink-500/15 hover:border-pink-500/50 hover:shadow-[0_0_12px_rgba(236,72,153,0.2)]";
+          }
+        };
+
+        const getSaveButtonGlassClasses = () => {
+          switch (selectedColor) {
+            case "yellow": return "bg-yellow-500/10 border-yellow-500/25 text-yellow-400 hover:bg-yellow-500/20 hover:border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)] hover:shadow-[0_0_20px_rgba(234,179,8,0.25)]";
+            case "blue": return "bg-cyan-500/10 border-cyan-500/25 text-cyan-400 hover:bg-cyan-500/20 hover:border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.1)] hover:shadow-[0_0_20px_rgba(6,182,212,0.25)]";
+            case "orchid": return "bg-purple-500/10 border-purple-500/25 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.1)] hover:shadow-[0_0_20px_rgba(168,85,247,0.25)]";
+            case "peach": return "bg-orange-500/10 border-orange-500/25 text-orange-400 hover:bg-orange-500/20 hover:border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.1)] hover:shadow-[0_0_20px_rgba(249,115,22,0.25)]";
+            case "beige": return "bg-amber-500/8 border-amber-500/20 text-amber-300 hover:bg-amber-500/15 hover:border-amber-500/40 shadow-[0_0_12px_rgba(217,119,6,0.08)] hover:shadow-[0_0_18px_rgba(217,119,6,0.2)]";
+            case "maroon": return "bg-red-500/10 border-red-500/25 text-red-400 hover:bg-red-500/20 hover:border-red-500/50 shadow-[0_0_15px_rgba(220,38,38,0.1)] hover:shadow-[0_0_20px_rgba(220,38,38,0.25)]";
+            case "gemini": return "bg-blue-500/10 border-blue-500/25 text-blue-400 hover:bg-blue-500/20 hover:border-blue-500/50 shadow-[0_0_15px_rgba(37,99,235,0.1)] hover:shadow-[0_0_20px_rgba(37,99,235,0.25)]";
+            case "pink":
+            default:
+              return "bg-pink-500/10 border-pink-500/25 text-pink-400 hover:bg-pink-500/20 hover:border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.1)] hover:shadow-[0_0_20px_rgba(236,72,153,0.25)]";
+          }
+        };
+
+        const getCancelButtonGlassClasses = () => {
+          switch (selectedColor) {
+            case "yellow": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-yellow-500/[0.03] hover:border-yellow-500/30 hover:text-yellow-400 hover:shadow-[0_0_10px_rgba(234,179,8,0.1)]";
+            case "blue": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-cyan-500/[0.03] hover:border-cyan-500/30 hover:text-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.1)]";
+            case "orchid": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-purple-500/[0.03] hover:border-purple-500/30 hover:text-purple-400 hover:shadow-[0_0_10px_rgba(168,85,247,0.1)]";
+            case "peach": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-orange-500/[0.03] hover:border-orange-500/30 hover:text-orange-400 hover:shadow-[0_0_10px_rgba(249,115,22,0.1)]";
+            case "beige": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-amber-500/[0.02] hover:border-amber-500/25 hover:text-amber-300 hover:shadow-[0_0_10px_rgba(217,119,6,0.08)]";
+            case "maroon": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-red-500/[0.03] hover:border-red-500/30 hover:text-red-400 hover:shadow-[0_0_10px_rgba(220,38,38,0.1)]";
+            case "gemini": return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-blue-500/[0.03] hover:border-blue-500/30 hover:text-blue-400 hover:shadow-[0_0_10px_rgba(37,99,235,0.1)]";
+            case "pink":
+            default:
+              return "bg-white/[0.02] border-white/10 text-white/70 hover:bg-pink-500/[0.03] hover:border-pink-500/30 hover:text-pink-400 hover:shadow-[0_0_10px_rgba(236,72,153,0.1)]";
+          }
+        };
+
+        const formFields = [
+          { id: "general", label: "General Settings Button Name", placeholder: "Bestie Corner" },
+          { id: "personalization", label: "Personalization Button Name", placeholder: "Dressing Room" },
+          { id: "memory", label: "Memory Button Name", placeholder: "Stored Gossips" },
+          { id: "about", label: "Privacy Button Name", placeholder: "BFF Trust" },
+          { id: "account", label: "Account Button Name", placeholder: "BFF Member Card" },
+          { id: "reminders", label: "Reminders Button Name", placeholder: "Swara's Sticky Notes" },
+          { id: "music", label: "Music Button Name", placeholder: "Our Jam Session" }
+        ];
+
+        const cardFlipVariants: any = {
+          initial: (back: boolean) => ({
+            opacity: 0,
+            rotateY: back ? -90 : 90,
+            scale: 0.95
+          }),
+          animate: {
+            opacity: 1,
+            rotateY: 0,
+            scale: 1,
+            transition: { duration: 0.35, ease: "easeOut" }
+          },
+          exit: (back: boolean) => ({
+            opacity: 0,
+            rotateY: back ? 90 : -90,
+            scale: 0.95,
+            transition: { duration: 0.3, ease: "easeIn" }
+          })
+        };
+
+        return (
+          <motion.div key="naming_theme" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
+            <SectionShell
+              label="Bestie Essentials"
+              title="Vibe Changer"
+              description="Choose the naming style of the Settings buttons to match your vibe."
+              compact={isCompact}
+            >
+              <div className="flex flex-col gap-4 relative [perspective:1000px] overflow-visible">
+                <AnimatePresence mode="wait" initial={false} custom={isCreating}>
+                  {!isCreating ? (
+                    <motion.div
+                      key="grid-selector"
+                      variants={cardFlipVariants}
+                      custom={isCreating}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      className="w-full [backface-visibility:hidden] flex flex-col gap-4"
+                    >
+                      <div className="grid grid-cols-2 gap-2.5 max-h-[350px] overflow-y-auto pr-1 no-scrollbar pointer-events-auto">
+                        {themesList.map((theme) => {
+                          const isActive = theme.id === "custom_create" ? isCreating : (namingTheme === theme.id);
+                          const isPreset = ["basic", "cute", "professional", "bestie"].includes(theme.id);
+                          return (
+                            <button
+                              key={theme.id}
+                              onClick={() => {
+                                if (theme.id === "custom_create") {
+                                  setIsCreating(true);
+                                } else {
+                                  setIsCreating(false);
+                                  setNamingTheme(theme.id);
+                                  if (typeof window !== "undefined") {
+                                    window.localStorage.setItem("saheli_naming_theme", theme.id);
+                                  }
+                                  toast.success(`Settings style updated to ${theme.title}!`);
+                                }
+                              }}
+                              className={`group relative flex flex-col items-start gap-1 p-2.5 rounded-2xl border text-left transition-all duration-300 pointer-events-auto ${getActiveCardClasses(theme.id)}`}
+                            >
+                              <div className="flex items-center justify-between w-full pr-5">
+                                <span className="text-lg select-none">{theme.icon}</span>
+                                {isActive && theme.id !== "custom_create" && <Check className={`h-3.5 w-3.5 ${activeCheckColor}`} />}
+                              </div>
+                              <span className="text-xs font-semibold text-white mt-1">{theme.title}</span>
+                              <span className="text-[9px] text-white/40 leading-normal line-clamp-2">
+                                {theme.preview}
+                              </span>
+
+                              {!isPreset && theme.id !== "custom_create" && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setThemeToDelete(customThemes.find(t => t.id === theme.id) || null);
+                                  }}
+                                  className="absolute top-2 right-2 p-1.5 rounded-full border border-white/5 bg-black/40 text-white/40 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/20 hover:scale-105 hover:shadow-[0_0_8px_rgba(239,68,68,0.25)] transition-all duration-300 z-10 pointer-events-auto backdrop-blur-sm opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto"
+                                >
+                                  <Trash2 className="h-3 w-3 transition-transform duration-300 hover:rotate-12" />
+                                </button>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="creator-form"
+                      variants={cardFlipVariants}
+                      custom={isCreating}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      className="w-full [backface-visibility:hidden] flex flex-col gap-4 border border-white/10 rounded-2xl p-4 bg-white/[0.01] backdrop-blur-md"
+                    >
+                      <div className="flex items-center justify-between w-full border-b border-white/10 pb-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreating(false);
+                            toast.info("Returned to theme selector 🔄");
+                          }}
+                          className={`group flex items-center gap-1 px-2.5 py-1 rounded-full border transition-all duration-300 text-[10px] font-semibold pointer-events-auto backdrop-blur-md ${getPremiumBackBtnClasses()}`}
+                        >
+                          <ChevronLeft className="h-3 w-3 group-hover:-translate-x-0.5 transition-transform duration-200" />
+                          <span>Back</span>
+                        </button>
+                        
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-pink-400/90 block">Creator Vibe ✍️</span>
+                          <span className="text-[8px] text-white/40 block">Create custom naming style</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1 no-scrollbar pointer-events-auto">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-pink-400/90 pl-1 uppercase tracking-wider">Vibe Title / Heading 🏷️</label>
+                          <input
+                            type="text"
+                            value={customThemeName}
+                            placeholder="e.g. My Special Vibe"
+                            onChange={(e) => setCustomThemeName(e.target.value)}
+                            className={`w-full bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 transition-all outline-none ${getFocusBorderColor()}`}
+                          />
+                        </div>
+
+                        <div className="h-[1px] bg-white/10 my-1" />
+
+                        {formFields.map((field) => (
+                          <div key={field.id} className="flex flex-col gap-1">
+                            <label className="text-[10px] font-medium text-white/60 pl-1">{field.label}</label>
+                            <input
+                              type="text"
+                              value={formCustomNames[field.id] || ""}
+                              placeholder={`e.g. ${field.placeholder}`}
+                              onChange={(e) => {
+                                setFormCustomNames((prev) => ({
+                                  ...prev,
+                                  [field.id]: e.target.value
+                                }));
+                              }}
+                              className={`w-full bg-white/[0.03] border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-white/30 transition-all outline-none ${getFocusBorderColor()}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-2 mt-1 pointer-events-auto border-t border-white/10 pt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomThemeName("");
+                            setFormCustomNames({
+                              general: "",
+                              personalization: "",
+                              memory: "",
+                              about: "",
+                              account: "",
+                              reminders: "",
+                              music: ""
+                            });
+                            setIsCreating(false);
+                            toast.info("Creation cancelled! 🔄");
+                          }}
+                          className={`flex-1 border transition-all duration-300 rounded-xl py-2.5 text-xs font-semibold backdrop-blur-md ${getCancelButtonGlassClasses()}`}
+                        >
+                          Cancel 🔄
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customThemeName.trim() === "") {
+                              toast.error("Please enter a title/heading name for your vibe! 🏷️");
+                              return;
+                            }
+
+                            const autoCapitalize = (str: string) => {
+                              if (!str) return "";
+                              return str
+                                .trim()
+                                .split(/\s+/)
+                                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                                .join(" ");
+                            };
+                            
+                            const newId = "custom_" + Date.now();
+                            const newTheme: CustomTheme = {
+                              id: newId,
+                              name: autoCapitalize(customThemeName),
+                              labels: {
+                                general: autoCapitalize(formCustomNames.general) || "Bestie Corner",
+                                personalization: autoCapitalize(formCustomNames.personalization) || "Dressing Room",
+                                memory: autoCapitalize(formCustomNames.memory) || "Stored Gossips",
+                                about: autoCapitalize(formCustomNames.about) || "BFF Trust",
+                                account: autoCapitalize(formCustomNames.account) || "BFF Member Card",
+                                reminders: autoCapitalize(formCustomNames.reminders) || "Swara's Sticky Notes",
+                                music: autoCapitalize(formCustomNames.music) || "Our Jam Session",
+                              }
+                            };
+
+                            const updatedThemes = [...customThemes, newTheme];
+                            setCustomThemes(updatedThemes);
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem("saheli_saved_custom_themes", JSON.stringify(updatedThemes));
+                            }
+
+                            setCustomThemeName("");
+                            setFormCustomNames({
+                              general: "",
+                              personalization: "",
+                              memory: "",
+                              about: "",
+                              account: "",
+                              reminders: "",
+                              music: ""
+                            });
+                            setIsCreating(false);
+
+                            toast.success(`Vibe "${newTheme.name}" saved! Click on its card to apply. ✨`);
+                          }}
+                          className={`flex-[1.5] border transition-all duration-300 rounded-xl py-2.5 text-xs font-semibold backdrop-blur-md ${getSaveButtonGlassClasses()}`}
+                        >
+                          Save Vibe ✨
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+              </div>
+            </SectionShell>
+          </motion.div>
+        );
+      }
 
       case "api_keys": {
         const getProviderCardClasses = (providerName: "groq" | "gemini" | "openrouter") => {
@@ -4410,12 +4926,12 @@ export default function SettingsPanel({
 
   const [showContentPanel, setShowContentPanel] = useState(false);
   const sections = useMemo(() => ([
-    { id: "personalization" as const, label: "Personalization" },
-    { id: "reminders" as const, label: "Reminders" },
-    { id: "memory" as const, label: "Memory" },
-    { id: "account" as const, label: "Account" },
-    { id: "appearance" as const, label: "Personality" },
-    { id: "about" as const, label: "Privacy" },
+    { id: "general" as const, label: "Bestie Essentials" },
+    { id: "personalization" as const, label: "Swara Makeover" },
+    { id: "memory" as const, label: "Sweet Memory" },
+    { id: "about" as const, label: "Safe Space" },
+    { id: "account" as const, label: "User Hub" },
+    { id: "reminders" as const, label: "Swara's Alerts" },
   ]), []);
   const personalizationSections = useMemo(() => ([
     { id: "character" as const, label: "Character" },
@@ -4472,7 +4988,7 @@ export default function SettingsPanel({
             {/* Overlay to close */}
             <div className="absolute inset-0 pointer-events-auto" onClick={() => onOpenChange(false)} />
 
-            <div className="flex items-end animate-soft-float pointer-events-none">
+            <div className="flex items-end animate-soft-float pointer-events-none [perspective:1000px] [transform-style:preserve-3d]">
               {/* Level 1: Menu */}
               <motion.div
                 initial={{ opacity: 0, x: -20, scale: 0.95 }}
@@ -4485,40 +5001,62 @@ export default function SettingsPanel({
                   border: "1px solid rgba(255, 255, 255, 0.12)",
                   boxShadow: getChildPanelShadow(selectedColor)
                 }}
-                className="settings-menu-container relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2"
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  const isInteractive = target.closest("button, input, textarea, select, [role='switch'], a");
+                  if (!isInteractive) {
+                    setShowContentPanel(false);
+                    setPersonalizationChild(null);
+                  }
+                }}
+                className="settings-menu-container relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2 cursor-default"
               >
                 <div className="mb-2 px-2">
                   <h2 className="text-xl font-semibold tracking-tight text-white">{t.settings.title}</h2>
                   <p className="text-[11px] text-white/50">{t.settings.description}</p>
                 </div>
                 
-                <div className="flex flex-col gap-1 max-h-[320px] overflow-y-auto pr-1 no-scrollbar">
+                <div className="flex flex-col gap-1 max-h-[355px] overflow-y-auto pr-1 pb-1 no-scrollbar [perspective:1000px] [transform-style:preserve-3d]">
                   {layout
                     .filter((item) => item.parentId === null)
-                    .map((item) => {
+                    .map((item, index) => {
                       const active = activeSection === item.id;
                       return (
-                        <NavButton
-                          key={item.id}
-                          id={item.id}
-                          themeColor={selectedColor}
-                          active={active}
-                          label={item.label}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, item.id)}
-                          onDragOver={(e) => handleDragOver(e, item.id)}
-                          onDrop={(e) => handleDrop(e, item.id)}
-                          dragOverActive={dragOverId === item.id}
-                          onClick={() => {
-                            if (isActionItem(item.id)) {
-                              handleItemAction(item.id);
-                              return;
-                            }
-                            setShowContentPanel(true);
-                            onSectionChange(item.id as SettingsSectionId);
-                            setPersonalizationChild(null);
-                          }}
-                        />
+                        <AnimatePresence mode="wait" initial={false}>
+                          <motion.div
+                            key={`${item.id}-${namingTheme}`}
+                            initial={{ opacity: 0, rotateX: -60, y: 12 }}
+                            animate={{ opacity: 1, rotateX: 0, y: 0 }}
+                            exit={{ opacity: 0, rotateX: 60, y: -12 }}
+                            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], delay: index * 0.03 }}
+                            style={{
+                              transformOrigin: "center bottom",
+                              transformStyle: "preserve-3d",
+                              backfaceVisibility: "hidden"
+                            }}
+                          >
+                            <NavButton
+                              id={item.id}
+                              themeColor={selectedColor}
+                              active={active}
+                              label={getLabel(item.id, item.label)}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, item.id)}
+                              onDragOver={(e) => handleDragOver(e, item.id)}
+                              onDrop={(e) => handleDrop(e, item.id)}
+                              dragOverActive={dragOverId === item.id}
+                              onClick={() => {
+                                if (isActionItem(item.id)) {
+                                  handleItemAction(item.id);
+                                  return;
+                                }
+                                setShowContentPanel(true);
+                                onSectionChange(item.id as SettingsSectionId);
+                                setPersonalizationChild(null);
+                              }}
+                            />
+                          </motion.div>
+                        </AnimatePresence>
                       );
                     })}
                 </div>
@@ -4539,7 +5077,15 @@ export default function SettingsPanel({
                       border: "1px solid rgba(255, 255, 255, 0.12)",
                       boxShadow: getChildPanelShadow(selectedColor)
                     }}
-                    className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 ${
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      const isInteractive = target.closest("button, input, textarea, select, [role='switch'], a");
+                      if (!isInteractive) {
+                        setPersonalizationChild(null);
+                        setIsCustomColorPickerOpen(false);
+                      }
+                    }}
+                    className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 cursor-default ${
                       activeItem?.id === "character" ? "w-[280px]" : activeItem?.id === "memory" ? "w-[300px]" : activeItem?.id === "personalization" ? "w-[320px]" : activeItem?.id === "realtime" ? "w-[380px]" : activeItem?.id === "color" ? "w-[245px]" : activeItem?.id === "customization" ? "w-[350px]" : "w-[360px]"
                     }`}
                   >
@@ -4549,8 +5095,8 @@ export default function SettingsPanel({
                           <motion.div key={activeSection} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.08, ease: "easeOut" }}>
                             <SectionShell
                               label="Settings"
-                              title={activeItem?.label || ""}
-                              description={`Manage your ${activeItem?.label || ""} preferences.`}
+                              title={activeItem ? getLabel(activeItem.id, activeItem.label) : ""}
+                              description={`Manage your ${activeItem ? getLabel(activeItem.id, activeItem.label) : ""} preferences.`}
                               compact
                             >
                               <div className="flex flex-col gap-2.5">
@@ -4573,7 +5119,7 @@ export default function SettingsPanel({
                                         >
                                           <div className="min-w-0">
                                             <div>
-                                              <p className="text-sm font-medium text-white">{child.label}</p>
+                                              <p className="text-sm font-medium text-white">{getLabel(child.id, child.label)}</p>
                                               <p className="text-[11px] leading-5 text-white/50">Auto-save insights from chats</p>
                                             </div>
                                           </div>
@@ -4606,7 +5152,7 @@ export default function SettingsPanel({
                                         >
                                           <div className="min-w-0">
                                             <div>
-                                              <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">{child.label}</p>
+                                              <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">{getLabel(child.id, child.label)}</p>
                                               <p className="mt-1 text-[12px] leading-5 text-white/55">
                                                 Keeps your chats in ghost mode. No chat history, messages, or memories are saved.
                                               </p>
@@ -4652,7 +5198,7 @@ export default function SettingsPanel({
                                               : getThemeClasses(selectedColor, "inactive")
                                         }`}
                                       >
-                                        <span className="font-medium truncate">{child.label}</span>
+                                        <span className="font-medium truncate">{getLabel(child.id, child.label)}</span>
                                         {active && dragOverId !== child.id ? <Check className={`h-4 w-4 ${getThemeClasses(selectedColor, "textLight")}`} /> : null}
                                       </motion.button>
                                     );
@@ -4811,6 +5357,120 @@ export default function SettingsPanel({
               {isCustomizeModalOpen && renderCustomizeModal()}
               {showMultiDeleteConfirm && renderMultiDeleteConfirmationModal()}
               {showRestoreConfirm && renderRestoreConfirmationModal()}
+              {themeToDelete && (() => {
+                let glowColor = "rgba(236, 72, 153, 0.15)";
+                let borderColor = "rgba(255, 105, 180, 0.15)";
+                let deleteBtnClass = "bg-pink-600 text-white hover:bg-pink-700 shadow-pink-600/20";
+                
+                if (selectedColor === "yellow") {
+                  glowColor = "rgba(234, 179, 8, 0.15)";
+                  borderColor = "rgba(234, 179, 8, 0.15)";
+                  deleteBtnClass = "bg-yellow-500 text-black hover:bg-yellow-600 shadow-yellow-500/20";
+                } else if (selectedColor === "blue") {
+                  glowColor = "rgba(6, 182, 212, 0.15)";
+                  borderColor = "rgba(6, 182, 212, 0.15)";
+                  deleteBtnClass = "bg-cyan-500 text-black hover:bg-cyan-600 shadow-cyan-500/20";
+                } else if (selectedColor === "orchid") {
+                  glowColor = "rgba(168, 85, 247, 0.15)";
+                  borderColor = "rgba(168, 85, 247, 0.15)";
+                  deleteBtnClass = "bg-purple-600 text-white hover:bg-purple-700 shadow-purple-600/20";
+                } else if (selectedColor === "peach") {
+                  glowColor = "rgba(249, 115, 22, 0.15)";
+                  borderColor = "rgba(249, 115, 22, 0.15)";
+                  deleteBtnClass = "bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20";
+                } else if (selectedColor === "beige") {
+                  glowColor = "rgba(217, 119, 6, 0.12)";
+                  borderColor = "rgba(217, 119, 6, 0.12)";
+                  deleteBtnClass = "bg-amber-600 text-white hover:bg-amber-700 shadow-amber-600/20";
+                } else if (selectedColor === "maroon") {
+                  glowColor = "rgba(220, 38, 38, 0.15)";
+                  borderColor = "rgba(220, 38, 38, 0.15)";
+                  deleteBtnClass = "bg-red-600 text-white hover:bg-red-700 shadow-red-600/20";
+                } else if (selectedColor === "gemini") {
+                  glowColor = "rgba(37, 99, 235, 0.15)";
+                  borderColor = "rgba(37, 99, 235, 0.15)";
+                  deleteBtnClass = "bg-blue-600 text-white hover:bg-blue-700 shadow-blue-600/20";
+                } else if (selectedColor === "custom") {
+                  glowColor = `${customColorVal}22`;
+                  borderColor = `${customColorVal}33`;
+                  deleteBtnClass = "text-white";
+                }
+                
+                return (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 bg-black/40 backdrop-blur-[8px] flex items-center justify-center p-4 z-[999] pointer-events-auto"
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                      transition={{ type: "spring", damping: 20, stiffness: 400 }}
+                      style={{
+                        background: "rgba(10, 10, 12, 0.45)",
+                        backdropFilter: "blur(30px)",
+                        border: `1px solid ${borderColor}`,
+                        boxShadow: `0 25px 50px rgba(0, 0, 0, 0.65), 0 0 35px ${glowColor}, inset 0 1px 0 rgba(255,255,255,0.1)`,
+                        borderRadius: "28px"
+                      }}
+                      className="relative flex flex-col w-[min(26rem,calc(100vw-2rem))] overflow-hidden p-6 text-white text-left shadow-2xl"
+                    >
+                      {/* Close button X in top right */}
+                      <button
+                        type="button"
+                        onClick={() => setThemeToDelete(null)}
+                        className="absolute top-5 right-5 p-1.5 rounded-full text-white/40 hover:text-white hover:bg-white/5 transition-all duration-200 cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+
+                      <div className="pr-6">
+                        <h3 className="text-lg font-semibold tracking-tight text-white">Delete Custom Vibe</h3>
+                        <p className="text-sm text-white/60 mt-2 leading-relaxed">
+                          Delete "{themeToDelete.name}" permanently?
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-3 mt-6">
+                        <button
+                          type="button"
+                          onClick={() => setThemeToDelete(null)}
+                          className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white transition-all duration-300 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updatedThemes = customThemes.filter((t) => t.id !== themeToDelete.id);
+                            setCustomThemes(updatedThemes);
+                            if (typeof window !== "undefined") {
+                              window.localStorage.setItem("saheli_saved_custom_themes", JSON.stringify(updatedThemes));
+                            }
+                            if (namingTheme === themeToDelete.id) {
+                              setNamingTheme("cute");
+                              if (typeof window !== "undefined") {
+                                window.localStorage.setItem("saheli_naming_theme", "cute");
+                              }
+                            }
+                            setThemeToDelete(null);
+                            toast.success(`Vibe "${themeToDelete.name}" deleted! 🗑️`);
+                          }}
+                          className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] cursor-pointer shadow-[0_4px_12px_rgba(0,0,0,0.25)] ${deleteBtnClass}`}
+                          style={selectedColor === "custom" ? {
+                            backgroundImage: `linear-gradient(135deg, ${customColorVal} 0%, ${customColorVal}cc 100%)`,
+                            boxShadow: `0 4px 12px ${customColorVal}44`
+                          } : {}}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                );
+              })()}
             </AnimatePresence>,
             document.body
           )}

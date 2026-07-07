@@ -126,7 +126,7 @@ export default function SettingsBubble({
   const renderHome = () => (
     <motion.div layout className="space-y-1.5">
       <BubbleAction
-        label="Personalization"
+        label="Swara Makeover"
         icon={<MoonStar className="h-4 w-4 text-purple-300" />}
         onClick={() => setSection("personalization")}
       />
