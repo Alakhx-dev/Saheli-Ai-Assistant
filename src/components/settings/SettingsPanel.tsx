@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, ChevronLeft, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, ChevronLeft, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User, Bell, Languages } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -16,8 +16,22 @@ type SettingsSectionId =
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders" | "general" | "naming_theme";
+  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders" | "general" | "naming_theme" | "language";
 type ReplyLanguageMode = "auto" | "english" | "hindi" | "hinglish";
+
+// Helper to convert hex string (#RRGGBB) to RGB string ("R, G, B")
+function hexToRgbString(hex: string): string {
+  if (!hex) return "236, 72, 153";
+  let clean = hex.replace(/^#/, "");
+  if (clean.length === 3) {
+    clean = clean.split("").map(c => c + c).join("");
+  }
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return "236, 72, 153";
+  return `${r}, ${g}, ${b}`;
+}
 
 // Helper to convert hex string (#RRGGBB) to HSV
 function hexToHsv(hex: string): { h: number; s: number; v: number } {
@@ -550,6 +564,7 @@ export const DEFAULT_LAYOUT: ConfigItem[] = [
   { id: "appearance", label: "Personality", type: "item", parentId: "general" },
   { id: "naming_theme", label: "Vibe Changer", type: "item", parentId: "general" },
   { id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "general" },
+  { id: "language", label: "Language", type: "item", parentId: "general" },
 
   { id: "personalization", label: "Swara Makeover", type: "tab", parentId: null },
   { id: "character", label: "Character Selection", type: "item", parentId: "personalization" },
@@ -625,6 +640,13 @@ const sanitizeAndMigrateLayout = (loadedLayout: ConfigItem[]): ConfigItem[] => {
     cleaned.push({ id: "realtime", label: "Date, Time & Weather", type: "item", parentId: "general" });
   } else {
     realtimeItem.parentId = "general";
+  }
+
+  const languageItem = cleaned.find(item => item.id === "language");
+  if (!languageItem) {
+    cleaned.push({ id: "language", label: "Language", type: "item", parentId: "general" });
+  } else {
+    languageItem.parentId = "general";
   }
 
   // Force layout migration if they have the old default order, or if they are missing 'general', or if 'general' label is still 'General Settings' or 'Bestie Basics', or if 'personalization' label is 'Personalization', or if 'memory' label is 'Memory', or if 'about' label is 'Privacy', or if 'account' label is 'Account', or if 'appearance' is parentId null (i.e. still top-level), or if 'general' is not at the top (idx 0)
@@ -838,6 +860,8 @@ export default function SettingsPanel({
 
   const [isCreating, setIsCreating] = useState(false);
   const [themeToDelete, setThemeToDelete] = useState<CustomTheme | null>(null);
+  const [isLanguageNotified, setIsLanguageNotified] = useState(false);
+  const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
 
   const getLabel = (itemId: string, defaultLabel: string) => {
     if (namingTheme.startsWith("custom_")) {
@@ -3586,6 +3610,169 @@ export default function SettingsPanel({
           </motion.div>
         );
 
+      case "language": {
+        let accentColor = "#ec4899";
+        let glowColor = "rgba(255, 105, 180, 0.12)";
+        let iconBgClass = "bg-pink-500/10 border-pink-500/20 text-pink-300";
+        let badgeClass = "border-pink-500/35 bg-pink-500/10 text-pink-200 shadow-[0_0_15px_rgba(255,105,180,0.2)]";
+
+        if (selectedColor === "yellow") {
+          accentColor = "#eab308";
+          glowColor = "rgba(234, 179, 8, 0.12)";
+          iconBgClass = "bg-yellow-500/10 border-yellow-500/20 text-yellow-300";
+          badgeClass = "border-yellow-500/35 bg-yellow-500/10 text-yellow-100 shadow-[0_0_15px_rgba(234,179,8,0.2)]";
+        } else if (selectedColor === "blue") {
+          accentColor = "#06b6d4";
+          glowColor = "rgba(6, 182, 212, 0.12)";
+          iconBgClass = "bg-cyan-500/10 border-cyan-500/20 text-cyan-300";
+          badgeClass = "border-cyan-500/35 bg-cyan-500/10 text-cyan-100 shadow-[0_0_15px_rgba(6,182,212,0.2)]";
+        } else if (selectedColor === "orchid") {
+          accentColor = "#a855f7";
+          glowColor = "rgba(168, 85, 247, 0.12)";
+          iconBgClass = "bg-purple-500/10 border-purple-500/20 text-purple-300";
+          badgeClass = "border-purple-500/35 bg-purple-500/10 text-purple-100 shadow-[0_0_15px_rgba(168,85,247,0.2)]";
+        } else if (selectedColor === "peach") {
+          accentColor = "#f97316";
+          glowColor = "rgba(249, 115, 22, 0.12)";
+          iconBgClass = "bg-orange-500/10 border-orange-500/20 text-orange-300";
+          badgeClass = "border-orange-500/35 bg-orange-500/10 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.2)]";
+        } else if (selectedColor === "beige") {
+          accentColor = "#d97706";
+          glowColor = "rgba(217, 119, 6, 0.12)";
+          iconBgClass = "bg-amber-500/10 border-amber-500/20 text-amber-200";
+          badgeClass = "border-amber-500/35 bg-amber-500/10 text-amber-200 shadow-[0_0_15px_rgba(217,119,6,0.2)]";
+        } else if (selectedColor === "maroon") {
+          accentColor = "#dc2626";
+          glowColor = "rgba(220, 38, 38, 0.12)";
+          iconBgClass = "bg-red-500/10 border-red-500/20 text-red-300";
+          badgeClass = "border-red-500/35 bg-red-500/10 text-red-300 shadow-[0_0_15px_rgba(220,38,38,0.2)]";
+        } else if (selectedColor === "gemini") {
+          accentColor = "#3b82f6";
+          glowColor = "rgba(59, 130, 246, 0.12)";
+          iconBgClass = "bg-blue-500/10 border-blue-500/20 text-blue-300";
+          badgeClass = "border-blue-500/35 bg-blue-500/10 text-blue-300 shadow-[0_0_15px_rgba(59,130,246,0.2)]";
+        } else if (selectedColor === "custom") {
+          accentColor = customColorVal || "#ec4899";
+          glowColor = `${accentColor}18`;
+        }
+
+        const customIconStyle = selectedColor === "custom" ? {
+          backgroundColor: `${accentColor}12`,
+          borderColor: `${accentColor}25`,
+          color: accentColor,
+        } : undefined;
+
+        const customBadgeStyle = selectedColor === "custom" ? {
+          backgroundColor: `${accentColor}15`,
+          borderColor: `${accentColor}30`,
+          color: accentColor,
+          boxShadow: `0 0 15px ${accentColor}25`,
+        } : undefined;
+
+        return (
+          <motion.div
+            key="general-language"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.08, ease: "easeOut" }}
+            className="space-y-4"
+          >
+            {/* Header Section matching other panels */}
+            <div className="flex flex-col gap-1">
+              <h3 className="text-[1.35rem] font-semibold tracking-[-0.02em] text-white flex items-center gap-2">
+                <Languages className="h-5 w-5 text-pink-400" />
+                Language Settings
+              </h3>
+              <p className="text-[11.5px] text-white/50 leading-relaxed">
+                Multi-language support, regional accents & voice translation.
+              </p>
+            </div>
+
+            {/* Hero Teaser Banner Card */}
+            <div className="settings-glass-card relative overflow-hidden !p-4 flex flex-col items-center text-center space-y-2.5">
+              {/* Floating Globe */}
+              <div className="relative pt-1">
+                <motion.div 
+                  animate={{ y: [0, -4, 0] }}
+                  transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+                  className={`relative flex h-11 w-11 items-center justify-center rounded-[18px] border backdrop-blur-xl transition-all duration-500 shadow-md ${
+                    selectedColor !== "custom" ? iconBgClass : ""
+                  }`}
+                  style={customIconStyle}
+                >
+                  <Globe className="h-5 w-5 animate-[spin_24s_linear_infinite] opacity-95" />
+                  <motion.div 
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+                    className="absolute -top-0.5 -right-0.5"
+                  >
+                    <Sparkles className="h-2.5 w-2.5 text-pink-300 animate-pulse" />
+                  </motion.div>
+                </motion.div>
+              </div>
+
+              {/* Status Badge */}
+              <motion.span 
+                animate={{
+                  boxShadow: selectedColor === "custom" 
+                    ? [`0 0 10px ${accentColor}10`, `0 0 20px ${accentColor}30`, `0 0 10px ${accentColor}10`]
+                    : ["0 0 10px rgba(255,105,180,0.1)", "0 0 20px rgba(255,105,180,0.35)", "0 0 10px rgba(255,105,180,0.1)"]
+                }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-[9px] font-black tracking-[0.18em] uppercase backdrop-blur-md transition-all duration-500 ${
+                  selectedColor !== "custom" ? badgeClass : ""
+                }`}
+                style={customBadgeStyle}
+              >
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-80" />
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-pink-500" />
+                </span>
+                Coming Soon
+              </motion.span>
+
+              <p className="text-[11px] text-white/60 leading-relaxed max-w-[250px]">
+                We are actively developing localized AI voice translation and regional accents for your bestie experience.
+              </p>
+            </div>
+
+            {/* Remind / Get Notified Button */}
+            <div className="settings-glass-card flex items-center justify-between !p-3">
+              <div>
+                <p className="text-[12px] font-semibold text-white">Get Early Access</p>
+                <p className="text-[10.5px] text-white/50">{isLanguageNotified ? "Alert set for release" : "Notify me on release"}</p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  setIsLanguageNotified(true);
+                  setIsNotifyModalOpen(true);
+                }}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[11px] font-semibold transition shadow-sm cursor-pointer ${
+                  isLanguageNotified 
+                    ? "border-emerald-400/40 bg-emerald-500/20 text-emerald-200" 
+                    : "border-pink-400/30 bg-pink-500/15 text-pink-200 hover:border-pink-400/60 hover:bg-pink-500/25 hover:text-white"
+                }`}
+              >
+                {isLanguageNotified ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-emerald-300" />
+                    Notified
+                  </>
+                ) : (
+                  <>
+                    <Bell className="h-3.5 w-3.5 text-pink-300 animate-bounce" />
+                    Notify Me
+                  </>
+                )}
+              </motion.button>
+            </div>
+          </motion.div>
+        );
+      }
+
       case "customization":
         return renderCustomizationView();
 
@@ -5469,6 +5656,123 @@ export default function SettingsPanel({
                       </div>
                     </motion.div>
                   </motion.div>
+                );
+              })()}
+            </AnimatePresence>,
+            document.body
+          )}
+
+          {/* Language Notification Popup Modal */}
+          {createPortal(
+            <AnimatePresence>
+              {isNotifyModalOpen && (() => {
+                let mainHex = "#ec4899";
+                let glowRgb = "255, 0, 120";
+
+                if (selectedColor === "yellow") {
+                  mainHex = "#eab308";
+                  glowRgb = "234, 179, 8";
+                } else if (selectedColor === "blue") {
+                  mainHex = "#06b6d4";
+                  glowRgb = "6, 182, 212";
+                } else if (selectedColor === "orchid") {
+                  mainHex = "#a855f7";
+                  glowRgb = "168, 85, 247";
+                } else if (selectedColor === "peach") {
+                  mainHex = "#f97316";
+                  glowRgb = "249, 115, 22";
+                } else if (selectedColor === "beige") {
+                  mainHex = "#d97706";
+                  glowRgb = "217, 119, 6";
+                } else if (selectedColor === "maroon") {
+                  mainHex = "#dc2626";
+                  glowRgb = "220, 38, 38";
+                } else if (selectedColor === "gemini") {
+                  mainHex = "#3b82f6";
+                  glowRgb = "59, 130, 246";
+                } else if (selectedColor === "custom" && customColorVal) {
+                  mainHex = customColorVal;
+                  glowRgb = hexToRgbString(customColorVal);
+                }
+
+                return (
+                  <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+                    {/* Backdrop */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setIsNotifyModalOpen(false)}
+                      className="absolute inset-0 bg-black/75 backdrop-blur-md"
+                    />
+
+                    {/* Modal Card */}
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 15 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.9, y: 15 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className="relative z-10 w-full max-w-sm overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-b from-[#1e152d] via-[#180f24] to-[#120a1b] p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl"
+                    >
+                      {/* Dynamic Glow ambient circle */}
+                      <div
+                        className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 h-24 blur-2xl pointer-events-none transition-all duration-500"
+                        style={{
+                          background: `radial-gradient(ellipse at center, rgba(${glowRgb}, 0.45) 0%, transparent 70%)`
+                        }}
+                      />
+
+                      {/* Close Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsNotifyModalOpen(false)}
+                        className="absolute top-4 right-4 flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/60 transition hover:bg-white/15 hover:text-white cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+
+                      {/* Animated Bell Icon with theme glow */}
+                      <div
+                        className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border transition-all duration-500"
+                        style={{
+                          borderColor: `rgba(${glowRgb}, 0.4)`,
+                          background: `linear-gradient(135deg, rgba(${glowRgb}, 0.25) 0%, rgba(${glowRgb}, 0.08) 100%)`,
+                          boxShadow: `0 0 30px rgba(${glowRgb}, 0.35)`
+                        }}
+                      >
+                        <Bell className="h-7 w-7 animate-bounce" style={{ color: mainHex }} />
+                      </div>
+
+                      {/* Title */}
+                      <h4 className="text-lg font-extrabold tracking-tight text-white flex items-center justify-center gap-2">
+                        Notification Set! 🎉
+                      </h4>
+
+                      {/* Message */}
+                      <p className="mt-2.5 text-xs leading-relaxed text-white/75 px-2">
+                        You will be notified as soon as{" "}
+                        <span className="font-semibold transition-colors duration-300" style={{ color: mainHex }}>
+                          Multi-language support, regional accents & voice translation
+                        </span>{" "}
+                        are officially released!
+                      </p>
+
+                      {/* Action Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => setIsNotifyModalOpen(false)}
+                        className="mt-5 w-full rounded-xl border py-2.5 text-xs font-bold text-white transition-all duration-300 cursor-pointer"
+                        style={{
+                          borderColor: `rgba(${glowRgb}, 0.45)`,
+                          background: `linear-gradient(135deg, rgba(${glowRgb}, 0.35) 0%, rgba(${glowRgb}, 0.15) 100%)`,
+                          boxShadow: `0 0 22px rgba(${glowRgb}, 0.3)`
+                        }}
+                      >
+                        Awesome, Got It!
+                      </motion.button>
+                    </motion.div>
+                  </div>
                 );
               })()}
             </AnimatePresence>,
