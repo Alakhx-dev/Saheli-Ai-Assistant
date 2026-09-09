@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
+import { createPortal } from "react-dom";
 import {
   Camera,
   ImagePlus,
@@ -96,6 +97,7 @@ import { useRealtimeAwareness } from "@/hooks/useRealtimeAwareness";
 
 import { isMobile } from "@/lib/utils";
 import Sidebar from "../components/Sidebar";
+import MobileDesktopGuard from "../components/mobile/MobileDesktopGuard";
 import SaheliLogo from "../components/SaheliLogo";
 import CinematicAtmosphere from "../components/CinematicAtmosphere";
 import Profile from "../components/Profile";
@@ -111,7 +113,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import SettingsPanel, { CustomColorPicker } from "../components/settings/SettingsPanel";
+import SettingsPanel, { CustomColorPicker, type SettingsSectionId } from "../components/settings/SettingsPanel";
 import MusicPlayerPanel from "../components/music/MusicPlayerPanel";
 import FullscreenPlayer from "../components/music/FullscreenPlayer";
 import type { JioSaavnSong } from "../../lib/musicService";
@@ -405,11 +407,6 @@ function getStreamingTtsPreview(text: string) {
 
 type LanguageOption = AppLanguage;
 type ReplyLanguageMode = LanguageOption;
-type SettingsSectionId = 
-  | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
-  | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
-  | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
-  | "incognito" | "api_keys" | "music" | "studio_light" | "reminders" | "general" | "naming_theme";
 
 
 // Canonical image map — single source of truth for character assets
@@ -580,6 +577,29 @@ const STATIC_STARS = [
   { right: 205, top: 112 },
   { right: 248, top: 88 },
   { right: 288, top: 102 }
+];
+
+const STATIC_GLASS_BEADS = [
+  { left: 14, top: 18, size: 2.2, opacity: 0.35 },
+  { left: 32, top: 38, size: 2.8, opacity: 0.4 },
+  { left: 68, top: 24, size: 2.5, opacity: 0.35 },
+  { left: 84, top: 42, size: 3.0, opacity: 0.45 },
+];
+
+const DETERMINISTIC_RAIN_STREAKS = Array.from({ length: 32 }, (_, i) => {
+  const layer = i % 3; // 0 = foreground, 1 = midground, 2 = background
+  const left = Number(((i * 3.1 + (i * 7) % 5) % 95).toFixed(2));
+  const delay = Number(((i * 0.17) % 2.6).toFixed(2));
+  const duration = Number((layer === 0 ? 0.55 + (i % 4) * 0.05 : layer === 1 ? 0.78 + (i % 4) * 0.06 : 1.05 + (i % 4) * 0.08).toFixed(2));
+  const height = layer === 0 ? 28 + (i % 5) * 6 : layer === 1 ? 22 + (i % 5) * 4 : 15 + (i % 5) * 3;
+  const width = layer === 0 ? "0.95px" : layer === 1 ? "0.7px" : "0.45px";
+  const opacity = layer === 0 ? 0.48 : layer === 1 ? 0.30 : 0.16;
+  return { left, delay, duration, height, width, opacity, layer };
+});
+
+const GLASS_WATER_BEADS = [
+  { left: 22, top: 16, size: 4.0, speed: 15, delay: 0, trailHeight: 16 },
+  { left: 76, top: 22, size: 4.5, speed: 17, delay: 2.5, trailHeight: 18 },
 ];
 
 const renderSlider = (
@@ -2085,6 +2105,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [temporaryMemories, setTemporaryMemories] = useState<string[]>([]);
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => !isMobile());
+  const [desktopGuardOpen, setDesktopGuardOpen] = useState(false);
+  const [desktopGuardFeature, setDesktopGuardFeature] = useState("Desktop Feature");
   const [isSidebarLightMode, setIsSidebarLightMode] = useState(false);
   const [isTtsMuted, setIsTtsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -5292,24 +5314,64 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         ? "shadow-[0_22px_52px_rgba(249,115,22,0.10),0_0_38px_rgba(249,115,22,0.04)]"
         : "shadow-[0_24px_60px_rgba(59,130,246,0.12),0_0_40px_rgba(124,58,237,0.10)]";
 
-  const isRainy = awareness.weather?.isRainy;
-  const isCloudy = awareness.weather?.isCloudy;
-  const isFoggy = awareness.weather?.condition?.toLowerCase().includes("fog") || awareness.weather?.condition?.toLowerCase().includes("mist");
+  const conditionStr = (awareness.weather?.condition || "").toLowerCase();
+  const weatherCode = awareness.weather?.weatherCode ?? -1;
+  const isRainyCode = [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(weatherCode);
+
+  const isDrizzleOrShower = conditionStr.includes("drizzle") ||
+    conditionStr.includes("shower") ||
+    conditionStr.includes("light rain") ||
+    [51, 53, 56, 80].includes(weatherCode);
+
+  const isThunderstorm = [95, 96, 99].includes(weatherCode) ||
+    conditionStr.includes("thunder") ||
+    conditionStr.includes("lightning");
+
+  const windSpeed = awareness.weather?.windSpeedKph ?? 0;
+  const isWindStorm = (windSpeed >= 35 || conditionStr.includes("storm") || conditionStr.includes("gale") || conditionStr.includes("squall")) && !isThunderstorm;
+  const isWindy = windSpeed >= 10 ||
+    conditionStr.includes("wind") ||
+    conditionStr.includes("breeze") ||
+    isWindStorm ||
+    isThunderstorm;
+
+  const isRainy = Boolean(
+    awareness.weather?.isRainy ||
+    isRainyCode ||
+    conditionStr.includes("rain") ||
+    isDrizzleOrShower ||
+    isThunderstorm ||
+    isWindStorm ||
+    (typeof awareness.weather?.rainProbabilityPercent === "number" && awareness.weather.rainProbabilityPercent > 30)
+  );
+
+  const isOvercast = conditionStr.includes("overcast") || weatherCode === 3;
+  const isCloudy = awareness.weather?.isCloudy || isRainy || isOvercast || conditionStr.includes("cloud") || [1, 2, 3].includes(weatherCode);
+  const isFoggy = conditionStr.includes("fog") || conditionStr.includes("mist") || [45, 48].includes(weatherCode);
+
+  const activeRainStreaks = useMemo(() => {
+    if (isWindStorm) {
+      // Wind Storm: "sirf pani ka droplet ekke dukka rhega" -> 4 streaks max
+      return DETERMINISTIC_RAIN_STREAKS.slice(0, 4);
+    }
+    if (isDrizzleOrShower) {
+      // Shower/Drizzle: "ekdum patla patla and halka halka baarish, low density" -> 8 light streaks
+      return DETERMINISTIC_RAIN_STREAKS.slice(0, 8);
+    }
+    if (isThunderstorm) {
+      // Thunderstorm -> 20 streaks with heavy wind
+      return DETERMINISTIC_RAIN_STREAKS.slice(0, 20);
+    }
+    // Normal Rain -> 14 streaks
+    return DETERMINISTIC_RAIN_STREAKS.slice(0, 14);
+  }, [isWindStorm, isDrizzleOrShower, isThunderstorm]);
+
+  const hideSun = isRainy || isThunderstorm || isOvercast || isRainyCode;
   const isClearNight = skyDarkness > 0.5 && !isCloudy && !isRainy;
   const isHotWeather = awareness.weather?.hotColdState === "hot";
   const isSunset = currentHour >= dynamicSunsetHour - 2.0 && currentHour < dynamicSunsetHour + 1.0;
 
-  const isThunderstorm = [95, 96, 99].includes(awareness.weather?.weatherCode ?? -1) ||
-    (awareness.weather?.condition?.toLowerCase().includes("storm") ?? false) ||
-    (awareness.weather?.condition?.toLowerCase().includes("thunder") ?? false);
-
-  const windSpeed = awareness.weather?.windSpeedKph ?? 0;
-  const isStorm = windSpeed >= 40 || isThunderstorm;
-  const isWindy = windSpeed >= 10 ||
-    (awareness.weather?.condition?.toLowerCase().includes("wind") ?? false) ||
-    (awareness.weather?.condition?.toLowerCase().includes("breeze") ?? false) ||
-    isStorm;
-  const windDuration = Math.max(1.2, Math.min(10, 60 / (windSpeed || 1)));
+  const windDuration = Math.max(1.1, Math.min(6, (isWindStorm || isThunderstorm) ? 1.4 : 60 / (windSpeed || 1)));
   const isPinkTheme = activeTheme === "pink";
   const isOrchidTheme = activeTheme === "orchid";
   const isMaroonTheme = activeTheme === "maroon";
@@ -5819,11 +5881,22 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         onToggleTtsMute={handleToggleTtsMute}
         onToggleSidebarTheme={handleToggleSidebarTheme}
         onOpenProfile={handleOpenProfileFromSettings}
-        onOpenSettings={() => setSettingsPanelOpen(true)}
+        onOpenSettings={(sectionId) => {
+          if (sectionId && typeof sectionId === "string") {
+            setActiveSettingsSection(sectionId as SettingsSectionId);
+          }
+          setSettingsPanelOpen(true);
+        }}
         onLogout={() => void handleLogout()}
         activeTheme={activeTheme}
         customColor={customColor}
         className={`${(isSidebarOpen && isIdle) ? 'ghost-mode' : ''} ${settingsPanelOpen ? 'sidebar-deactivated' : ''}`}
+      />
+
+      <MobileDesktopGuard
+        isOpen={desktopGuardOpen}
+        onClose={() => setDesktopGuardOpen(false)}
+        featureName={desktopGuardFeature}
       />
 
       {/* Premium Glassmorphic Share Dialog Modal */}
@@ -5972,7 +6045,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     {isRefreshingRealtime ? (
                       <span className="absolute inset-0 rounded-full border border-cyan-400/40 border-t-transparent animate-spin" />
                     ) : null}
-                    {awareness.datetime.dayState === "day" ? (
+                    {isRainy ? (
+                      <CloudRain className="h-3.5 w-3.5 text-sky-300" />
+                    ) : isThunderstorm ? (
+                      <CloudLightning className="h-3.5 w-3.5 text-amber-300" />
+                    ) : awareness.datetime.dayState === "day" ? (
                       <CloudSun className="h-3.5 w-3.5" />
                     ) : (
                       <CloudMoon className="h-3.5 w-3.5" />
@@ -6010,145 +6087,238 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     <div 
                       className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
                       style={{
-                        backgroundImage: visualTheme === "morning"
-                          ? `linear-gradient(180deg, rgba(255,247,237,0.06), rgba(255,245,240,0.03)), radial-gradient(circle at top right, rgba(255,183,77,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(255,206,102,0.10), transparent 26%)`
-                          : visualTheme === "evening"
-                            ? `linear-gradient(180deg, rgba(255,244,230,0.05), rgba(255,240,230,0.02)), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(250,204,21,0.10), transparent 26%)`
-                            : `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`, // Afternoon
-                        opacity: 1 - skyDarkness,
+                        backgroundImage: isRainy || isThunderstorm || isOvercast
+                          ? `linear-gradient(180deg, rgba(30,41,59,0.35), rgba(15,23,42,0.15)), radial-gradient(circle at top right, rgba(71,85,105,0.25), transparent 50%), radial-gradient(circle at 12% 0%, rgba(51,65,85,0.2), transparent 30%)`
+                          : visualTheme === "morning"
+                            ? `linear-gradient(180deg, rgba(255,247,237,0.06), rgba(255,245,240,0.03)), radial-gradient(circle at top right, rgba(255,183,77,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(255,206,102,0.10), transparent 26%)`
+                            : visualTheme === "evening"
+                              ? `linear-gradient(180deg, rgba(255,244,230,0.05), rgba(255,240,230,0.02)), radial-gradient(circle at top right, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 12% 0%, rgba(250,204,21,0.10), transparent 26%)`
+                              : `linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.03)), radial-gradient(circle at top right, rgba(250,204,21,0.16), transparent 42%), radial-gradient(circle at 12% 0%, rgba(251,191,36,0.14), transparent 26%)`, // Afternoon
+                        opacity: isRainy || isThunderstorm || isOvercast ? 0.9 : (1 - skyDarkness),
                       }}
                     />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)] z-0" />
+                    {!hideSun && (
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.08),transparent_40%)] z-0" />
+                    )}
 
                     {/* CINEMATIC WEATHER THEMES */}
-                    <div className="absolute inset-0 pointer-events-none transition-opacity duration-1500 ease-in-out">
-                      {isRainy && !isThunderstorm && (
-                        <div className="absolute inset-0 opacity-80 mix-blend-screen">
-                          <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent" />
-                          {Array.from({ length: 12 }).map((_, i) => (
-                            <div 
-                              key={`rain-${i}`}
-                              className="absolute bg-gradient-to-b from-white/20 to-white/0 w-[1px]"
+                    <div className="absolute inset-0 pointer-events-none transition-opacity duration-1500 ease-in-out overflow-hidden">
+                      {/* 🌧️ AESTHETIC CINEMATIC RAIN SYSTEM */}
+                      {isRainy && (
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden z-10">
+                          {/* Rain Atmosphere Soft Ambient Overlay */}
+                          <div className="absolute inset-0 bg-gradient-to-b from-sky-950/20 via-slate-900/15 to-transparent pointer-events-none" />
+                          
+                          {/* Glass Condensation Moisture Blur */}
+                          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.03)_0%,transparent_80%)] pointer-events-none" />
+
+                          {/* 💧 Subtle Static Micro Water Droplets Clinging to Upper Glass */}
+                          {STATIC_GLASS_BEADS.map((bead, i) => (
+                            <div
+                              key={`static-bead-${i}`}
+                              className="absolute pointer-events-none"
                               style={{
-                                left: `${Math.random() * 100}%`,
-                                top: `-20px`,
-                                height: `${20 + Math.random() * 40}px`,
-                                animation: `weatherRainDrop ${0.4 + Math.random() * 0.3}s linear infinite`,
-                                animationDelay: `${Math.random() * 2}s`
+                                left: `${bead.left}%`,
+                                top: `${bead.top}%`,
+                                width: `${bead.size}px`,
+                                height: `${bead.size * 1.15}px`,
+                                opacity: bead.opacity,
+                                background: "radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.6) 0%, rgba(186, 230, 253, 0.25) 50%, rgba(15, 23, 42, 0.4) 95%)",
+                                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.3), inset 0 -0.5px 1px rgba(255, 255, 255, 0.5)",
+                                borderRadius: "50% 50% 60% 60%",
                               }}
                             />
+                          ))}
+
+                          {/* Rain Streaks Originating Directly from Cloud Canopy Area (09:45 Time Level) */}
+                          {activeRainStreaks.map((streak, i) => (
+                            <div 
+                              key={`hyper-rain-streak-${i}`}
+                              className="absolute pointer-events-none"
+                              style={{
+                                left: `${streak.left}%`,
+                                top: `35px`, // Rain originates directly from the clouds behind 09:45 time section!
+                                width: isDrizzleOrShower ? "0.65px" : streak.width,
+                                height: `${isDrizzleOrShower ? streak.height * 0.85 : streak.height}px`,
+                                background: streak.layer === 0
+                                  ? "linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(224, 242, 254, 0.4) 60%, rgba(255, 255, 255, 0.7) 100%)"
+                                  : streak.layer === 1
+                                    ? "linear-gradient(180deg, rgba(224, 242, 254, 0) 0%, rgba(147, 197, 253, 0.28) 60%, rgba(224, 242, 254, 0.45) 100%)"
+                                    : "linear-gradient(180deg, rgba(186, 230, 253, 0) 0%, rgba(125, 211, 252, 0.18) 60%, rgba(186, 230, 253, 0.3) 100%)",
+                                filter: streak.layer === 0 ? "none" : streak.layer === 1 ? "blur(0.2px)" : "blur(0.5px)",
+                                borderRadius: "0 0 50% 50%",
+                                animation: `weatherRainStreakFall ${isDrizzleOrShower ? streak.duration * 1.35 : streak.duration}s linear infinite both`,
+                                animationDelay: `${streak.delay}s`,
+                                animationFillMode: 'both',
+                                willChange: 'transform'
+                              }}
+                            />
+                          ))}
+
+                          {/* 💧 Condensed Water Droplets Sliding down Upper Glass */}
+                          {!isWindStorm && GLASS_WATER_BEADS.slice(0, isDrizzleOrShower ? 1 : 2).map((bead, i) => (
+                            <div
+                              key={`glass-bead-${i}`}
+                              className="absolute pointer-events-none"
+                              style={{
+                                left: `${bead.left}%`,
+                                top: `${bead.top}%`,
+                                width: `${bead.size}px`,
+                                height: `${bead.size * 1.3}px`,
+                                background: "radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.65) 0%, rgba(186, 230, 253, 0.25) 50%, rgba(15, 23, 42, 0.4) 90%)",
+                                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3), inset 0 -1px 2px rgba(255, 255, 255, 0.5)",
+                                borderRadius: "45% 45% 65% 65%",
+                                animation: `weatherGlassBeadSlide ${bead.speed}s linear infinite both`,
+                                animationDelay: `${bead.delay}s`,
+                                animationFillMode: 'both',
+                              }}
+                            >
+                              {/* Wet Water Trail */}
+                              <div 
+                                className="absolute bottom-[85%] left-1/2 -translate-x-1/2 w-[1px] pointer-events-none rounded-full opacity-30"
+                                style={{
+                                  height: `${bead.trailHeight}px`,
+                                  background: "linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(186, 230, 253, 0.25) 100%)",
+                                }}
+                              />
+                            </div>
                           ))}
                         </div>
                       )}
 
+                      {/* Thunderstorm Sheet Lightning Flash */}
                       {isThunderstorm && (
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen">
-                          <div className="absolute inset-0 bg-blue-100/30 opacity-0 animate-[weatherLightningFlash_6s_ease-out_infinite]" />
-                          <div className="absolute inset-0 opacity-70">
-                            {Array.from({ length: 18 }).map((_, i) => (
-                              <div 
-                                key={`storm-rain-${i}`}
-                                className="absolute bg-gradient-to-b from-sky-200/30 to-sky-200/0 w-[1.5px]"
-                                style={{
-                                  left: `${Math.random() * 100}%`,
-                                  top: `-30px`,
-                                  height: `${30 + Math.random() * 50}px`,
-                                  animation: `weatherStormRainDrop ${0.35 + Math.random() * 0.2}s linear infinite`,
-                                  animationDelay: `${Math.random() * 2}s`
-                                }}
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen z-10">
+                          <div className="absolute inset-0 bg-indigo-100/35 opacity-0 animate-[weatherLightningFlash_4.5s_ease-out_infinite]" />
+                        </div>
+                      )}
+
+                      {/* ☁️ Hyper-Realistic Volumetric Smoke & Cloud Canopy */}
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-95 z-0">
+                        <svg className="absolute w-0 h-0 pointer-events-none">
+                          <defs>
+                            <linearGradient id="organicCloudDay" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(255, 255, 255, 0.85)" />
+                              <stop offset="45%" stopColor="rgba(235, 242, 252, 0.55)" />
+                              <stop offset="100%" stopColor="rgba(195, 210, 235, 0.12)" />
+                            </linearGradient>
+                            <linearGradient id="organicCloudStorm" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(140, 155, 178, 0.9)" />
+                              <stop offset="50%" stopColor="rgba(65, 80, 102, 0.7)" />
+                              <stop offset="100%" stopColor="rgba(25, 35, 52, 0.25)" />
+                            </linearGradient>
+                            <linearGradient id="smokeSkyCanopyGrad1" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(71, 85, 105, 0.95)" />
+                              <stop offset="50%" stopColor="rgba(51, 65, 85, 0.8)" />
+                              <stop offset="85%" stopColor="rgba(30, 41, 59, 0.45)" />
+                              <stop offset="100%" stopColor="rgba(15, 23, 42, 0.0)" />
+                            </linearGradient>
+                            <linearGradient id="smokeSkyCanopyGrad2" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor="rgba(148, 163, 184, 0.85)" />
+                              <stop offset="60%" stopColor="rgba(90, 108, 132, 0.6)" />
+                              <stop offset="100%" stopColor="rgba(30, 41, 59, 0.0)" />
+                            </linearGradient>
+                          </defs>
+                        </svg>
+
+                        {/* Upper Sky Smoke & Heavy Cloud Mist Canopy (Fills upper screen with rich, atmospheric smoke clouds) */}
+                        {hideSun && (
+                          <>
+                            {/* Dark smoke gradient atmosphere across upper sky */}
+                            <div className="absolute top-0 left-0 right-0 h-[160px] bg-gradient-to-b from-slate-950/90 via-slate-900/60 to-transparent pointer-events-none mix-blend-multiply" />
+                            
+                            {/* Dynamic Atmospheric Smoke / Cloud Haze Layer 1 */}
+                            <div className="absolute -top-10 -left-12 -right-12 h-[140px] bg-gradient-to-r from-slate-700/40 via-slate-600/60 to-slate-800/40 blur-3xl opacity-95 animate-[weatherSmokeBreath_45s_ease-in-out_infinite_alternate]" />
+                            
+                            {/* Dynamic Atmospheric Smoke / Cloud Haze Layer 2 (Ultra slow micro drift) */}
+                            <div className="absolute -top-6 -left-20 w-[190%] h-[120px] bg-gradient-to-r from-transparent via-slate-500/35 to-transparent blur-3xl opacity-90 animate-[weatherUltraSlowDrift_300s_ease-in-out_infinite]" />
+
+                            {/* Seamless Volumetric Smoke Cloud Spheres (Zero hard lines) */}
+                            <div className="absolute -top-14 -left-10 w-56 h-44 rounded-full bg-slate-600/45 blur-3xl opacity-90 animate-[weatherSmokeBreath_35s_ease-in-out_infinite_alternate]" />
+                            <div className="absolute -top-16 -right-8 w-64 h-48 rounded-full bg-slate-700/55 blur-3xl opacity-95 animate-[weatherSmokeBreath_48s_ease-in-out_infinite_alternate]" />
+                            <div className="absolute -top-8 left-12 right-12 h-36 rounded-full bg-slate-500/30 blur-2xl opacity-85 animate-[weatherFog_40s_ease-in-out_infinite_alternate]" />
+                          </>
+                        )}
+                        {!hideSun && (
+                          <>
+                            {/* Layer 1: Background Soft Cloud Haze */}
+                            <svg 
+                              viewBox="0 0 160 60" 
+                              className="absolute top-0 w-[140px] h-[60px] animate-[weatherCloudMove_55s_linear_infinite] opacity-35 blur-[1px]"
+                              style={{ left: "-130px" }}
+                            >
+                              <path 
+                                d="M 15,45 C 10,30 25,18 42,22 C 58,10 88,14 105,25 C 122,20 142,32 135,45 C 120,52 30,53 15,45 Z" 
+                                fill="url(#organicCloudDay)" 
                               />
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                            </svg>
 
-                      {/* Real Vector Clouds (fluffy cloud shapes, no smoky blur) */}
-                      {isCloudy ? (
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen opacity-55">
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-2 w-[85px] h-[55px] animate-[weatherCloudMove_35s_linear_infinite]"
-                            style={{ left: "-100px" }}
-                          >
-                            <defs>
-                              <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.45)" />
-                                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.15)" />
-                              </linearGradient>
-                              <linearGradient id="stormCloudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="rgba(148, 163, 184, 0.45)" />
-                                <stop offset="100%" stopColor="rgba(71, 85, 105, 0.2)" />
-                              </linearGradient>
-                            </defs>
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
-                          </svg>
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-8 w-[110px] h-[70px] animate-[weatherCloudMove_48s_linear_infinite]"
-                            style={{ left: "-130px", animationDelay: "4s" }}
-                          >
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
-                          </svg>
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-14 w-[65px] h-[45px] animate-[weatherCloudMove_26s_linear_infinite]"
-                            style={{ left: "-80px", animationDelay: "10s" }}
-                          >
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
-                          </svg>
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-4 w-[95px] h-[60px] animate-[weatherCloudMove_42s_linear_infinite]"
-                            style={{ left: "-110px", animationDelay: "16s" }}
-                          >
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill={isThunderstorm || isRainy ? "url(#stormCloudGrad)" : "url(#cloudGrad)"} />
-                          </svg>
-                        </div>
-                      ) : (
-                        // Clear / Nirmal sky - very faint drift clouds
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen opacity-20">
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-3 w-[70px] h-[45px] animate-[weatherCloudMove_55s_linear_infinite]"
-                            style={{ left: "-100px" }}
-                          >
-                            <defs>
-                              <linearGradient id="cloudGradClear" x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" stopColor="rgba(255, 255, 255, 0.3)" />
-                                <stop offset="100%" stopColor="rgba(255, 255, 255, 0.08)" />
-                              </linearGradient>
-                            </defs>
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="url(#cloudGradClear)" />
-                          </svg>
-                          <svg 
-                            viewBox="0 0 24 24" 
-                            className="absolute top-9 w-[55px] h-[35px] animate-[weatherCloudMove_75s_linear_infinite]"
-                            style={{ left: "-90px", animationDelay: "12s" }}
-                          >
-                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" fill="url(#cloudGradClear)" />
-                          </svg>
-                        </div>
-                      )}
+                            {/* Layer 2: Midground Volumetric Puff with Golden Rim Glow */}
+                            <svg 
+                              viewBox="0 0 180 70" 
+                              className="absolute top-2 w-[170px] h-[75px] animate-[weatherCloudMove_40s_linear_infinite]"
+                              style={{ 
+                                left: "-160px", 
+                                animationDelay: "4s",
+                                filter: "drop-shadow(0 0 12px rgba(255,230,170,0.6))"
+                              }}
+                            >
+                              <path 
+                                d="M 20,52 C 12,35 32,20 52,26 C 72,8 108,12 122,28 C 142,22 165,36 158,52 C 140,62 35,60 20,52 Z" 
+                                fill="url(#organicCloudDay)" 
+                              />
+                            </svg>
 
-                      {/* Dynamic Wind particles (Streaks, Leaves, Dust) with speed scaling */}
+                            {/* Layer 3: Foreground Crisp Layered Cloud */}
+                            <svg 
+                              viewBox="0 0 200 80" 
+                              className="absolute top-5 w-[190px] h-[90px] animate-[weatherCloudMove_28s_linear_infinite]"
+                              style={{ 
+                                left: "-180px", 
+                                animationDelay: "16s",
+                                filter: "drop-shadow(0 0 16px rgba(255,240,200,0.7))"
+                              }}
+                            >
+                              <path 
+                                d="M 25,60 C 15,40 38,22 62,30 C 85,10 125,15 142,33 C 165,26 190,42 180,62 C 160,72 40,70 25,60 Z" 
+                                fill="url(#organicCloudDay)" 
+                              />
+                            </svg>
+                          </>
+                        )}
+
+
+                      </div>
+
+                      {/* Dynamic Wind particles (Fast Wind Streaks, Flying Leaves, Flying Dust) */}
                       {isWindy && (
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen animate-none">
-                          {Array.from({ length: isStorm ? 16 : 6 }).map((_, i) => {
-                            const type = i % 3;
-                            const delay = i * 0.35;
-                            const topPercent = 15 + (i * 17) % 70;
+                        <div className="absolute inset-0 pointer-events-none overflow-hidden mix-blend-screen z-20">
+                          {Array.from({ length: (isWindStorm || isThunderstorm) ? 20 : 8 }).map((_, i) => {
+                            const type = i % 4;
+                            const delay = (i * 0.22) % 2.5;
+                            const topPercent = 12 + (i * 14) % 75;
                             
                             let childNode = null;
                             if (type === 0) {
-                              childNode = <div className="h-[1px] w-10 bg-gradient-to-r from-transparent via-white/25 to-transparent" />;
+                              // Fast wind streak
+                              childNode = <div className="h-[1px] w-14 bg-gradient-to-r from-transparent via-sky-200/40 to-transparent" />;
                             } else if (type === 1) {
+                              // Flying Green Leaf
                               childNode = (
-                                <svg width="8" height="6" viewBox="0 0 8 6" className="fill-emerald-500/40 opacity-70">
-                                  <path d="M0,3 C2,0 6,0 8,3 C6,6 2,6 0,3 Z" />
+                                <svg width="11" height="8" viewBox="0 0 11 8" className="fill-emerald-400/80 drop-shadow-[0_0_6px_rgba(52,211,153,0.5)]">
+                                  <path d="M0,4 C2,1 8,1 11,4 C8,7 2,7 0,4 Z" />
+                                </svg>
+                              );
+                            } else if (type === 2) {
+                              // Flying Autumn Leaf
+                              childNode = (
+                                <svg width="9" height="7" viewBox="0 0 9 7" className="fill-amber-400/70 drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]">
+                                  <path d="M0,3.5 C2,0.5 7,0.5 9,3.5 C7,6.5 2,6.5 0,3.5 Z" />
                                 </svg>
                               );
                             } else {
-                              childNode = <div className="h-[1.5px] w-[1.5px] rounded-full bg-amber-600/30" />;
+                              // Flying Dust Spec
+                              childNode = <div className="h-[1.5px] w-[1.5px] rounded-full bg-emerald-200/60 shadow-[0_0_3px_rgba(255,255,255,0.8)]" />;
                             }
                             
                             return (
@@ -6266,7 +6436,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                       className="absolute inset-0 pointer-events-none transition-opacity duration-500 ease-in-out"
                       style={{ opacity: 1 - skyDarkness }}
                     >
-                      {sunDetails && (
+                      {sunDetails && !hideSun && (
                         <>
                           {/* Soft atmospheric sun glow spreading across the box */}
                           <div 
@@ -6346,7 +6516,13 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         <span className="tracking-[0.01em]">{awareness.datetime.currentDate}</span>
                         <span className="text-white/18">•</span>
                         <span className="inline-flex items-center gap-1.5 text-white/60">
-                          {weatherCurrentBadge.icon === Sun ? <Sun className="h-3 w-3 text-amber-200" /> : <Moon className="h-3 w-3 text-sky-200" />}
+                          {hideSun ? (
+                            <CloudRain className="h-3 w-3 text-sky-300" />
+                          ) : weatherCurrentBadge.icon === Sun ? (
+                            <Sun className="h-3 w-3 text-amber-200" />
+                          ) : (
+                            <Moon className="h-3 w-3 text-sky-200" />
+                          )}
                           {awareness.datetime.dayState === "day" ? "Daytime" : "Nighttime"}
                         </span>
                       </div>
@@ -6364,7 +6540,11 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         </div>
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                           <span className="inline-flex min-w-0 items-center gap-2">
-                            {awareness.datetime.dayState === "day" ? (
+                            {isRainy ? (
+                              <CloudRain className="h-3.5 w-3.5 text-sky-200/80" />
+                            ) : isThunderstorm ? (
+                              <CloudLightning className="h-3.5 w-3.5 text-amber-200/80" />
+                            ) : awareness.datetime.dayState === "day" ? (
                               <CloudSun className="h-3.5 w-3.5 text-cyan-200/80" />
                             ) : (
                               <CloudMoon className="h-3.5 w-3.5 text-cyan-200/80" />
@@ -6494,9 +6674,15 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               @keyframes weatherLightningFlash { 0%, 92%, 100% { opacity: 0; } 93% { opacity: 0.8; } 94% { opacity: 0.1; } 96% { opacity: 0.9; } 98% { opacity: 0; } }
               @keyframes weatherStormRainDrop { 0% { transform: translateY(0) rotate(18deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(320px) rotate(18deg); opacity: 0; } }
               @keyframes weatherWindDrift { 0% { transform: translate(0, 0) rotate(0deg); opacity: 0; } 15% { opacity: 0.5; } 50% { transform: translate(150px, 15px) rotate(90deg); } 85% { opacity: 0.5; } 100% { transform: translate(320px, -15px) rotate(180deg); opacity: 0; } }
-              @keyframes weatherSunPulse { 0%, 100% { filter: drop-shadow(0 0 12px rgba(251,191,36,0.75)); } 50% { filter: drop-shadow(0 0 24px rgba(251,191,36,0.95)); } }
-              @keyframes weatherSunRayPulse { 0% { transform: scale(1.1) rotate(0deg); opacity: 0.4; } 50% { transform: scale(1.3) rotate(180deg); opacity: 0.75; } 100% { transform: scale(1.1) rotate(360deg); opacity: 0.4; } }
+              @keyframes weatherSunRayPulse { 0%, 100% { opacity: 0.3; transform: scale(0.97); } 50% { opacity: 0.65; transform: scale(1.04); } }
+              @keyframes weatherWaterBounce { 0% { transform: scale(0.2); opacity: 0; } 25% { transform: scale(1.2); opacity: 1; border-color: rgba(255, 255, 255, 0.95); } 60% { transform: scale(2.2); opacity: 0.5; } 100% { transform: scale(3.2); opacity: 0; } }
+              @keyframes weatherSplashSparks { 0% { transform: translateY(0px) scale(0.8); opacity: 0; } 30% { transform: translateY(-8px) scale(1.2); opacity: 1; } 70% { transform: translateY(-12px) scale(0.6); opacity: 0.6; } 100% { transform: translateY(-16px) scale(0.1); opacity: 0; } }
               @keyframes weatherMoonPulse { 0%, 100% { transform: scale(1); filter: drop-shadow(0 0 calc(var(--moon-glow-intensity, 1) * 10px) rgba(255,255,255,calc(var(--moon-glow-intensity, 1) * 0.7))); } 50% { transform: scale(1.08); filter: drop-shadow(0 0 calc(var(--moon-glow-intensity, 1) * 18px) rgba(255,255,255,calc(var(--moon-glow-intensity, 1) * 0.95))); } }
+              @keyframes weatherTopCloudPulse { 0%, 100% { transform: translateY(0px) scale(1); } 50% { transform: translateY(-3px) scale(1.03); } }
+              @keyframes weatherSmokeBreath { 0%, 100% { transform: translateY(0px) scale(1); opacity: 0.85; } 50% { transform: translateY(-3px) scale(1.02); opacity: 0.98; } }
+              @keyframes weatherUltraSlowDrift { 0% { transform: translateX(-40px); } 50% { transform: translateX(20px); } 100% { transform: translateX(-40px); } }
+              @keyframes weatherGlassBeadSlide { 0% { transform: translateY(0px) scale(0.9); opacity: 0; } 10% { opacity: 0.6; transform: translateY(10px) scale(1); } 60% { transform: translateY(180px) scale(1.02); opacity: 0.5; } 100% { transform: translateY(330px) scale(0.5); opacity: 0; } }
+              @keyframes weatherRainStreakFall { 0% { transform: translateY(0px) rotate(10deg); opacity: 0; } 12% { opacity: 0.85; } 88% { opacity: 0.7; } 100% { transform: translateY(370px) rotate(10deg); opacity: 0; } }
 
             `}</style>
           </div>
@@ -7046,66 +7232,80 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           )}
         </div>
 
-        <SettingsPanel
-          open={settingsPanelOpen}
-          onOpenChange={handleSettingsOpenChange}
-          activeSection={activeSettingsSection}
-          onSectionChange={setActiveSettingsSection}
-          languageMode={replyLanguageMode}
-          onLanguageModeChange={handleLanguageModeChange}
-          memoryEnabled={memoryEnabled}
-          onMemoryToggle={handleMemoryToggle}
-          onManageMemory={handleOpenMemoryFromSettings}
-          profileName={effectiveUserName}
-          profileSubtext={profileSubtext}
-          profileImageUrl={profileDraftPhotoUrl}
-          profileInitial={profileInitial}
-          onEditProfile={handleOpenProfileFromSettings}
-          onChangePassword={() => void handleChangePassword()}
-          onLogout={() => void handleLogout()}
-          isTtsMuted={isTtsMuted}
-          onToggleTtsMute={handleToggleTtsMute}
-          selectedCharacter={selectedCharacter}
-          onCharacterChange={handleCharacterChange}
-          uploadedCharacters={uploadedCharacters}
-          onRefreshUploadedCharacters={refreshCustomCharacters}
-          onEditCharacterAdjustments={handleEditCharacterAdjustments}
-          activeMode={currentMode}
-          onModeChange={setCurrentMode}
-          profileDraftName={profileDraftName}
-          onProfileNameChange={setProfileDraftName}
-          onProfileImageSelect={handleProfileImageSelect}
-          onProfileImageDelete={() => void handleProfileImageDelete()}
-          onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
-          isSavingProfile={isSavingProfile}
-          originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
-          realtimeAwareness={awareness}
-          awarenessLocationLabel={locationLabel}
-          awarenessWeatherLabel={weatherLabel}
-          awarenessTimeFormat={awarenessSettings.timeFormat}
-          awarenessShowDayDate={awarenessSettings.showDayDate}
-          awarenessRefreshing={isRefreshingRealtime}
-          onAwarenessTimeFormatChange={setTimeFormat}
-          onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
-          onAwarenessRefresh={() => void refreshLocationAndWeather()}
-          onOpenMusicSystem={() => {
-            setIsMusicPanelOpen(true);
-            setIsMusicMinimized(false);
-          }}
-          incognitoMode={incognitoMode}
-          onIncognitoModeChange={handleIncognitoModeChange}
-          aiSelfProfile={memoryProfile?.aiSelfProfile}
-          onUpdateAiSelfProfile={(profile) => {
-            setMemoryProfile((prev) => {
-              const updated = { ...(prev ?? createEmptyMemoryProfile()), aiSelfProfile: profile };
-              setTimeout(() => setStoreMemory(updated), 0);
-              if (user) {
-                void saveAiSelfProfile(user, profile).catch(err => console.error("Failed to save AI self profile:", err));
-              }
-              return updated;
-            });
-          }}
-        />
+        {(() => {
+          const mobilePortalElement = typeof document !== "undefined" ? document.getElementById("mobile-settings-portal") : null;
+          const isMobileCardView = !!mobilePortalElement;
+
+          const settingsPanelComponent = (
+            <SettingsPanel
+              open={settingsPanelOpen}
+              onOpenChange={handleSettingsOpenChange}
+              activeSection={activeSettingsSection}
+              onSectionChange={setActiveSettingsSection}
+              languageMode={replyLanguageMode}
+              onLanguageModeChange={handleLanguageModeChange}
+              memoryEnabled={memoryEnabled}
+              onMemoryToggle={handleMemoryToggle}
+              onManageMemory={handleOpenMemoryFromSettings}
+              profileName={effectiveUserName}
+              profileSubtext={profileSubtext}
+              profileImageUrl={profileDraftPhotoUrl}
+              profileInitial={profileInitial}
+              onEditProfile={handleOpenProfileFromSettings}
+              onChangePassword={() => void handleChangePassword()}
+              onLogout={() => void handleLogout()}
+              isTtsMuted={isTtsMuted}
+              onToggleTtsMute={handleToggleTtsMute}
+              selectedCharacter={selectedCharacter}
+              onCharacterChange={handleCharacterChange}
+              uploadedCharacters={uploadedCharacters}
+              onRefreshUploadedCharacters={refreshCustomCharacters}
+              onEditCharacterAdjustments={handleEditCharacterAdjustments}
+              activeMode={currentMode}
+              onModeChange={setCurrentMode}
+              profileDraftName={profileDraftName}
+              onProfileNameChange={setProfileDraftName}
+              onProfileImageSelect={handleProfileImageSelect}
+              onProfileImageDelete={() => void handleProfileImageDelete()}
+              onSaveProfile={(nameOverride?: string) => void handleSaveProfile(nameOverride)}
+              isSavingProfile={isSavingProfile}
+              originalPhotoUrl={user?.providerData?.[0]?.photoURL || ""}
+              realtimeAwareness={awareness}
+              awarenessLocationLabel={locationLabel}
+              awarenessWeatherLabel={weatherLabel}
+              awarenessTimeFormat={awarenessSettings.timeFormat}
+              awarenessShowDayDate={awarenessSettings.showDayDate}
+              awarenessRefreshing={isRefreshingRealtime}
+              onAwarenessTimeFormatChange={setTimeFormat}
+              onAwarenessToggleDayDateVisibility={toggleDayDateVisibility}
+              onAwarenessRefresh={() => void refreshLocationAndWeather()}
+              onOpenMusicSystem={() => {
+                setIsMusicPanelOpen(true);
+                setIsMusicMinimized(false);
+              }}
+              incognitoMode={incognitoMode}
+              onIncognitoModeChange={handleIncognitoModeChange}
+              aiSelfProfile={memoryProfile?.aiSelfProfile}
+              onUpdateAiSelfProfile={(profile) => {
+                setMemoryProfile((prev) => {
+                  const updated = { ...(prev ?? createEmptyMemoryProfile()), aiSelfProfile: profile };
+                  setTimeout(() => setStoreMemory(updated), 0);
+                  if (user) {
+                    void saveAiSelfProfile(user, profile).catch(err => console.error("Failed to save AI self profile:", err));
+                  }
+                  return updated;
+                });
+              }}
+              isMobileCardView={isMobileCardView}
+              onMobileFlipBack={() => {
+                window.dispatchEvent(new CustomEvent('saheli_mobile_unflip'));
+                handleSettingsOpenChange(false);
+              }}
+            />
+          );
+
+          return mobilePortalElement ? createPortal(settingsPanelComponent, mobilePortalElement) : settingsPanelComponent;
+        })()}
 
         <MemoryModal
           open={memoryModalOpen}

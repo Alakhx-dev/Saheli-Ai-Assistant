@@ -12,7 +12,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "fi
 import { characterDb } from "../../utils/indexedDb";
 import ReminderManager from "../reminders/ReminderManager";
 
-type SettingsSectionId = 
+export type SettingsSectionId = 
   | "personalization" | "character" | "memory" | "account" | "appearance" | "voice" | "about" | "realtime"
   | "color" | "customization" | "chat_memory" | "image_memory" | "memory_toggle" | "custom_profile" | "swara_profile"
   | "profile" | "password" | "logout" | "bestie_mentor" | "bond_progress" | "reset_memory"
@@ -488,6 +488,8 @@ interface SettingsPanelProps {
   onOpenMusicSystem?: () => void;
   incognitoMode: boolean;
   onIncognitoModeChange: (value: boolean) => void;
+  isMobileCardView?: boolean;
+  onMobileFlipBack?: () => void;
 }
 
 const characterCards = [
@@ -814,6 +816,8 @@ export default function SettingsPanel({
   onOpenMusicSystem,
   incognitoMode,
   onIncognitoModeChange,
+  isMobileCardView,
+  onMobileFlipBack,
 }: SettingsPanelProps) {
   const t = getLang();
 
@@ -5169,35 +5173,61 @@ export default function SettingsPanel({
 
   return (
     <AnimatePresence>
-      {open && (
+      {(open || isMobileCardView) && (
         <>
-          <div className="fixed inset-0 z-[100] pointer-events-none flex items-end pb-[24px] pl-[320px]">
+          <div className={isMobileCardView ? "relative w-full h-full flex flex-col p-2" : "fixed inset-0 z-[100] pointer-events-none flex items-end pb-[24px] pl-[320px]"}>
             {/* Overlay to close */}
-            <div className="absolute inset-0 pointer-events-auto" onClick={() => onOpenChange(false)} />
+            {!isMobileCardView && <div className="absolute inset-0 pointer-events-auto" onClick={() => onOpenChange(false)} />}
 
-            <div className="flex items-end animate-soft-float pointer-events-none [perspective:1000px] [transform-style:preserve-3d]">
+            <div className={isMobileCardView ? "flex flex-col flex-1 overflow-hidden" : "flex items-end animate-soft-float pointer-events-none [perspective:1000px] [transform-style:preserve-3d]"}>
+              
+              {isMobileCardView && (
+                <div className="border-b border-white/[0.1] px-3.5 py-3 flex items-center justify-between bg-black/70 rounded-t-[20px] mb-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (showContentPanel) {
+                        setShowContentPanel(false);
+                      } else if (onMobileFlipBack) {
+                        onMobileFlipBack();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-full border border-pink-400/40 bg-gradient-to-r from-pink-500/30 to-purple-500/30 px-3.5 py-1.5 text-xs font-semibold text-pink-100 hover:brightness-125 active:scale-95 transition-all shadow-[0_0_15px_rgba(255,105,180,0.3)] cursor-pointer pointer-events-auto z-10"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    <span>{showContentPanel ? "Back" : "← Flip Back"}</span>
+                  </button>
+                  <span className="text-xs font-extrabold tracking-wider text-pink-200 uppercase truncate max-w-[140px]">
+                    {showContentPanel && activeSection ? getLabel(activeSection, activeSection) : "Settings"}
+                  </span>
+                </div>
+              )}
+
               {/* Level 1: Menu */}
-              <motion.div
-                initial={{ opacity: 0, x: -20, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -20, scale: 0.95 }}
-                transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                style={{
-                  background: "rgba(255, 255, 255, 0.03)",
-                  backdropFilter: "blur(40px) saturate(160%)",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  boxShadow: getChildPanelShadow(selectedColor)
-                }}
-                onClick={(e) => {
-                  const target = e.target as HTMLElement;
-                  const isInteractive = target.closest("button, input, textarea, select, [role='switch'], a");
-                  if (!isInteractive) {
-                    setShowContentPanel(false);
-                    setPersonalizationChild(null);
-                  }
-                }}
-                className="settings-menu-container relative pointer-events-auto w-[260px] rounded-[28px] p-4 flex flex-col gap-2 cursor-default"
-              >
+              <AnimatePresence>
+                {(!isMobileCardView || !showContentPanel) && (
+                  <motion.div
+                    key="level1"
+                    initial={{ opacity: 0, x: -20, scale: 0.95 }}
+                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                    exit={{ opacity: 0, x: -20, scale: 0.95 }}
+                    transition={{ type: "tween", duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.03)",
+                      backdropFilter: "blur(40px) saturate(160%)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      boxShadow: getChildPanelShadow(selectedColor)
+                    }}
+                    onClick={(e) => {
+                      const target = e.target as HTMLElement;
+                      const isInteractive = target.closest("button, input, textarea, select, [role='switch'], a");
+                      if (!isInteractive) {
+                        setShowContentPanel(false);
+                        setPersonalizationChild(null);
+                      }
+                    }}
+                    className={`settings-menu-container relative pointer-events-auto rounded-[28px] p-4 flex flex-col gap-2 cursor-default ${isMobileCardView ? "w-full flex-1 mb-2" : "w-[260px]"}`}
+                  >
                 <div className="mb-2 px-2">
                   <h2 className="text-xl font-semibold tracking-tight text-white">{t.settings.title}</h2>
                   <p className="text-[11px] text-white/50">{t.settings.description}</p>
@@ -5247,7 +5277,9 @@ export default function SettingsPanel({
                       );
                     })}
                 </div>
-              </motion.div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Level 2: Content Panel */}
               <AnimatePresence>
@@ -5272,8 +5304,10 @@ export default function SettingsPanel({
                         setIsCustomColorPickerOpen(false);
                       }
                     }}
-                    className={`settings-content-panel relative pointer-events-auto ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} flex max-h-[calc(100vh-100px)] flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 cursor-default ${
-                      activeItem?.id === "character" ? "w-[280px]" : activeItem?.id === "memory" ? "w-[300px]" : activeItem?.id === "personalization" ? "w-[320px]" : activeItem?.id === "realtime" ? "w-[380px]" : activeItem?.id === "color" ? "w-[245px]" : activeItem?.id === "customization" ? "w-[350px]" : "w-[360px]"
+                    className={`settings-content-panel relative pointer-events-auto flex flex-col rounded-[32px] overflow-hidden transition-[width] duration-150 cursor-default ${
+                      isMobileCardView ? "w-full flex-1" : `ml-4 ${activeItem?.id === "personalization" ? "mb-6" : "mb-2"} max-h-[calc(100vh-100px)] ${
+                        activeItem?.id === "character" ? "w-[280px]" : activeItem?.id === "memory" ? "w-[300px]" : activeItem?.id === "personalization" ? "w-[320px]" : activeItem?.id === "realtime" ? "w-[380px]" : activeItem?.id === "color" ? "w-[245px]" : activeItem?.id === "customization" ? "w-[350px]" : "w-[360px]"
+                      }`
                     }`}
                   >
                     <div className="flex-1 overflow-y-auto px-6 py-6 no-scrollbar">

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2, MoreHorizontal, Pin, Share2 } from "lucide-react";
 import SaheliLogo from "./SaheliLogo";
+import MobileFlipSidebar from "./mobile/MobileFlipSidebar";
 
 export interface ChatSessionListItem {
   id: string;
@@ -38,7 +39,7 @@ interface SidebarProps {
   onToggleTtsMute: () => void;
   onToggleSidebarTheme: (nextValue: boolean) => void;
   onOpenProfile: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings: (sectionId?: any) => void;
   onLogout: () => void | Promise<void>;
   activeTheme?: string;
   customColor?: string;
@@ -58,7 +59,7 @@ interface ChatItemProps {
   onShareChat?: (chatId: string) => void | Promise<void>;
 }
 
-const ChatItem = memo(function ChatItem({
+export const ChatItem = memo(function ChatItem({
   chat,
   isActive,
   title,
@@ -323,6 +324,49 @@ export default function Sidebar(props: SidebarProps) {
     if (!aPinned && bPinned) return 1;
     return 0;
   });
+
+  const [isMobileScreen, setIsMobileScreen] = useState(
+    typeof window !== "undefined" ? window.innerWidth <= 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  if (isMobileScreen) {
+    return (
+      <MobileFlipSidebar
+        isOpen={isOpen}
+        chatSessions={chatSessions}
+        currentChatId={currentChatId}
+        isGuest={isGuest}
+        isLightMode={props.isLightMode}
+        isTtsMuted={props.isTtsMuted}
+        newChatLabel={newChatLabel}
+        recentChatsLabel={recentChatsLabel}
+        noChatsGuestLabel={noChatsGuestLabel}
+        noChatsAccountLabel={noChatsAccountLabel}
+        settingsLabel={settingsLabel}
+        userName={userName}
+        userPhotoUrl={userPhotoUrl}
+        resolveChatTitle={resolveChatTitle}
+        onCreateChat={onCreateChat}
+        onSelectChat={onSelectChat}
+        onDeleteChat={onDeleteChat}
+        onPinChat={onPinChat}
+        onCloseSidebar={onCloseSidebar}
+        onToggleTtsMute={props.onToggleTtsMute}
+        onToggleSidebarTheme={props.onToggleSidebarTheme}
+        onOpenProfile={props.onOpenProfile}
+        onOpenDesktopSettings={onOpenSettings}
+        activeTheme={activeTheme}
+      />
+    );
+  }
 
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
 

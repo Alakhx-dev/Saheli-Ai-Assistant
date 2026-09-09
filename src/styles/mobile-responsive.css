@@ -67,6 +67,46 @@
     animation: mobileSlideIn 0.3s ease-out forwards !important;
   }
 
+  /* ─── 3D Flip Container & Perspective ─── */
+  .mobile-card-perspective {
+    perspective: 1200px !important;
+    transform-style: preserve-3d !important;
+  }
+
+  .mobile-flip-card-inner {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transform-style: preserve-3d !important;
+  }
+
+  .mobile-flip-card-inner.is-flipped {
+    transform: rotateY(180deg) !important;
+  }
+
+  .mobile-flip-card-front,
+  .mobile-flip-card-back {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    backface-visibility: hidden !important;
+    -webkit-backface-visibility: hidden !important;
+    border-radius: 20px !important;
+    overflow-y: auto !important;
+  }
+
+  .mobile-flip-card-front {
+    z-index: 2 !important;
+    transform: rotateY(0deg) !important;
+  }
+
+  .mobile-flip-card-back {
+    transform: rotateY(180deg) !important;
+    z-index: 1 !important;
+  }
+
   .sidebar.sidebar-closed {
     transform: translateX(-110%) !important;
     opacity: 0 !important;
