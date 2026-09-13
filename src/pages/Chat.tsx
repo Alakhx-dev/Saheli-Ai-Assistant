@@ -999,6 +999,82 @@ function detectChatLanguage(text: string): AppLanguage | null {
   return "hinglish"; // default
 }
 
+const DEVANAGARI_VOWELS: Record<string, string> = {
+  "अ": "a", "आ": "aa", "इ": "i", "ई": "ee", "उ": "u", "ऊ": "oo", "ऋ": "ri",
+  "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au", "अं": "an", "अः": "ah"
+};
+
+const DEVANAGARI_MATRAS: Record<string, string> = {
+  "ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u", "ृ": "ri",
+  "े": "e", "ै": "ai", "ो": "o", "ौ": "au", "ं": "n", "ँ": "n", "ः": "h"
+};
+
+const DEVANAGARI_CONSONANTS: Record<string, string> = {
+  "क": "k", "ख": "kh", "ग": "g", "घ": "gh", "ङ": "ng",
+  "च": "ch", "छ": "chh", "ज": "j", "झ": "jh", "ञ": "ny",
+  "ट": "t", "ठ": "th", "ड": "d", "ढ": "dh", "ण": "n",
+  "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n",
+  "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m",
+  "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh", "ष": "sh", "स": "s", "ह": "h",
+  "क़": "q", "ख़": "kh", "ग़": "gh", "ज़": "z", "ड़": "d", "ढ़": "dh", "फ़": "f"
+};
+
+const HINDI_TO_HINGLISH_WORDS: Record<string, string> = {
+  "नमस्ते": "namaste", "नमस्कार": "namaskar", "हैलो": "hello", "हेलो": "hello", "हाय": "hi",
+  "हाँ": "haan", "हां": "haan", "नहीं": "nahi", "नही": "nahi", "क्या": "kya", "क्यों": "kyun",
+  "क्यूँ": "kyun", "कैसे": "kaise", "कैसा": "kaisa", "कैसी": "kaisi", "कब": "kab", "कहाँ": "kahan",
+  "कहा": "kahan", "यहाँ": "yahan", "वहाँ": "wahan", "अच्छा": "achha", "अच्छी": "achhi",
+  "अच्छे": "achhe", "ठीक": "theek", "है": "hai", "हैं": "hain", "हो": "ho", "हूँ": "hoon",
+  "हु": "hu", "था": "tha", "थी": "thi", "थे": "the", "आप": "aap", "तुम": "tum", "तू": "tu",
+  "मैं": "main", "हम": "hum", "मेरा": "mera", "मेरी": "meri", "मेरे": "mere", "तेरा": "tera",
+  "तेरी": "teri", "तेरे": "tere", "उसका": "uska", "उसकी": "uski", "उसके": "uske", "इनका": "inka",
+  "बात": "baat", "कर": "kar", "करो": "karo", "करना": "karna", "करते": "karte", "करती": "karti",
+  "रहा": "raha", "रही": "rahi", "रहे": "rahe", "बोल": "bol", "बोलो": "bolo", "सुन": "sun",
+  "सुनो": "suno", "बताओ": "batao", "कहो": "kaho", "चलो": "chalo", "चल": "chal", "यार": "yaar",
+  "दोस्त": "dost", "भाई": "bhai", "कुछ": "kuch", "और": "aur", "भी": "bhi", "तो": "to",
+  "पे": "pe", "पर": "par", "में": "mein", "से": "se", "को": "ko", "का": "ka", "की": "ki",
+  "के": "ke", "यह": "yeh", "ये": "ye", "वह": "woh", "वो": "wo", "आज": "aaj", "कल": "kal",
+  "दिन": "din", "रात": "raat", "सुबह": "subah", "शाम": "shaam", "खाना": "khana", "पानी": "pani",
+  "घर": "ghar", "काम": "kaam", "मदद": "madad", "प्लीज": "please", "धन्यवाद": "dhanyawad"
+};
+
+function devanagariToHinglish(text: string): string {
+  if (!/[\u0900-\u097F]/.test(text)) return text;
+
+  return text.split(/(\s+)/).map((token) => {
+    const trimmed = token.trim();
+    if (!trimmed) return token;
+    const lower = trimmed.toLowerCase();
+    if (HINDI_TO_HINGLISH_WORDS[lower]) return token.replace(trimmed, HINDI_TO_HINGLISH_WORDS[lower]);
+    if (!/[\u0900-\u097F]/.test(trimmed)) return token;
+
+    let out = "";
+    const chars = [...trimmed];
+    for (let i = 0; i < chars.length; i++) {
+      const c = chars[i];
+      const next = chars[i + 1];
+
+      if (DEVANAGARI_VOWELS[c]) {
+        out += DEVANAGARI_VOWELS[c];
+      } else if (DEVANAGARI_MATRAS[c]) {
+        out += DEVANAGARI_MATRAS[c];
+      } else if (DEVANAGARI_CONSONANTS[c]) {
+        out += DEVANAGARI_CONSONANTS[c];
+        if (next === "्") {
+          i++;
+        } else if (!DEVANAGARI_MATRAS[next] && next && DEVANAGARI_CONSONANTS[next] && i < chars.length - 1) {
+          out += "a";
+        }
+      } else if (c === "्" || c === "़") {
+        // Skip virama / nukta
+      } else {
+        out += c;
+      }
+    }
+    return token.replace(trimmed, out || trimmed);
+  }).join("");
+}
+
 function useSpeechToText(onResult: (text: string, isFinal: boolean) => void, appLanguage: string = "hinglish"): SpeechToTextResult {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
@@ -1033,35 +1109,36 @@ function useSpeechToText(onResult: (text: string, isFinal: boolean) => void, app
 
     const recognition = new SpeechRecognition();
     
-    // Choose appropriate language locale
-    if (appLanguage === "english") {
-      recognition.lang = "en-US";
-    } else if (appLanguage === "hindi") {
+    // Choose appropriate language locale:
+    // en-IN is Google's Indian English model that natively outputs English AND Hinglish words in Roman script
+    if (appLanguage === "hindi") {
       recognition.lang = "hi-IN";
     } else {
-      // Default / Hinglish
-      recognition.lang = "hi-IN";
+      recognition.lang = "en-IN";
     }
 
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
 
-    let finalTranscript = "";
-
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
-      let interim = "";
-      let hasFinal = false;
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-          hasFinal = true;
-        } else {
-          interim = transcript;
+      let fullTranscript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        const item = event.results[i];
+        if (item && item[0] && item[0].transcript) {
+          const chunk = item[0].transcript.trim();
+          if (chunk) {
+            fullTranscript += (fullTranscript ? " " : "") + chunk;
+          }
         }
       }
-      // Show interim text while speaking, replace with final when done
-      onResultRef.current(finalTranscript || interim, hasFinal);
+
+      // Convert any Devanagari output to clean Hinglish for English/Hinglish modes
+      const processed = appLanguage === "hindi"
+        ? fullTranscript
+        : devanagariToHinglish(fullTranscript);
+
+      const hasFinal = Boolean(event.results[event.results.length - 1]?.isFinal);
+      onResultRef.current(processed, hasFinal);
     };
 
     recognition.onerror = (event: any) => {
@@ -1071,6 +1148,7 @@ function useSpeechToText(onResult: (text: string, isFinal: boolean) => void, app
           toast.error("Microphone access blocked. Please allow microphone permission in your browser settings.");
         } else if (event.error === "no-speech") {
           console.warn("No speech detected.");
+          return;
         } else {
           toast.error(`Speech recognition error: ${event.error}`);
         }
@@ -1359,7 +1437,7 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
       ref={containerRef}
       className="w-full md:w-[85%] lg:w-[80%] mx-auto px-4 md:px-8 space-y-3 overflow-y-auto h-full pb-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       style={{
-        overflowAnchor: "auto",
+        overflowAnchor: "none",
         scrollBehavior: "auto",
         contain: "content",
         WebkitOverflowScrolling: "touch",
@@ -2177,7 +2255,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [pendingMobileVisionRequest, setPendingMobileVisionRequest] = useState<PendingMobileVisionRequest | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleScrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "instant", block: "end" });
+    const el = messagesEndRef.current;
+    if (el && el.parentElement) {
+      el.parentElement.scrollTo({ top: el.parentElement.scrollHeight, behavior: "smooth" });
+    }
     setShowScrollBottom(false);
   }, []);
   const firstChunkReceivedRef = useRef(false);
@@ -2759,20 +2840,16 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const [interimTranscript, setInterimTranscript] = useState("");
   const [audioVolume, setAudioVolume] = useState(0);
 
-  // Speech-to-text: appends recognized speech to current input
+  // Speech-to-text: live types recognized speech into current input (Gboard style)
   const { isListening, toggle: toggleMic, stopListening } = useSpeechToText(
-    useCallback((speechText: string, isFinal: boolean) => {
-      if (!isFinal) {
-        setInterimTranscript(speechText);
-      } else {
-        setInterimTranscript(speechText);
-        setInput(() => {
-          const base = initialInputRef.current;
-          if (!base) return speechText;
-          const separator = base.endsWith(" ") ? "" : " ";
-          return base + separator + speechText;
-        });
-      }
+    useCallback((speechText: string) => {
+      setInterimTranscript(speechText);
+      setInput(() => {
+        const base = initialInputRef.current;
+        if (!base) return speechText;
+        const separator = base.endsWith(" ") ? "" : " ";
+        return base + separator + speechText;
+      });
     }, []),
     language
   );
@@ -2780,6 +2857,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const handleMicClick = () => {
     if (!isListening) {
       initialInputRef.current = input;
+      setInterimTranscript("");
     }
     toggleMic();
   };
@@ -2858,6 +2936,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
 
   useEffect(() => {
+    let rafId: number;
     const snapScroll = () => {
       const el = messagesEndRef.current;
       if (el && el.parentElement) {
@@ -2865,17 +2944,10 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       }
     };
 
-    // 1. Snap instantly
-    snapScroll();
-
-    // 2. Snap on requestAnimationFrame
-    requestAnimationFrame(snapScroll);
-
-    // 3. Single delayed fallback for dynamic content (images, code blocks)
-    const timer = setTimeout(snapScroll, 120);
+    rafId = requestAnimationFrame(snapScroll);
 
     return () => {
-      clearTimeout(timer);
+      cancelAnimationFrame(rafId);
     };
   }, [messages.length, isLoading, currentChatId]);
 
@@ -5034,6 +5106,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
     stopSaheliSpeech();
     resetSaheliSpeechDedup();
+    stopListening();
     lastSpokenMessageRef.current = "";
     firstChunkReceivedRef.current = false;
 
@@ -6076,7 +6149,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       </AnimatePresence>
 
       <div 
-        className="chat-content relative z-10 flex h-full flex-col transition-all duration-500" 
+        className="chat-content relative z-10 flex h-full flex-col transition-[margin,width] duration-500" 
         style={{ 
           isolation: 'isolate', 
           background: '#000000',
@@ -7036,9 +7109,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           ) : null}
           <form
             onSubmit={handleSubmit}
-            className={`saheli-composer-container relative mx-auto flex flex-col justify-end transition-all duration-300 ${
-              input.trim() ? "scale-[1.01]" : ""
-            }`}
+            className="saheli-composer-container relative mx-auto flex flex-col justify-end transition-colors duration-200"
             style={{
               width: "min(100%, 860px)",
               transform: "translateY(-28px)",
