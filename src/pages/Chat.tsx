@@ -55,6 +55,8 @@ import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { toast } from "sonner";
 import { useReminderStore, type AssistantReminder } from "@/store/reminder-store";
 import { sendMessage, detectChatMode, extractUnifiedMemoryAI, type AIProvider, type AppLanguage, type ChatMessage, type EmotionLabel, type RealtimeAwarenessContext, type UserIdentityContext } from "@/lib/ai-service";
+import { BestieSnapCard } from "@/components/chat/BestieSnapCard";
+import { generateFluxImage, detectBestiePhotoRequest } from "@/services/cloudflareFluxService";
 import {
   createChatSession,
   deleteChatSession,
@@ -1151,10 +1153,12 @@ interface ScrollFadeMessageItemProps {
   onDeleteMessage?: (messageId: string, idx: number) => void;
   onEditMessage?: (messageId: string, idx: number, newContent: string) => void;
   index: number;
+  activeTheme?: string;
+  onRegenerateImage?: (prompt: string) => void;
 }
 
 const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessageItemProps>(
-  function ScrollFadeMessageItem({ msg, isNew, onImageClick, onDeleteMessage, onEditMessage, index }, ref) {
+  function ScrollFadeMessageItem({ msg, isNew, onImageClick, onDeleteMessage, onEditMessage, index, activeTheme = "pink", onRegenerateImage }, ref) {
     const isUser = msg.role === "user";
     const [isEditing, setIsEditing] = useState(false);
     const [editContent, setEditContent] = useState(msg.content || "");
@@ -1183,71 +1187,84 @@ const ScrollFadeMessageItem = React.forwardRef<HTMLDivElement, ScrollFadeMessage
         className={`flex ${isUser ? "justify-end" : "justify-start"} group/msg w-full`}
       >
         <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} max-w-[85%] md:max-w-[45%]`}>
-          <div
-            data-role={isUser ? 'user' : 'assistant'}
-            className={`
-              w-full px-5 py-4 text-sm leading-relaxed font-medium relative transition-all duration-300
-              ${isNew ? "msg-sheen" : ""}
-              ${isUser
-                ? "saheli-premium-user-bubble text-white/95"
-                : "saheli-premium-ai-bubble text-[#fdf2f8]"
-              }
-            `}
-            style={{ 
-              fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
-              letterSpacing: "0.01em",
-            }}
-          >
-            {msg.image && (
-              <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 shadow-lg relative group cursor-pointer max-w-[320px]">
-                <img
-                  src={msg.image}
-                  alt="Attached content"
-                  className="w-full h-auto object-cover max-h-[220px] transition-transform duration-500 ease-out group-hover:scale-105"
-                  onClick={() => {
-                    if (typeof onImageClick === "function") {
-                      onImageClick(msg.image!);
-                    }
-                  }}
-                />
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                  <span className="text-white/80 text-[11px] font-medium bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">
-                    Click to view
-                  </span>
+          {msg.generatedImage && (
+            <BestieSnapCard
+              imageUrl={msg.generatedImage.imageUrl}
+              prompt={msg.generatedImage.prompt}
+              isGenerating={msg.generatedImage.isGenerating}
+              caption={msg.generatedImage.caption}
+              provider={msg.generatedImage.provider || "Cloudflare Workers AI (FLUX.1)"}
+              activeTheme={activeTheme}
+              onRegenerate={onRegenerateImage ? () => onRegenerateImage(msg.generatedImage?.prompt || "") : undefined}
+            />
+          )}
+          {!msg.generatedImage && (
+            <div
+              data-role={isUser ? 'user' : 'assistant'}
+              className={`
+                w-full px-5 py-4 text-sm leading-relaxed font-medium relative transition-all duration-300
+                ${isNew ? "msg-sheen" : ""}
+                ${isUser
+                  ? "saheli-premium-user-bubble text-white/95"
+                  : "saheli-premium-ai-bubble text-[#fdf2f8]"
+                }
+              `}
+              style={{ 
+                fontFamily: "'Outfit', 'Inter', system-ui, sans-serif", 
+                letterSpacing: "0.01em",
+              }}
+            >
+              {msg.image && (
+                <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 shadow-lg relative group cursor-pointer max-w-[320px]">
+                  <img
+                    src={msg.image}
+                    alt="Attached content"
+                    className="w-full h-auto object-cover max-h-[220px] transition-transform duration-500 ease-out group-hover:scale-105"
+                    onClick={() => {
+                      if (typeof onImageClick === "function") {
+                        onImageClick(msg.image!);
+                      }
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                    <span className="text-white/80 text-[11px] font-medium bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">
+                      Click to view
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )}
-            {isEditing ? (
-              <div className="w-full space-y-2 min-w-[200px]">
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-pink-500/50 font-medium resize-y min-h-[60px]"
-                  autoFocus
-                />
-                <div className="flex justify-end gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={handleCancelEdit}
-                    className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition duration-200 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveEdit}
-                    className="px-2.5 py-1 rounded-md bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:bg-pink-500/30 hover:text-white transition duration-200 cursor-pointer font-semibold"
-                  >
-                    Save
-                  </button>
+              )}
+              {isEditing ? (
+                <div className="w-full space-y-2 min-w-[200px]">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-pink-500/50 font-medium resize-y min-h-[60px]"
+                    autoFocus
+                  />
+                  <div className="flex justify-end gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-white/60 hover:text-white hover:bg-white/10 transition duration-200 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdit}
+                      className="px-2.5 py-1 rounded-md bg-pink-500/20 border border-pink-500/30 text-pink-200 hover:bg-pink-500/30 hover:text-white transition duration-200 cursor-pointer font-semibold"
+                    >
+                      Save
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              msg.content && msg.content.trim() !== "Please analyze this image carefully." && (
-                <div className="select-text">{renderMessageContent(msg.content)}</div>
-              )
-            )}
-          </div>
+              ) : (
+                msg.content && msg.content.trim() !== "Please analyze this image carefully." && (
+                  <div className="select-text">{renderMessageContent(msg.content)}</div>
+                )
+              )}
+            </div>
+          )}
 
           {/* Edit & Delete Action Buttons Row */}
           {isUser && !isEditing && (
@@ -1321,6 +1338,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   onImageClick,
   onDeleteMessage,
   onEditMessage,
+  activeTheme = "pink",
+  onRegenerateImage,
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
@@ -1330,6 +1349,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
   onImageClick?: (url: string) => void;
   onDeleteMessage?: (messageId: string, idx: number) => void;
   onEditMessage?: (messageId: string, idx: number, newContent: string) => void;
+  activeTheme?: string;
+  onRegenerateImage?: (prompt: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -1355,6 +1376,8 @@ const ScrollFadeMessageList = memo(function ScrollFadeMessageList({
             onDeleteMessage={onDeleteMessage}
             onEditMessage={onEditMessage}
             index={idx}
+            activeTheme={activeTheme}
+            onRegenerateImage={onRegenerateImage}
           />
         ))}
       </AnimatePresence>
@@ -2161,7 +2184,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
   const chatSessionsRef = useRef<ChatSessionSummary[]>([]);
   const submitLockRef = useRef(false);
   const lastMsgCountRef = useRef(0);
-  const lastModelUsedRef = useRef("groq/meta-llama/llama-3.3-70b-versatile");
+  const lastModelUsedRef = useRef("gemini/gemini-2.5-flash");
   const titleEvolutionTimerRef = useRef<number | null>(null);
   const titleEvolutionFlightRef = useRef(false);
   const titleEvolutionCheckpointRef = useRef({
@@ -3093,6 +3116,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
             role: data.role === "user" ? "user" : "model",
             content: typeof data.content === "string" ? data.content : "",
             image: typeof data.image === "string" ? data.image : undefined,
+            generatedImage: data.generatedImage ? data.generatedImage : undefined,
           } as ChatMessage;
         });
 
@@ -4941,6 +4965,65 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     }
   }, [user, memoryProfile, setMemoryProfile, setTemporaryMemories, setStoreMemory]);
 
+  const triggerImageGeneration = useCallback(async (promptText: string, customCaption?: string) => {
+    const { chatId } = await ensureActiveChat();
+
+    const modelMsgId = `flux-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const bestieCaption = customCaption || "Aww ruko, main photo bhejti hu! ☕✨";
+
+    const placeholderMsg: StoredChatMessage = {
+      id: modelMsgId,
+      role: "model",
+      content: bestieCaption,
+      createdAt: Date.now(),
+      generatedImage: {
+        isGenerating: true,
+        prompt: promptText,
+        caption: bestieCaption,
+        provider: "Cloudflare Workers AI (FLUX.1)",
+      }
+    };
+
+    setMessages((prev) => {
+      const next = [...prev, placeholderMsg];
+      messagesRef.current = next;
+      return next;
+    });
+
+    try {
+      const result = await generateFluxImage({ prompt: promptText });
+
+      const updatedMsg: StoredChatMessage = {
+        ...placeholderMsg,
+        generatedImage: {
+          imageUrl: result.imageUrl,
+          prompt: promptText,
+          isGenerating: false,
+          caption: bestieCaption,
+          provider: result.provider === "cloudflare-flux" ? "Cloudflare Workers AI (FLUX.1)" : "Pollinations FLUX.1",
+        }
+      };
+
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === modelMsgId ? updatedMsg : m));
+        messagesRef.current = next;
+        return next;
+      });
+      void persistChatMessage(chatId, updatedMsg);
+    } catch (err) {
+      console.error("Image generation error:", err);
+      setMessages((prev) => {
+        const next = prev.map((m) => (m.id === modelMsgId ? {
+          ...m,
+          content: "Arey sorry! Photo click karne me error aa gaya, ruko main firse try karti hu! 😅",
+          generatedImage: undefined
+        } : m));
+        messagesRef.current = next;
+        return next;
+      });
+    }
+  }, [ensureActiveChat, persistChatMessage]);
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if ((!(input.trim() || selectedImageRef.current)) || isLoading || submitLockRef.current) {
@@ -4997,7 +5080,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     setMessages((prev) => [...prev, optimisticUserMessage]);
     messagesRef.current = nextHistory;
 
-    setIsLoading(true);
+    // Persist user message to chat history immediately so it never vanishes
     void persistChatMessage(chatId, userMessage).catch((error) => {
       console.error("Failed to persist user message", error);
       if (isFirestoreConnectivityError(error)) {
@@ -5007,6 +5090,30 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
     if (routeChatId !== chatId) {
       navigate(`/chat/${chatId}`);
     }
+
+    // Bestie Photo Share / Cloudflare FLUX.1 Intent Check
+    const bestieDetection = detectBestiePhotoRequest(userText);
+    const lowerUserText = userText.toLowerCase();
+    const isImagineCmd = lowerUserText.startsWith("/imagine") || lowerUserText.startsWith("/image");
+
+    if (bestieDetection.isRequest || isImagineCmd) {
+      let targetPrompt = bestieDetection.defaultPrompt;
+      let bestieCaption = bestieDetection.userCaption || "Aww rukna! Main abhi chill kar rahi hu... Ye lo photo! ☕✨";
+
+      if (isImagineCmd) {
+        const extracted = userText.replace(/^\/(imagine|image)\s*/i, "").trim();
+        if (extracted) {
+          targetPrompt = `A beautiful semi-realistic anime girl style, ${extracted}, highly detailed anime aesthetics, soft realistic lighting, fine facial features, smooth anime shading, photorealistic atmospheric ambient glow, 8k resolution`;
+          bestieCaption = `Here is the semi-realistic snap for "${extracted}"! 🎨✨`;
+        }
+      }
+
+      setIsLoading(false);
+      void triggerImageGeneration(targetPrompt, bestieCaption);
+      return;
+    }
+
+    setIsLoading(true);
 
 
     if (memoryEnabled && !incognitoMode) {
@@ -6885,6 +6992,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               onImageClick={(imgUrl) => setLightboxImage(imgUrl)}
               onDeleteMessage={handleDeleteChatMessage}
               onEditMessage={handleEditChatMessage}
+              activeTheme={activeTheme}
+              onRegenerateImage={(prompt) => triggerImageGeneration(prompt, "Here is another photo variation for you! 📸✨")}
             />
           )}
         </div>
@@ -7145,6 +7254,15 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                   >
                     <Upload className="h-4 w-4 text-[var(--theme-light)]" />
                     File Upload
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="flex items-center gap-2.5 px-3.5 py-2.5 text-[13.5px] rounded-xl cursor-pointer transition-all duration-200 focus:bg-pink-500/20 focus:text-pink-200 hover:bg-pink-500/20 hover:text-pink-200 outline-none font-semibold text-pink-300"
+                    onSelect={() => {
+                      setInput("/imagine ");
+                    }}
+                  >
+                    <Sparkles className="h-4 w-4 text-pink-400 animate-pulse" />
+                    Snap Photo (Flux.1)
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

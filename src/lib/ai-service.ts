@@ -6,6 +6,13 @@ export interface ChatMessage {
   role: "user" | "model";
   content: string;
   image?: string;
+  generatedImage?: {
+    imageUrl?: string;
+    prompt: string;
+    isGenerating?: boolean;
+    caption?: string;
+    provider?: string;
+  };
 }
 
 export type EmotionLabel = "happy" | "sad" | "neutral" | "angry";
@@ -103,35 +110,37 @@ export interface VisionParseResult {
 
 const AI_PIPELINE_CONFIG = {
   bestie: [
-    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
-    { provider: "openrouter", modelId: "google/gemma-4-31b-it:free" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.2-3b-instruct:free" },
-    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
-    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
-    { provider: "groq", modelId: "qwen-qwq-32b" },
+    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash" },
+    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.3-70b-instruct:free" },
+    { provider: "groq", modelId: "llama-3.3-70b-specdec" },
+    { provider: "groq", modelId: "llama3-70b-8192" },
+    { provider: "groq", modelId: "llama3-8b-8192" },
   ],
   mentor: [
     { provider: "gemini", modelId: "gemini-2.5-pro" },
-    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash" },
     { provider: "openrouter", modelId: "meta-llama/llama-3.3-70b-instruct:free" },
-    { provider: "openrouter", modelId: "qwen/qwen3-coder:free" },
-    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
-    { provider: "groq", modelId: "meta-llama/llama-4-scout-17b-16e-instruct" },
-    { provider: "groq", modelId: "llama-3.2-3b-preview" },
+    { provider: "openrouter", modelId: "qwen/qwen-2.5-72b-instruct:free" },
+    { provider: "groq", modelId: "llama-3.3-70b-specdec" },
+    { provider: "groq", modelId: "llama3-70b-8192" },
+    { provider: "groq", modelId: "llama3-8b-8192" },
   ],
   vision: [
+    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash" },
     { provider: "gemini", modelId: "gemini-2.5-pro" },
-    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
-    { provider: "openrouter", modelId: "openrouter/free" },
-    { provider: "groq", modelId: "llama-3.2-11b-vision-preview" },
-    { provider: "groq", modelId: "llava-v1.5-7b-4096-preview" },
+    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
+    { provider: "groq", modelId: "llama-3.2-11b-vision-instruct" },
+    { provider: "groq", modelId: "llama-3.2-90b-vision-instruct" },
   ],
   title: [
-    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.2-3b-instruct:free" },
-    { provider: "groq", modelId: "llama-3.3-70b-versatile" },
+    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash" },
+    { provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct:free" },
+    { provider: "groq", modelId: "llama3-8b-8192" },
   ],
 } as const;
 
@@ -1630,8 +1639,10 @@ export async function extractUnifiedMemoryAI(
   currentPermanentMemories: string[] = [],
 ): Promise<UnifiedMemoryExtraction> {
   const extractTiers = [
-    { provider: "gemini" as const, modelId: "gemini-2.0-flash-lite" },
-    { provider: "groq" as const, modelId: "llama-3.3-70b-versatile" }
+    { provider: "gemini" as const, modelId: "gemini-3.5-flash-lite" },
+    { provider: "gemini" as const, modelId: "gemini-2.5-flash" },
+    { provider: "groq" as const, modelId: "llama3-70b-8192" },
+    { provider: "groq" as const, modelId: "llama3-8b-8192" }
   ];
 
   // Inject current time and current memories into the prompt

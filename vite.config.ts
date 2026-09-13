@@ -9,6 +9,7 @@ import { generateChatTitle } from "./lib/generateChatTitle";
 import { synthesizePollyAudioBase64 } from "./lib/pollyTts";
 import { handleWeatherRequest } from "./lib/weatherService";
 import { searchSongs, resolveSongUrl } from "./lib/musicService";
+import { generateCloudflareFluxBase64 } from "./lib/cloudflareFlux";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -401,6 +402,63 @@ export default defineConfig(({ mode }) => {
     },
   };
 
+  const devCloudflareFluxMiddleware = {
+    name: "dev-cloudflare-flux-middleware",
+    configureServer(server: any) {
+      server.middlewares.use("/api/flux", (req: any, res: any, next: any) => {
+        if (req.method === "OPTIONS") {
+          res.statusCode = 200;
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Access-Control-Allow-Headers", "authorization, x-client-info, apikey, content-type");
+          res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+          res.end("ok");
+          return;
+        }
+
+        if (req.method !== "POST") {
+          next();
+          return;
+        }
+
+        let rawBody = "";
+        req.on("data", (chunk: Buffer) => {
+          rawBody += chunk.toString();
+        });
+
+        req.on("end", async () => {
+          try {
+            const parsed = rawBody ? JSON.parse(rawBody) : {};
+            const prompt = String(parsed.prompt || "").trim();
+            if (!prompt) {
+              res.statusCode = 400;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "Prompt is required" }));
+              return;
+            }
+
+            const imageBase64 = await generateCloudflareFluxBase64(
+              { prompt },
+              {
+                CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID || env.VITE_CLOUDFLARE_ACCOUNT_ID,
+                CLOUDFLARE_API_TOKEN: env.CLOUDFLARE_API_TOKEN || env.VITE_CLOUDFLARE_API_TOKEN,
+              }
+            );
+
+            res.statusCode = 200;
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ image: imageBase64, provider: "cloudflare-flux" }));
+          } catch (error: any) {
+            console.error("[DEV FLUX MIDDLEWARE ERROR]:", error);
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: error?.message || "Dev FLUX generation failed" }));
+          }
+        });
+      });
+    },
+  };
+
   return {
     envPrefix: ["VITE_", "NEXT_PUBLIC_"],
     server: {
@@ -411,7 +469,7 @@ export default defineConfig(({ mode }) => {
         overlay: false,
       },
     },
-    plugins: [react(), mode === "development" && componentTagger(), mode === "development" && devPollyTtsMiddleware, mode === "development" && devTitleMiddleware, mode === "development" && devWeatherMiddleware, mode === "development" && devMusicMiddleware].filter(Boolean),
+    plugins: [react(), mode === "development" && componentTagger(), mode === "development" && devPollyTtsMiddleware, mode === "development" && devTitleMiddleware, mode === "development" && devWeatherMiddleware, mode === "development" && devMusicMiddleware, mode === "development" && devCloudflareFluxMiddleware].filter(Boolean),
     optimizeDeps: {},
     resolve: {
       alias: {

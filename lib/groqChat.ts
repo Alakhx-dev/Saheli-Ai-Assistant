@@ -23,7 +23,7 @@ export interface GroqChatRequest {
   temperature?: number;
 }
 
-const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_MODEL = "llama3-70b-8192";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 function extractGroqDelta(data: any): string {

@@ -304,6 +304,7 @@ export async function loadChatMessages(chatId: string, user: User | null): Promi
       content: typeof data.content === "string" ? data.content : "",
       createdAt: typeof data.createdAt === "number" ? data.createdAt : 0,
       image: typeof data.image === "string" ? data.image : undefined,
+      generatedImage: data.generatedImage ? data.generatedImage : undefined,
     };
   });
 }
