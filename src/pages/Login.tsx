@@ -12,7 +12,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useNavigate } from "react-router-dom";
-import { Github } from "lucide-react";
+import { Github, Sparkles, X, Heart } from "lucide-react";
 import { isMobile } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -98,6 +98,9 @@ export default function Login() {
   const [isClicked, setIsClicked] = useState(false);
   const [showBubble, setShowBubble] = useState(false);
   const bubbleTimeoutRef = useRef<number | null>(null);
+  const [isMobileLoginOpen, setIsMobileLoginOpen] = useState(false);
+  const lastTapRef = useRef<number>(0);
+  const tapTimeoutRef = useRef<number | null>(null);
   const navigate = useNavigate();
 
   const ANGRY_EMOJIS = ["😕", "😐", "😑", "😤", "😠"];
@@ -182,6 +185,17 @@ export default function Login() {
   };
 
   useEffect(() => {
+    return () => {
+      if (tapTimeoutRef.current) {
+        window.clearTimeout(tapTimeoutRef.current);
+      }
+      if (bubbleTimeoutRef.current) {
+        window.clearTimeout(bubbleTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         navigate("/chat");
@@ -261,11 +275,289 @@ export default function Login() {
     }
   };
 
-  return (
-    <div className="min-h-screen w-full flex flex-col md:flex-row items-center justify-around bg-[#0a0a0f] p-4 overflow-hidden relative">
-      <div className="w-full md:w-1/2 flex justify-center items-center h-[50vh] md:h-screen relative group">
-        <div className="relative flex items-center justify-center w-full max-w-[520px]">
+  const triggerHoverBehavior = () => {
+    hideBubble();
 
+    const now = Date.now();
+    const timeSinceLast = now - interactionTimer.current;
+    interactionTimer.current = now;
+    const isFast = timeSinceLast < 450;
+
+    setHoverCount((prev) => {
+      const current = prev + 1;
+      const isText = Math.random() > 0.15;
+
+      let content = "";
+      if (isText) {
+        const arr = isFast ? HOVER_TEXTS_FAST : HOVER_TEXTS_NORMAL;
+        content = arr[Math.floor(Math.random() * arr.length)];
+      } else {
+        content = HOVER_EMOJIS[Math.floor(Math.random() * HOVER_EMOJIS.length)];
+      }
+
+      createReaction(content, isText);
+      return current;
+    });
+  };
+
+  const triggerClickBehavior = () => {
+    setIsClicked(true);
+    hideBubble();
+    window.setTimeout(() => setIsClicked(false), 150);
+
+    const now = Date.now();
+    const timeSinceLast = now - interactionTimer.current;
+    interactionTimer.current = now;
+    const isFast = timeSinceLast < 350;
+
+    setClickCount((prev) => {
+      const current = prev + 1;
+      const isText = Math.random() > 0.15;
+
+      let content = "";
+      if (isText) {
+        const arr = isFast ? CLICK_TEXTS_FAST : CLICK_TEXTS_NORMAL;
+        content = arr[Math.floor(Math.random() * arr.length)];
+      } else {
+        content = ANGRY_EMOJIS[Math.floor(Math.random() * ANGRY_EMOJIS.length)];
+      }
+
+      createReaction(content, isText);
+      return current;
+    });
+  };
+
+  const handleDollTap = () => {
+    if (typeof window !== "undefined" && window.innerWidth > 768) {
+      triggerClickBehavior();
+      return;
+    }
+
+    const now = Date.now();
+    const diff = now - lastTapRef.current;
+    lastTapRef.current = now;
+
+    if (diff < 320) {
+      // Double tap detected!
+      if (tapTimeoutRef.current) {
+        window.clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+      }
+      triggerClickBehavior();
+    } else {
+      // First tap, wait to confirm single tap
+      if (tapTimeoutRef.current) {
+        window.clearTimeout(tapTimeoutRef.current);
+      }
+      tapTimeoutRef.current = window.setTimeout(() => {
+        triggerHoverBehavior();
+        tapTimeoutRef.current = null;
+      }, 240);
+    }
+  };
+
+  const renderAuthCard = (isModal: boolean = false) => (
+    <motion.div 
+      animate={{ 
+        rotateY: isSignUp ? 180 : 0, 
+        y: isModal ? 0 : [0, -6, 0] 
+      }}
+      transition={{ 
+        rotateY: { type: "spring", stiffness: 220, damping: 22, mass: 0.8 },
+        y: isModal ? { duration: 0 } : { duration: 6, repeat: Infinity, ease: "easeInOut" }
+      }}
+      className={`relative w-full max-w-md ${isModal ? "min-h-[420px] h-auto" : "h-[550px]"} card-inner z-20`}
+    >
+      {/* --- FRONT SIDE: LOGIN --- */}
+      <div className={`cinematic-card w-full h-full ${isModal ? "p-5 md:p-10" : "p-10"} flex flex-col justify-center`}>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{loginHeroCopy.title}</h1>
+          <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{loginHeroCopy.subtitle}</p>
+        </motion.div>
+
+        <form onSubmit={handleAuth} className="space-y-6">
+          <input
+            type="email"
+            placeholder="Username or Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onFocus={() => handleTease("emailFocus")}
+            onBlur={hideBubble}
+            className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onFocus={() => handleTease("passwordFocus")}
+            onBlur={hideBubble}
+            className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
+            required
+          />
+
+          {error && !isSignUp && <p className="text-pink-400 text-sm">{error}</p>}
+
+          <button
+            type="submit"
+            onMouseEnter={() => handleTease("welcome")}
+            onMouseLeave={hideBubble}
+            className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div className="mt-4 flex flex-col items-center gap-4">
+          <p className="text-gray-400 text-center text-sm mt-2">
+            New here?{" "}
+            <span 
+              onClick={() => setIsSignUp(true)} 
+              className="text-pink-400 cursor-pointer hover:underline"
+            >
+              Create an account
+            </span>
+          </p>
+
+          <div className="h-px w-full md:w-3/4 bg-gradient-to-r from-transparent via-white/20 to-transparent my-1" />
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => handleSocialAuth(new GoogleAuthProvider())}
+              onMouseEnter={() => showCustomTease(dialogues.google)}
+              onMouseLeave={hideBubble}
+              className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
+              aria-label="Continue with Google"
+            >
+              <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSocialAuth(new GithubAuthProvider())}
+              onMouseEnter={() => showCustomTease(dialogues.github)}
+              onMouseLeave={hideBubble}
+              className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
+              aria-label="Continue with GitHub"
+            >
+              <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
+            </button>
+          </div>
+
+          <button
+            type="button"
+            id={isModal ? "modal-skip-login-btn" : "skip-login-btn"}
+            onClick={() => {
+              sessionStorage.setItem("devMode", "true");
+              navigate("/chat");
+            }}
+            className="mt-2 w-full py-3 rounded-xl border border-white/10 bg-white/5 text-white/60 text-sm font-medium hover:bg-white/10 hover:text-white/80 hover:border-white/20 transition-all duration-200 backdrop-blur-md"
+          >
+            ⚡ Skip Login (Guest Mode)
+          </button>
+        </div>
+      </div>
+
+      {/* --- BACK SIDE: SIGNUP --- */}
+      <div className="cinematic-card card-back w-full h-full p-10 flex flex-col justify-center">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{signupHeroCopy.title}</h1>
+          <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{signupHeroCopy.subtitle}</p>
+        </motion.div>
+
+        <form onSubmit={handleAuth} className="space-y-6">
+          <input
+            type="email"
+            placeholder="Email Address"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onFocus={() => handleTease("emailFocus")}
+            onBlur={hideBubble}
+            className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Create Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onFocus={() => handleTease("passwordFocus")}
+            onBlur={hideBubble}
+            className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
+            required
+          />
+
+          {error && isSignUp && <p className="text-pink-400 text-sm">{error}</p>}
+
+          <button
+            type="submit"
+            onMouseEnter={() => handleTease("signup")}
+            onMouseLeave={hideBubble}
+            className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
+          >
+            Create Account
+          </button>
+        </form>
+
+        <div className="mt-4 flex flex-col items-center gap-4">
+          <p className="text-gray-400 text-center text-sm mt-2">
+            Pehle se ID hai?{" "}
+            <span 
+              onClick={() => setIsSignUp(false)} 
+              className="text-pink-400 cursor-pointer hover:underline"
+            >
+              Login karlo!
+            </span>
+          </p>
+
+          <div className="h-px w-full md:w-3/4 bg-gradient-to-r from-transparent via-white/20 to-transparent my-1" />
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => handleSocialAuth(new GoogleAuthProvider())}
+              className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
+              aria-label="Continue with Google"
+            >
+              <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSocialAuth(new GithubAuthProvider())}
+              className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
+              aria-label="Continue with GitHub"
+            >
+              <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+
+  return (
+    <div className="login-screen-wrapper min-h-screen h-[100dvh] max-h-[100dvh] w-full flex flex-col md:flex-row items-center justify-between md:justify-around bg-[#0a0a0f] p-2 md:p-4 overflow-hidden relative overscroll-none select-none">
+      <div className="login-character-stage w-full md:w-1/2 flex flex-col justify-center items-center h-[calc(100dvh-75px)] md:h-screen relative group select-none overflow-hidden">
+        <div className="relative flex flex-col items-center justify-center w-full max-w-[520px]">
 
           {/* Anchored Chat Bubble: Toggled by Hover/Focus */}
           <AnimatePresence>
@@ -333,62 +625,18 @@ export default function Login() {
 
           {/* Character Image with Multi-Layered Animations */}
           <div
-            className="relative z-10 flex items-center justify-center w-full max-w-[460px] px-2"
+            className="relative z-10 flex items-center justify-center w-full max-w-[500px] px-2 cursor-pointer"
             onMouseEnter={() => {
-              hideBubble();
-
-              const now = Date.now();
-              const timeSinceLast = now - interactionTimer.current;
-              interactionTimer.current = now;
-              const isFast = timeSinceLast < 450;
-
-              setHoverCount((prev) => {
-                const current = prev + 1;
-                const isText = Math.random() > 0.15;
-
-                let content = "";
-                if (isText) {
-                  const arr = isFast ? HOVER_TEXTS_FAST : HOVER_TEXTS_NORMAL;
-                  content = arr[Math.floor(Math.random() * arr.length)];
-                } else {
-                  content = HOVER_EMOJIS[Math.floor(Math.random() * HOVER_EMOJIS.length)];
-                }
-
-                createReaction(content, isText);
-                return current;
-              });
+              if (typeof window !== "undefined" && window.innerWidth > 768) {
+                triggerHoverBehavior();
+              }
             }}
-            onClick={() => {
-              setIsClicked(true);
-              hideBubble();
-              window.setTimeout(() => setIsClicked(false), 150);
-
-              const now = Date.now();
-              const timeSinceLast = now - interactionTimer.current;
-              interactionTimer.current = now;
-              const isFast = timeSinceLast < 350;
-
-              setClickCount((prev) => {
-                const current = prev + 1;
-                const isText = Math.random() > 0.15;
-
-                let content = "";
-                if (isText) {
-                  const arr = isFast ? CLICK_TEXTS_FAST : CLICK_TEXTS_NORMAL;
-                  content = arr[Math.floor(Math.random() * arr.length)];
-                } else {
-                  content = ANGRY_EMOJIS[Math.floor(Math.random() * ANGRY_EMOJIS.length)];
-                }
-
-                createReaction(content, isText);
-                return current;
-              });
-            }}
+            onClick={handleDollTap}
           >
             <img
               src="/saheli-ai-logo.png"
               alt="Saheli AI Bestie"
-              className={`anime-girl w-full max-w-[460px] max-h-[70vh] object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
+              className={`anime-girl w-full max-w-[500px] max-h-[68vh] md:max-h-[70vh] object-contain z-10 ${isClicked ? "tap-soft" : ""}`}
               style={{
                 willChange: "transform, filter",
               }}
@@ -409,206 +657,81 @@ export default function Login() {
 
           {/* 4. Ambient glow — very faint depth around character */}
           <div className="girl-ambient-glow" />
+
+          {/* Mobile Gestures Helper Badge */}
+          <div className="md:hidden mt-2 px-3 py-0.5 rounded-full bg-white/5 border border-white/10 text-white/50 text-[10.5px] font-medium tracking-wide flex items-center gap-1.5 pointer-events-none backdrop-blur-sm shadow-sm">
+            <span>👆 1 Tap: Tease</span>
+            <span className="text-white/20">•</span>
+            <span>✌️ 2 Tap: Poke 💢</span>
+          </div>
         </div>
       </div>
 
-      <div className="w-full md:w-1/2 flex justify-center items-center perspective-container z-20 relative">
+      {/* Desktop Auth Card: 100% Isolated to Desktop Screens */}
+      <div className="hidden md:flex md:w-1/2 justify-center items-center perspective-container z-20 relative">
         {/* Soft pink shadow matching the doll ground feel */}
         <div className="absolute top-[82%] md:top-[85%] w-[60%] max-w-[350px] h-[30px] rounded-[100%] blur-[25px] bg-pink-500/40 opacity-80 pointer-events-none z-10" />
 
-        <motion.div 
-          animate={{ rotateY: isSignUp ? 180 : 0, y: [0, -6, 0] }}
-          transition={{ 
-            rotateY: { type: "spring", stiffness: 220, damping: 22, mass: 0.8 },
-            y: { duration: 6, repeat: Infinity, ease: "easeInOut" }
-          }}
-          className="relative w-full max-w-md h-[550px] card-inner z-20"
-        >
-          {/* --- FRONT SIDE: LOGIN --- */}
-          <div className="cinematic-card w-full h-full p-10 flex flex-col justify-center">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{loginHeroCopy.title}</h1>
-              <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{loginHeroCopy.subtitle}</p>
-            </motion.div>
-
-            <form onSubmit={handleAuth} className="space-y-6">
-              <input
-                type="email"
-                placeholder="Username or Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => handleTease("emailFocus")}
-                onBlur={hideBubble}
-                className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => handleTease("passwordFocus")}
-                onBlur={hideBubble}
-                className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
-                required
-              />
-
-              {error && !isSignUp && <p className="text-pink-400 text-sm">{error}</p>}
-
-              <button
-                type="submit"
-                onMouseEnter={() => handleTease("welcome")}
-                onMouseLeave={hideBubble}
-                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-              >
-                Sign In
-              </button>
-            </form>
-
-            <div className="mt-4 flex flex-col items-center gap-4">
-              <p className="text-gray-400 text-center text-sm mt-2">
-                New here? {" "}
-                <span 
-                  onClick={() => setIsSignUp(true)} 
-                  className="text-pink-400 cursor-pointer hover:underline"
-                >
-                  Create an account
-                </span>
-              </p>
-
-              <div className="h-px w-full md:w-3/4 bg-gradient-to-r from-transparent via-white/20 to-transparent my-1" />
-
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleSocialAuth(new GoogleAuthProvider())}
-                  onMouseEnter={() => showCustomTease(dialogues.google)}
-                  onMouseLeave={hideBubble}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
-                  aria-label="Continue with Google"
-                >
-                  <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSocialAuth(new GithubAuthProvider())}
-                  onMouseEnter={() => showCustomTease(dialogues.github)}
-                  onMouseLeave={hideBubble}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
-                  aria-label="Continue with GitHub"
-                >
-                  <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                id="skip-login-btn"
-                onClick={() => {
-                  sessionStorage.setItem('devMode', 'true');
-                  navigate('/chat');
-                }}
-                className="mt-2 w-full py-3 rounded-xl border border-white/10 bg-white/5 text-white/60 text-sm font-medium hover:bg-white/10 hover:text-white/80 hover:border-white/20 transition-all duration-200 backdrop-blur-md"
-              >
-                ⚡ Skip Login (Guest Mode)
-              </button>
-            </div>
-          </div>
-
-          {/* --- BACK SIDE: SIGNUP --- */}
-          <div className="cinematic-card card-back w-full h-full p-10 flex flex-col justify-center">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <h1 className="text-3xl md:text-[2.1rem] font-semibold tracking-[-0.02em] text-white mb-1.5 text-center text-glow-magenta">{signupHeroCopy.title}</h1>
-              <p className="text-white/50 text-[0.95rem] md:text-base mb-7 text-center leading-relaxed">{signupHeroCopy.subtitle}</p>
-            </motion.div>
-
-            <form onSubmit={handleAuth} className="space-y-6">
-              <input
-                type="email"
-                placeholder="Email Address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                onFocus={() => handleTease("emailFocus")}
-                onBlur={hideBubble}
-                className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
-                required
-              />
-              <input
-                type="password"
-                placeholder="Create Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onFocus={() => handleTease("passwordFocus")}
-                onBlur={hideBubble}
-                className="w-full p-4 bg-transparent border-b border-white/10 text-white placeholder:text-white/50 focus:border-violet-400 outline-none"
-                required
-              />
-
-              {error && isSignUp && <p className="text-pink-400 text-sm">{error}</p>}
-
-              <button
-                type="submit"
-                onMouseEnter={() => handleTease("signup")}
-                onMouseLeave={hideBubble}
-                className="w-full py-4 bg-gradient-to-r from-pink-300 via-pink-400 to-fuchsia-400 text-white font-semibold rounded-2xl shadow-[0_3px_16px_rgba(244,163,187,0.28),0_1px_8px_rgba(232,121,249,0.16)] hover:shadow-[0_4px_20px_rgba(244,163,187,0.36),0_2px_10px_rgba(232,121,249,0.22)] hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
-              >
-                Create Account
-              </button>
-            </form>
-
-            <div className="mt-4 flex flex-col items-center gap-4">
-              <p className="text-gray-400 text-center text-sm mt-2">
-                Pehle se ID hai? {" "}
-                <span 
-                  onClick={() => setIsSignUp(false)} 
-                  className="text-pink-400 cursor-pointer hover:underline"
-                >
-                  Login karlo!
-                </span>
-              </p>
-
-              <div className="h-px w-full md:w-3/4 bg-gradient-to-r from-transparent via-white/20 to-transparent my-1" />
-
-              <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => handleSocialAuth(new GoogleAuthProvider())}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
-                  aria-label="Continue with Google"
-                >
-                  <svg className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSocialAuth(new GithubAuthProvider())}
-                  className="flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all group backdrop-blur-md"
-                  aria-label="Continue with GitHub"
-                >
-                  <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </motion.div>
+        {renderAuthCard(false)}
       </div>
+
+      {/* Mobile Floating Bottom Cute Glassmorphism Login Button */}
+      <div className="md:hidden fixed bottom-4 left-0 right-0 z-30 flex justify-center items-center pointer-events-auto px-4">
+        <motion.button
+          type="button"
+          onClick={() => setIsMobileLoginOpen(true)}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="px-6 py-2.5 rounded-full bg-white/[0.08] hover:bg-white/[0.14] active:bg-white/[0.2] backdrop-blur-xl border border-pink-400/35 hover:border-pink-300/60 text-white font-medium text-[13.5px] tracking-wide shadow-[0_4px_24px_rgba(236,72,153,0.25),inset_0_1px_2px_rgba(255,255,255,0.2)] flex items-center gap-2 transition-all duration-200"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-pink-300 animate-pulse" />
+          <span>Login</span>
+          <span className="text-pink-300 text-xs">✨</span>
+        </motion.button>
+      </div>
+
+      {/* Mobile Slide-Up Login Modal Sheet */}
+      <AnimatePresence>
+        {isMobileLoginOpen && (
+          <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22 }}
+              onClick={() => setIsMobileLoginOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Slide-up Container */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 280 }}
+              className="relative z-10 w-full max-h-[92dvh] bg-[#0c0b13]/95 border-t border-pink-500/30 rounded-t-[32px] p-4 pt-3 pb-8 overflow-y-auto shadow-[0_-15px_40px_rgba(236,72,153,0.25)] flex flex-col items-center"
+            >
+              {/* Drag bar & Close button */}
+              <div className="w-full flex items-center justify-between px-2 mb-2 relative">
+                <div className="w-12 h-1 bg-white/20 rounded-full mx-auto" />
+                <button
+                  type="button"
+                  onClick={() => setIsMobileLoginOpen(false)}
+                  className="absolute right-1 top-0 p-1.5 text-white/60 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="w-full max-w-sm perspective-container">
+                {renderAuthCard(true)}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

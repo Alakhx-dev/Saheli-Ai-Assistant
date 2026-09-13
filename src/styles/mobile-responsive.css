@@ -354,74 +354,89 @@
   }
 }
 
-/* ===== MOBILE: LOGIN PAGE ===== */
+/* ===== MOBILE: LOGIN PAGE (Zero scroll, perfectly adjusted) ===== */
 @media (max-width: 768px) {
 
-  /* Full vertical stack */
-  .min-h-screen.w-full.flex {
-    flex-direction: column !important;
-    padding: 12px !important;
+  /* Strictly fixed viewport height, no scrollbar, no bounce */
+  .min-h-screen.w-full.flex,
+  .login-screen-wrapper {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
     min-height: 100dvh !important;
-    gap: 0 !important;
-    justify-content: flex-start !important;
+    padding: 8px 12px 18px !important;
+    overflow: hidden !important;
+    position: fixed !important;
+    inset: 0 !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    touch-action: pan-x pan-y !important;
   }
 
-  /* Character section: smaller */
-  .min-h-screen > .w-full.flex.justify-center:first-child {
-    height: 35vh !important;
-    min-height: 200px !important;
-    max-height: 280px !important;
+  /* Character section on mobile: dynamically auto-adjusting */
+  .login-character-stage {
+    height: calc(100dvh - 65px) !important;
+    max-height: calc(100dvh - 65px) !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
   }
 
-  /* Anime girl on login: smaller */
-  .min-h-screen .anime-girl {
-    max-height: 55vh !important;
+  /* Anime girl on mobile login - BIGGER size */
+  .login-character-stage .anime-girl {
+    max-height: min(68vh, 520px) !important;
+    max-width: 95vw !important;
     width: auto !important;
+    height: auto !important;
+    object-fit: contain !important;
   }
 
-  /* Login card section */
+  /* Login card section (desktop only, hidden on mobile via Tailwind md:flex) */
   .min-h-screen > .w-full.flex.justify-center:last-child {
-    flex: 1 !important;
     align-items: flex-start !important;
     padding-top: 0 !important;
   }
 
-  /* Card inner */
+  /* Card inner inside mobile modal sheet: compact & fits screen */
   .card-inner {
     height: auto !important;
     min-height: 420px !important;
-    max-height: calc(100dvh - 220px) !important;
-    max-width: calc(100vw - 32px) !important;
+    max-height: calc(100dvh - 90px) !important;
+    max-width: calc(100vw - 28px) !important;
   }
 
   /* Login card padding */
   .cinematic-card {
-    padding: 28px 20px !important;
-    border-radius: 28px !important;
+    padding: 18px 16px !important;
+    border-radius: 24px !important;
   }
 
   .cinematic-card h1 {
-    font-size: 1.75rem !important;
-    margin-bottom: 0.5rem !important;
+    font-size: 1.35rem !important;
+    margin-bottom: 0.25rem !important;
   }
 
   .cinematic-card p {
-    font-size: 0.85rem !important;
-    margin-bottom: 1.5rem !important;
+    font-size: 0.78rem !important;
+    margin-bottom: 0.9rem !important;
   }
 
   .cinematic-card form {
-    gap: 1rem !important;
+    gap: 0.65rem !important;
   }
 
   .cinematic-card form input {
-    padding: 12px 0 !important;
-    font-size: 14px !important;
+    padding: 8px 0 !important;
+    font-size: 13.5px !important;
   }
 
   .cinematic-card form button[type="submit"] {
-    padding: 14px !important;
-    font-size: 15px !important;
+    padding: 11px !important;
+    font-size: 14px !important;
+    border-radius: 12px !important;
   }
 
   /* Speech bubble position fix on mobile login */
@@ -435,18 +450,16 @@
     max-width: 160px !important;
   }
 
-  /* Pink shadow under login card — handled by card-inner sizing above */
-
   /* Skip login button */
-  #skip-login-btn {
-    padding: 10px !important;
-    font-size: 13px !important;
+  #skip-login-btn, #modal-skip-login-btn {
+    padding: 8px !important;
+    font-size: 12px !important;
   }
 
   /* Social auth buttons */
   .cinematic-card .flex.items-center.gap-4 button {
-    width: 44px !important;
-    height: 44px !important;
+    width: 40px !important;
+    height: 40px !important;
   }
 }
 
