@@ -275,22 +275,54 @@
 
 @media (max-width: 768px) {
   .sidebar {
-    left: 16px;
-    top: 72px;
-    transform: none;
-    width: min(260px, calc(100vw - 32px));
-    max-height: calc(100vh - 96px);
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    right: auto !important;
+    width: min(290px, 85vw) !important;
+    max-width: 290px !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh !important;
+    border-radius: 0 24px 24px 0 !important;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 10px calc(14px + env(safe-area-inset-bottom, 0px)) 12px !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    z-index: 130 !important;
+    animation: none !important;
+    background: rgba(14, 10, 24, 0.78) !important;
+    backdrop-filter: blur(36px) saturate(210%) !important;
+    -webkit-backdrop-filter: blur(36px) saturate(210%) !important;
+    border: none !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 20px 0 60px rgba(0, 0, 0, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.2), 0 0 35px rgba(255, 105, 180, 0.12) !important;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease !important;
   }
 
+  .sidebar.sidebar-open,
   .sidebar-open {
-    opacity: 1;
-    transform: translateX(0);
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+    animation: none !important;
+    pointer-events: auto !important;
   }
 
+  .sidebar.sidebar-closed,
   .sidebar-closed {
-    opacity: 0;
-    transform: translateX(-120%);
-    pointer-events: none;
+    opacity: 0 !important;
+    transform: translateX(-110%) !important;
+    pointer-events: none !important;
+    animation: none !important;
+  }
+
+  .sidebar:hover {
+    transform: translateX(0) !important;
+    animation: none !important;
   }
 }
 
@@ -2182,15 +2214,17 @@
 
 @media (max-width: 768px) {
   .saheli-floating-logo-btn {
-    top: 10px !important;
-    left: 10px !important;
-    width: 42px !important;
-    height: 42px !important;
+    top: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+    height: 38px !important;
+    display: flex !important;
+    align-items: center !important;
     z-index: 120 !important;
   }
   .saheli-floating-logo-btn .saheli-logo-wrapper {
-    width: 42px !important;
-    height: 42px !important;
+    width: auto !important;
+    height: auto !important;
   }
 }
 

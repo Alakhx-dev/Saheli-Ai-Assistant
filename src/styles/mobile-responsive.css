@@ -2,46 +2,88 @@
 /* ===== MOBILE: GLOBAL LAYOUT ===== */
 @media (max-width: 768px) {
 
-  /* ─── Full-screen chat wrapper ─── */
+  /* ─── Prevent any viewport bounce/scrolling on root/body ─── */
+  html,
+  body {
+    overflow: hidden !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    overscroll-behavior: none !important;
+    touch-action: pan-y !important;
+    position: fixed !important;
+    width: 100% !important;
+  }
+
+  #root {
+    overflow: hidden !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    overscroll-behavior: none !important;
+    position: fixed !important;
+    width: 100% !important;
+  }
+
+  /* ─── Full-screen chat wrapper: strictly locked to screen size ─── */
   .chat-page-wrapper,
   .chat-screen-bg {
     width: 100vw !important;
     height: 100dvh !important;
+    max-height: 100dvh !important;
     min-height: 100dvh !important;
     overflow: hidden !important;
+    overscroll-behavior: none !important;
+    position: fixed !important;
+    inset: 0 !important;
   }
 
-  /* ─── Chat content flex container ─── */
+  /* ─── Chat content flex container: strictly fixed to screen size ─── */
   .chat-content {
     width: 100% !important;
     height: 100dvh !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh !important;
     padding: 0 !important;
     display: flex !important;
     flex-direction: column !important;
+    overflow: hidden !important;
+    overscroll-behavior: none !important;
+    position: fixed !important;
+    inset: 0 !important;
   }
 
-  /* ─── Header: Saheli AI branding ─── */
+  /* ─── Header: hide duplicate mobile header ─── */
   .chat-content > header {
-    position: relative !important;
-    top: auto !important;
-    padding: 12px 16px !important;
-    z-index: 30 !important;
-    pointer-events: auto !important;
-    flex-shrink: 0 !important;
+    display: none !important;
   }
 
-  /* ─── Hamburger menu button ─── */
+  /* ─── Hamburger menu button: sleek glassmorphic floating chip ─── */
   .chat-content ~ button[aria-label],
   button.fixed.left-4.top-4 {
-    top: 10px !important;
-    left: 10px !important;
-    width: 40px !important;
-    height: 40px !important;
+    top: calc(10px + env(safe-area-inset-top, 0px)) !important;
+    left: 12px !important;
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 14px !important;
+    background: rgba(18, 12, 28, 0.65) !important;
+    backdrop-filter: blur(24px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 1px 1.5px rgba(255, 255, 255, 0.2), 0 0 20px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.12) !important;
     z-index: 120 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: transform 0.2s ease, background 0.2s ease !important;
+  }
+
+  .chat-content ~ button[aria-label]:active,
+  button.fixed.left-4.top-4:active {
+    transform: scale(0.92) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
   }
 }
 
-/* ===== MOBILE: SIDEBAR ===== */
+/* ===== MOBILE: SIDEBAR (Premium Frosted Glass) ===== */
 @media (max-width: 768px) {
 
   .sidebar {
@@ -49,125 +91,133 @@
     top: 0 !important;
     left: 0 !important;
     bottom: 0 !important;
+    right: auto !important;
     width: 85vw !important;
-    max-width: 300px !important;
-    max-height: 100dvh !important;
+    max-width: 290px !important;
     height: 100dvh !important;
-    border-radius: 0 20px 20px 0 !important;
-    padding: 16px 12px !important;
-    transform: none !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh !important;
+    border-radius: 0 26px 26px 0 !important;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px calc(14px + env(safe-area-inset-bottom, 0px)) 14px !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    overflow-y: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    z-index: 130 !important;
     animation: none !important;
-    overflow-y: auto !important;
-    z-index: 110 !important;
+    background: rgba(14, 10, 24, 0.78) !important;
+    backdrop-filter: blur(36px) saturate(210%) !important;
+    -webkit-backdrop-filter: blur(36px) saturate(210%) !important;
+    border: none !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 20px 0 60px rgba(0, 0, 0, 0.8), inset 0 1px 2px rgba(255, 255, 255, 0.2), 0 0 35px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.12) !important;
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease !important;
   }
 
-  .sidebar.sidebar-open {
+  .sidebar.sidebar-open,
+  .sidebar-open {
     transform: translateX(0) !important;
     opacity: 1 !important;
-    animation: mobileSlideIn 0.3s ease-out forwards !important;
+    animation: none !important;
+    pointer-events: auto !important;
   }
 
-  /* ─── 3D Flip Container & Perspective ─── */
-  .mobile-card-perspective {
-    perspective: 1200px !important;
-    transform-style: preserve-3d !important;
-  }
-
-  .mobile-flip-card-inner {
-    position: relative !important;
-    width: 100% !important;
-    height: 100% !important;
-    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    transform-style: preserve-3d !important;
-  }
-
-  .mobile-flip-card-inner.is-flipped {
-    transform: rotateY(180deg) !important;
-  }
-
-  .mobile-flip-card-front,
-  .mobile-flip-card-back {
-    position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    backface-visibility: hidden !important;
-    -webkit-backface-visibility: hidden !important;
-    border-radius: 20px !important;
-    overflow-y: auto !important;
-  }
-
-  .mobile-flip-card-front {
-    z-index: 2 !important;
-    transform: rotateY(0deg) !important;
-  }
-
-  .mobile-flip-card-back {
-    transform: rotateY(180deg) !important;
-    z-index: 1 !important;
-  }
-
-  .sidebar.sidebar-closed {
+  .sidebar.sidebar-closed,
+  .sidebar-closed {
     transform: translateX(-110%) !important;
     opacity: 0 !important;
     pointer-events: none !important;
     animation: none !important;
   }
 
-  @keyframes mobileSlideIn {
-    from {
-      transform: translateX(-100%);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-
-  /* Sidebar float animation off on mobile */
-  .sidebar {
+  .sidebar:hover {
+    transform: translateX(0) !important;
     animation: none !important;
   }
 
-  .sidebar:hover {
-    transform: translateX(0) !important;
+  /* ─── Mobile Settings Sheet Container ─── */
+  .settings-menu-container,
+  .settings-content-panel {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin-left: 0 !important;
   }
 
-  /* Logo section compact */
+  /* Logo section compact & clean */
   .saheli-logo-section {
     padding: 0.4rem 0.15rem !important;
     margin-bottom: 0.15rem !important;
   }
 
   .saheli-logo-name {
-    font-size: 1.1rem !important;
+    font-size: 1.15rem !important;
+    letter-spacing: 0.04em !important;
   }
 
   .saheli-logo-badge {
     font-size: 0.5rem !important;
     padding: 3px 6px !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 999px !important;
   }
 
-  /* New chat pill */
-  .new-chat-pill {
-    padding: 10px 16px !important;
-    font-size: 12px !important;
-    gap: 6px !important;
+  /* New chat pill with glowing glass style */
+  .new-chat-pill,
+  .sidebar button.group.mx-3 {
+    padding: 11px 18px !important;
+    font-size: 12.5px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.04em !important;
+    border-radius: 999px !important;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.2), 0 0 18px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.1) !important;
+    transition: all 0.25s ease !important;
   }
 
   /* History items */
   .history-item {
-    padding: 8px 10px !important;
-    font-size: 12px !important;
+    padding: 9px 12px !important;
+    font-size: 12.5px !important;
     gap: 8px !important;
-    margin-bottom: 3px !important;
+    margin-bottom: 4px !important;
+    border-radius: 14px !important;
+    border: 1px solid transparent !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .history-item.active {
+    background: linear-gradient(135deg, rgba(var(--theme-primary-rgb, 236, 72, 153), 0.18), rgba(168, 85, 247, 0.12)) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(var(--theme-primary-rgb, 236, 72, 153), 0.35) !important;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
+    color: #fff !important;
+  }
+
+  /* Footer bottom profile card: sleek glass pill */
+  .sidebar .mt-auto > div:first-child {
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 1.5px rgba(255, 255, 255, 0.18) !important;
   }
 
   /* Footer buttons compact */
   .sidebar-footer-btn {
     width: 2.5rem !important;
     height: 2.5rem !important;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
   }
 
   .sidebar-footer-btn.profile-btn {
@@ -180,6 +230,10 @@
     min-width: 14rem !important;
     max-width: calc(100vw - 2rem) !important;
     font-size: 0.82rem !important;
+    background: rgba(18, 12, 28, 0.85) !important;
+    backdrop-filter: blur(28px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.2) !important;
   }
 
   /* Settings bubble position fix on mobile - show above instead of right */
@@ -196,56 +250,68 @@
   /* Background video */
   .anime-bg-video {
     min-width: 100% !important;
-    opacity: 0.35 !important;
+    opacity: 0.45 !important;
     height: 100% !important;
     object-fit: cover !important;
   }
 
-  /* Mascot container: smaller on mobile */
+  /* Mascot container: fully visible, vibrant & beautifully clear on mobile */
   .chat-content .absolute.inset-0.pointer-events-none.flex {
-    opacity: 0.15 !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 
-  /* Anime girl character */
+  /* Mascot character image: fully bright, saturated and sharp on mobile */
+  .chat-content .relative.z-\[5\] img {
+    opacity: 1 !important;
+    filter: drop-shadow(0 15px 35px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 25px rgba(255, 105, 180, 0.15)) !important;
+  }
+
+  /* Standardized character container: scale proportionally for mobile screens */
+  .relative.z-\[5\].pointer-events-none {
+    width: min(340px, 88vw) !important;
+    height: min(480px, 58vh) !important;
+  }
+
+  /* Anime girl character (login) */
   .anime-girl {
     width: 400px !important;
     max-width: 75vw !important;
   }
 
-  /* Ground shadows and lights smaller */
+  /* Ground shadows and lights */
   .girl-ground-shadow {
-    width: 40% !important;
+    width: 45% !important;
     bottom: 0 !important;
+    opacity: 0.7 !important;
   }
 
   .girl-ground-light {
-    width: 55% !important;
+    width: 60% !important;
+    opacity: 0.8 !important;
   }
 
   .girl-spotlight {
-    width: 70% !important;
+    width: 75% !important;
+    opacity: 0.85 !important;
   }
 
   .girl-ambient-glow {
-    width: 50% !important;
-  }
-
-  /* Standardized character container: scale down for mobile */
-  .relative.z-\[5\].pointer-events-none {
-    width: 280px !important;
-    height: 400px !important;
+    width: 60% !important;
+    opacity: 0.65 !important;
   }
 }
 
 /* ===== MOBILE: MESSAGE AREA ===== */
 @media (max-width: 768px) {
 
-  /* Messages scroll area — full width on mobile */
+  /* Messages scroll area — full width on mobile, no page scroll */
   .chat-content > .flex-1 {
-    padding: 8px 8px !important;
+    padding: 0 !important;
     min-height: 0 !important;
     flex: 1 1 0% !important;
     overflow: hidden !important;
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   /* Message list container — use full width instead of 60% */
@@ -262,13 +328,31 @@
     font-size: 0.85rem !important;
   }
 
-  /* User/AI bubble max-width for mobile */
-  div[data-role="user"],
+  /* User/AI bubble styling for mobile with luminous frosted glass */
   div[data-role="assistant"] {
-    max-width: 85% !important;
-    padding: 12px 14px !important;
+    max-width: 86% !important;
+    padding: 13px 15px !important;
     font-size: 13.5px !important;
-    line-height: 1.55 !important;
+    line-height: 1.58 !important;
+    border-radius: 22px 22px 22px 6px !important;
+    background: rgba(22, 14, 32, 0.75) !important;
+    backdrop-filter: blur(24px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.15), 0 0 20px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.06) !important;
+  }
+
+  div[data-role="user"] {
+    max-width: 86% !important;
+    padding: 13px 15px !important;
+    font-size: 13.5px !important;
+    line-height: 1.58 !important;
+    border-radius: 22px 22px 6px 22px !important;
+    background: linear-gradient(135deg, rgba(var(--theme-primary-rgb, 236, 72, 153), 0.32), rgba(168, 85, 247, 0.24)) !important;
+    backdrop-filter: blur(24px) saturate(190%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.45), inset 0 1px 1.5px rgba(255, 255, 255, 0.22), 0 0 25px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.2) !important;
   }
 
   /* Petal SVG accents on bubbles: hide on mobile to prevent overflow */
@@ -288,45 +372,124 @@
   }
 }
 
-/* ===== MOBILE: COMPOSER / INPUT BAR ===== */
+/* ===== MOBILE: COMPOSER / INPUT BAR (Ultra-Premium Glass Capsule) ===== */
 @media (max-width: 768px) {
 
-  /* Input bar container — full width */
+  /* Fixed to viewport bottom — rock solid, subtle transparent fade without muddy backdrop */
   .chat-content > .flex-none {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    padding: 8px 10px 12px !important;
-    padding-top: 4px !important;
+    padding: 6px 14px calc(10px + env(safe-area-inset-bottom, 0px)) !important;
     flex-shrink: 0 !important;
-    z-index: 30 !important;
-    margin-top: 0 !important;
+    z-index: 50 !important;
+    margin: 0 !important;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0.2) 65%, transparent 100%) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: auto !important;
   }
 
-  /* The form itself — full width with compact padding */
-  .chat-content > .flex-none form {
+  /* The message box itself — ultra-premium floating glass capsule */
+  .chat-content > .flex-none form,
+  .chat-content .saheli-composer-container {
     width: 100% !important;
     max-width: 100% !important;
-    padding: 3px 6px !important;
-    border-radius: 999px !important;
+    transform: none !important;
+    border-radius: 28px !important;
+    min-height: 52px !important;
+    height: auto !important;
+    padding: 5px 6px 5px 10px !important;
+    background: rgba(18, 12, 28, 0.72) !important;
+    backdrop-filter: blur(32px) saturate(200%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(200%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.16) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.26) !important;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.65), inset 0 1px 1.5px rgba(255, 255, 255, 0.22), 0 0 28px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.14) !important;
+    margin-bottom: 0 !important;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease !important;
   }
 
-  /* Text input */
-  .chat-content > .flex-none form input[type="text"] {
-    padding: 10px 12px !important;
-    font-size: 14px !important;
+  .chat-content > .flex-none form:focus-within,
+  .chat-content .saheli-composer-container:focus-within {
+    border-color: rgba(var(--theme-primary-rgb, 236, 72, 153), 0.5) !important;
+    border-top-color: rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.75), 0 0 30px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.28), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+  }
+
+  /* Row container inside form: perfect vertical centering */
+  .chat-content .saheli-composer-container > .flex.items-center {
+    height: 42px !important;
+    gap: 8px !important;
+  }
+
+  /* Text input inside the glassmorphic message box */
+  .chat-content > .flex-none form input[type="text"],
+  .chat-content .saheli-composer-input {
+    padding: 8px 6px !important;
+    font-size: 14.5px !important;
     min-width: 0 !important;
+    color: #ffffff !important;
+    letter-spacing: 0.01em !important;
   }
 
-  /* Action buttons (plus, mic, send) */
-  .chat-content > .flex-none form button {
+  .chat-content .saheli-composer-input::placeholder {
+    color: rgba(255, 255, 255, 0.38) !important;
+    font-size: 13.5px !important;
+  }
+
+  /* Action buttons (plus, mic, send) — sleek circular glass pills */
+  .chat-content > .flex-none form button,
+  .chat-content .saheli-composer-btn {
     width: 36px !important;
     height: 36px !important;
+    border-radius: 999px !important;
     flex-shrink: 0 !important;
+    background: rgba(255, 255, 255, 0.07) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
   }
 
-  .chat-content > .flex-none form button svg {
-    width: 16px !important;
-    height: 16px !important;
+  .chat-content > .flex-none form button:active,
+  .chat-content .saheli-composer-btn:active {
+    transform: scale(0.9) !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+  }
+
+  .chat-content > .flex-none form button svg,
+  .chat-content .saheli-composer-btn svg {
+    width: 17px !important;
+    height: 17px !important;
+  }
+
+  /* Send button with glowing vibrant gradient pill */
+  .chat-content > .flex-none form button.saheli-send-btn,
+  .chat-content .saheli-send-btn {
+    background: linear-gradient(135deg, rgba(var(--theme-primary-rgb, 236, 72, 153), 0.95), rgba(168, 85, 247, 0.95)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 18px rgba(var(--theme-primary-rgb, 236, 72, 153), 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+  }
+
+  .chat-content > .flex-none form button.saheli-send-btn:disabled,
+  .chat-content .saheli-send-btn:disabled {
+    opacity: 0.3 !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    border-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide perched composer butterfly on mobile to eliminate clutter */
+  .cinematic-hero-butterfly--perched-composer {
+    display: none !important;
   }
 
   /* Image preview: position above input */
@@ -564,11 +727,11 @@
     filter: blur(20px) !important;
   }
 
-  /* Studio aura smaller */
+  /* Studio aura */
   .cinematic-studio-aura-left,
   .cinematic-studio-aura-right {
     filter: blur(30px) !important;
-    opacity: 0.15 !important;
+    opacity: 0.35 !important;
   }
 
   /* Garden floor: shorter on mobile */
@@ -720,14 +883,9 @@
     }
   }
 
-  /* Safe area insets for notched phones */
+  /* Safe area top inset for notched phones */
   .chat-content {
-    padding-top: env(safe-area-inset-top) !important;
-    padding-bottom: env(safe-area-inset-bottom) !important;
-  }
-
-  .chat-content > .flex-none {
-    padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
   }
 }
 
@@ -751,3 +909,52 @@
     display: none !important;
   }
 }
+
+/* ===== MOBILE: LIVE CHARACTER SELECTOR (Done Button & Controls) ===== */
+@media (max-width: 768px) {
+
+  /* Ensure the live selector overlay sits securely above the fixed mobile input bar */
+  .saheli-live-selector-overlay {
+    z-index: 60 !important;
+  }
+
+  /* Reset container transform on mobile so fixed positioning is accurate */
+  .saheli-live-selector-container {
+    transform: none !important;
+    height: min(480px, 58vh) !important;
+    max-width: 100vw !important;
+  }
+
+  /* Keep character slide arrows inside screen bounds on mobile */
+  .saheli-live-selector-prev-btn {
+    left: 8px !important;
+  }
+
+  .saheli-live-selector-next-btn {
+    right: 8px !important;
+  }
+
+  /* Done / Exit control panel: floats safely above the mobile input composer */
+  .saheli-live-selector-panel {
+    position: fixed !important;
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+    padding: 7px 12px !important;
+    gap: 8px !important;
+    z-index: 70 !important;
+  }
+
+  .saheli-live-selector-panel .min-w-\[125px\] {
+    min-width: 80px !important;
+  }
+
+  .saheli-live-selector-panel button {
+    padding: 8px 12px !important;
+    font-size: 11.5px !important;
+    white-space: nowrap !important;
+  }
+}
+

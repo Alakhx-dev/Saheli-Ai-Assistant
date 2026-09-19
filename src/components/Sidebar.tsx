@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { MessageCircle, PanelLeft, Pencil, Plus, Settings, Trash2, MoreHorizontal, Pin, Share2 } from "lucide-react";
 import SaheliLogo from "./SaheliLogo";
-import MobileFlipSidebar from "./mobile/MobileFlipSidebar";
 
 export interface ChatSessionListItem {
   id: string;
@@ -337,37 +336,6 @@ export default function Sidebar(props: SidebarProps) {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  if (isMobileScreen) {
-    return (
-      <MobileFlipSidebar
-        isOpen={isOpen}
-        chatSessions={chatSessions}
-        currentChatId={currentChatId}
-        isGuest={isGuest}
-        isLightMode={props.isLightMode}
-        isTtsMuted={props.isTtsMuted}
-        newChatLabel={newChatLabel}
-        recentChatsLabel={recentChatsLabel}
-        noChatsGuestLabel={noChatsGuestLabel}
-        noChatsAccountLabel={noChatsAccountLabel}
-        settingsLabel={settingsLabel}
-        userName={userName}
-        userPhotoUrl={userPhotoUrl}
-        resolveChatTitle={resolveChatTitle}
-        onCreateChat={onCreateChat}
-        onSelectChat={onSelectChat}
-        onDeleteChat={onDeleteChat}
-        onPinChat={onPinChat}
-        onCloseSidebar={onCloseSidebar}
-        onToggleTtsMute={props.onToggleTtsMute}
-        onToggleSidebarTheme={props.onToggleSidebarTheme}
-        onOpenProfile={props.onOpenProfile}
-        onOpenDesktopSettings={onOpenSettings}
-        activeTheme={activeTheme}
-      />
-    );
-  }
-
   const profileInitial = (userName.trim() || "User").charAt(0).toUpperCase();
 
   return (
@@ -378,25 +346,28 @@ export default function Sidebar(props: SidebarProps) {
       />
       <aside
         className={`sidebar fixed flex flex-col justify-between overflow-hidden rounded-[28px] text-white ${isOpen ? "sidebar-open" : "sidebar-closed"} ${className}`}
-        style={{
-          top: "24px !important",
-          left: "20px",
-          bottom: "24px !important",
-          height: "calc(100vh - 48px)",
-          width: "280px",
-          zIndex: "9999 !important",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          paddingTop: "20px",
-          background: "rgba(15, 15, 15, 0.4)",
-          backdropFilter: "blur(25px)",
-          WebkitBackdropFilter: "blur(25px)",
-          border: "0.5px solid rgba(255, 255, 255, 0.06)",
-          boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)",
-          transform: isOpen ? "translateX(0)" : "translateX(-110%)",
-          transition: "transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
-        }}
+        style={
+          isMobileScreen
+            ? undefined
+            : {
+                top: "50%",
+                left: "20px",
+                height: "calc(100vh - 48px)",
+                width: "280px",
+                zIndex: 9999,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                paddingTop: "20px",
+                background: "rgba(15, 15, 15, 0.4)",
+                backdropFilter: "blur(25px)",
+                WebkitBackdropFilter: "blur(25px)",
+                border: "0.5px solid rgba(255, 255, 255, 0.06)",
+                boxShadow: "0 25px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(255, 105, 180, 0.08)",
+                transform: isOpen ? "translateY(-50%) translateX(0)" : "translateY(-50%) translateX(-110%)",
+                transition: "transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1)",
+              }
+        }
       >
         <div className="sidebar-bottom-glow pointer-events-none absolute -bottom-10 left-6 right-6 h-24 bg-[radial-gradient(ellipse_at_center,rgba(255,105,180,0.28)_0%,rgba(255,105,180,0.14)_34%,transparent_74%)] blur-3xl" />
 
@@ -479,9 +450,15 @@ export default function Sidebar(props: SidebarProps) {
 
             <button
               type="button"
-              onClick={() => { playPopSound(); onOpenSettings(); }}
+              onClick={() => {
+                playPopSound();
+                if (typeof window !== "undefined" && window.innerWidth <= 768) {
+                  onCloseSidebar?.();
+                }
+                onOpenSettings();
+              }}
               aria-label={settingsLabel}
-              className="sidebar-profile-settings-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/30 hover:text-pink-100 hover:shadow-[0_0_20px_rgba(255,105,180,0.3)]"
+              className="sidebar-profile-settings-btn inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-white/70 shadow-[0_8px_20px_rgba(0,0,0,0.3)] transition duration-300 hover:bg-gradient-to-r hover:from-pink-500/20 hover:to-purple-500/20 hover:border-pink-400/30 hover:text-pink-100 hover:shadow-[0_0_20px_rgba(255,105,180,0.3)] cursor-pointer"
               style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
             >
               <Settings className="h-4 w-4" />

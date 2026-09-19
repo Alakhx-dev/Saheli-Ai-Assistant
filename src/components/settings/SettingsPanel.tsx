@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, ChevronLeft, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User, Bell, Languages } from "lucide-react";
+import { Check, ImageIcon, MessageSquareText, Camera, Upload, Trash2, UserCircle, LogOut, KeyRound, Pencil, CalendarDays, Clock3, CloudSun, LocateFixed, RefreshCw, GripVertical, ChevronDown, ChevronRight, ChevronLeft, Maximize2, Undo2, X, LayoutGrid, Music, SlidersHorizontal, Cpu, Sparkles, Globe, RotateCcw, Minus, Plus, Sun, ArrowLeft, ArrowUp, ArrowRight, ArrowDown, GraduationCap, Palette, Ruler, MapPin, Heart, User, Bell, Languages } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getLang } from "@/lib/useLanguage";
 import type { RealtimeAwarenessSnapshot } from "@/lib/realtime-awareness";
@@ -820,6 +820,19 @@ export default function SettingsPanel({
   onMobileFlipBack,
 }: SettingsPanelProps) {
   const t = getLang();
+
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= 768;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileViewport(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const [namingTheme, setNamingTheme] = useState<string>(() => {
     if (typeof window !== "undefined") {
@@ -5170,6 +5183,257 @@ export default function SettingsPanel({
         return "0 25px 50px rgba(0, 0, 0, 0.55), 0 0 35px rgba(236, 72, 153, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08)";
     }
   };
+
+  if (open && isMobileViewport) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[120] flex flex-col justify-end p-2 pb-[calc(10px+env(safe-area-inset-bottom,0px))] bg-black/75 backdrop-blur-md"
+        >
+          {/* Backdrop click to close */}
+          <div
+            className="absolute inset-0"
+            onClick={() => {
+              onOpenChange(false);
+              setShowContentPanel(false);
+              setPersonalizationChild(null);
+              setIsCustomColorPickerOpen(false);
+            }}
+          />
+
+          <motion.div
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            className="relative z-10 w-full max-w-[440px] mx-auto max-h-[88dvh] flex flex-col rounded-[32px] overflow-hidden bg-[rgba(16,11,26,0.82)] backdrop-blur-[36px] backdrop-saturate-[210%] border border-white/[0.18] shadow-[0_25px_70px_rgba(0,0,0,0.85),inset_0_1px_2px_rgba(255,255,255,0.25),0_0_40px_rgba(236,72,153,0.12)] pointer-events-auto"
+          >
+            {/* Top Sheet Drag Pill with luminous glow */}
+            <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-gradient-to-r from-white/20 via-pink-400/50 to-white/20 shadow-[0_0_12px_rgba(255,105,180,0.35)] shrink-0" />
+
+            {/* Dedicated Mobile Header Bar */}
+            <div className="border-b border-white/[0.08] px-4 py-3 flex items-center justify-between bg-white/[0.02] backdrop-blur-xl shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                {(showContentPanel || personalizationChild || isCustomColorPickerOpen) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isCustomColorPickerOpen) {
+                        setIsCustomColorPickerOpen(false);
+                      } else if (personalizationChild) {
+                        setPersonalizationChild(null);
+                      } else if (showContentPanel) {
+                        setShowContentPanel(false);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-full border border-pink-400/40 bg-gradient-to-r from-pink-500/25 to-purple-500/25 px-3 py-1 text-xs font-semibold text-pink-100 hover:brightness-125 active:scale-95 transition-all shadow-[0_0_15px_rgba(255,105,180,0.25)] cursor-pointer shrink-0"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Back</span>
+                  </button>
+                )}
+                <span className="text-xs font-bold tracking-wider uppercase truncate bg-gradient-to-r from-pink-200 via-white to-purple-200 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(255,105,180,0.3)]">
+                  {isCustomColorPickerOpen
+                    ? "Custom Color"
+                    : personalizationChild
+                      ? getLabel(personalizationChild, personalizationChild)
+                      : showContentPanel && activeSection
+                        ? getLabel(activeSection, activeSection)
+                        : "Settings ⚙️"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  setShowContentPanel(false);
+                  setPersonalizationChild(null);
+                  setIsCustomColorPickerOpen(false);
+                }}
+                className="p-1.5 rounded-full text-white/60 hover:text-white bg-white/[0.05] border border-white/[0.08] hover:bg-white/[0.12] active:scale-90 transition-all cursor-pointer shrink-0 shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
+                aria-label="Close settings"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="flex-1 overflow-y-auto p-4 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {isCustomColorPickerOpen ? (
+                /* Level 4: Custom Color Picker */
+                <div className="flex flex-col gap-4">
+                  <CustomColorPicker value={draftCustomColor} onChange={setDraftCustomColor} />
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-white/50">Hex:</span>
+                    <input
+                      type="text"
+                      value={draftCustomColor.toUpperCase()}
+                      maxLength={7}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.startsWith("#") && val.length <= 7) {
+                          setDraftCustomColor(val);
+                        } else if (!val.startsWith("#") && val.length <= 6) {
+                          setDraftCustomColor(`#${val}`);
+                        }
+                      }}
+                      className="w-24 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white font-mono uppercase focus:outline-none focus:border-pink-500/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        backupAndResetStudioLight("custom", draftCustomColor);
+                        setCustomColorVal(draftCustomColor);
+                        setSelectedColor("custom");
+                        if (typeof window !== "undefined") {
+                          window.localStorage.setItem("saheli_custom_theme_color", draftCustomColor);
+                          window.localStorage.setItem("saheli_theme_color", "custom");
+                          window.dispatchEvent(new Event("saheli_theme_color_changed"));
+                        }
+                        setIsCustomColorPickerOpen(false);
+                        toast.success("Custom theme color applied! 🎨");
+                      }}
+                      className="ml-auto px-4 py-1.5 rounded-xl text-xs font-bold bg-pink-500 text-white hover:bg-pink-600 active:scale-95 transition cursor-pointer"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ) : personalizationChild ? (
+                /* Level 3: Child Item Content (e.g. Characters grid, Theme Color swatches) */
+                renderItemContent(personalizationChild, false)
+              ) : showContentPanel ? (
+                /* Level 2: Section Content or Tab Sub-items */
+                isTab ? (
+                  <div className="flex flex-col gap-2.5">
+                    {layout
+                      .filter((child) => child.parentId === activeSection)
+                      .map((child) => {
+                        if (child.id === "memory_toggle") {
+                          return (
+                            <div
+                              key={child.id}
+                              className="flex items-center justify-between gap-4 rounded-[20px] border p-4 backdrop-blur-xl border-white/10 bg-white/[0.03]"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-white">{getLabel(child.id, child.label)}</p>
+                                <p className="text-[11px] leading-5 text-white/50">Auto-save insights from chats</p>
+                              </div>
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={memoryEnabled}
+                                onClick={() => onMemoryToggle(!memoryEnabled)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition duration-300 backdrop-blur-md ${memoryEnabled ? "border-pink-400/40 bg-white/10 shadow-[0_0_15px_rgba(255,105,180,0.3)]" : "border-white/10 bg-white/5"}`}
+                              >
+                                <span className={`inline-block h-4 w-4 rounded-full transition duration-300 ${memoryEnabled ? "bg-white shadow-[0_0_15px_rgba(255,105,180,0.8)] translate-x-[22px]" : "bg-white/40 translate-x-[3px]"}`} />
+                              </button>
+                            </div>
+                          );
+                        }
+                        if (child.id === "incognito") {
+                          return (
+                            <div
+                              key={child.id}
+                              className="settings-glass-card flex items-start justify-between gap-3 !p-3"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-[13px] font-semibold tracking-[-0.02em] text-white">{getLabel(child.id, child.label)}</p>
+                                <p className="mt-1 text-[12px] leading-5 text-white/55">
+                                  Keeps your chats in ghost mode. No chat history, messages, or memories are saved.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                role="switch"
+                                aria-checked={incognitoMode}
+                                onClick={() => onIncognitoModeChange(!incognitoMode)}
+                                className={`settings-toggle-track scale-90 origin-right ${incognitoMode ? "settings-toggle-track-on" : ""}`}
+                              >
+                                <span className={`settings-toggle-thumb ${incognitoMode ? "settings-toggle-thumb-on" : ""}`} />
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        const isAction = isActionItem(child.id);
+                        return (
+                          <motion.button
+                            whileTap={{ scale: 0.97 }}
+                            key={child.id}
+                            type="button"
+                            onClick={() => {
+                              if (isAction) {
+                                handleItemAction(child.id);
+                              } else {
+                                setPersonalizationChild(child.id);
+                              }
+                            }}
+                            className={`flex w-full items-center justify-between rounded-[16px] border px-4 py-3 text-left text-sm transition-all duration-300 ${getThemeClasses(selectedColor, "inactive")}`}
+                          >
+                            <span>{getLabel(child.id, child.label)}</span>
+                            <ChevronRight className="h-4 w-4 opacity-50" />
+                          </motion.button>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  renderItemContent(activeSection, true)
+                )
+              ) : (
+                /* Level 1: Main Menu List */
+                <div className="flex flex-col gap-2">
+                  <div className="mb-2 px-1">
+                    <h2 className="text-lg font-semibold tracking-tight text-white">{t.settings.title}</h2>
+                    <p className="text-[11px] text-white/50">{t.settings.description}</p>
+                  </div>
+                  {layout
+                    .filter((item) => item.parentId === null)
+                    .map((item) => (
+                      <NavButton
+                        key={item.id}
+                        id={item.id}
+                        themeColor={selectedColor}
+                        active={activeSection === item.id}
+                        label={getLabel(item.id, item.label)}
+                        onClick={() => {
+                          if (isActionItem(item.id)) {
+                            handleItemAction(item.id);
+                            return;
+                          }
+                          setShowContentPanel(true);
+                          onSectionChange(item.id as SettingsSectionId);
+                          setPersonalizationChild(null);
+                        }}
+                      />
+                    ))}
+                </div>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Portals like delete confirm, etc. */}
+          {createPortal(
+            <AnimatePresence>
+              {isWidescreenCustomizerOpen && renderWidescreenCustomizer()}
+              {showConfirmRestore && renderConfirmationModal()}
+              {showApplyConfirmChar && renderApplyConfirmationModal()}
+              {showNameInputModal && pendingUploadFile && renderNameInputModal()}
+              {showDeleteConfirmChar && renderDeleteConfirmationModal()}
+              {isCustomizeModalOpen && renderCustomizeModal()}
+              {showMultiDeleteConfirm && renderMultiDeleteConfirmationModal()}
+              {showRestoreConfirm && renderRestoreConfirmationModal()}
+            </AnimatePresence>,
+            document.body
+          )}
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>

@@ -6158,13 +6158,6 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
           transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
-        <header className="absolute top-4 w-full flex items-center justify-start px-6 z-30 pointer-events-none">
-          <div className="md:hidden flex items-center gap-2 text-pink-400 font-semibold tracking-wide text-sm pointer-events-auto" style={{ fontFamily: "'Sour Gummy', cursive" }}>
-            <Heart className="w-5 h-5 fill-current" />
-            Saheli Ai
-          </div>
-        </header>
-
         {awarenessSettings.showDayDate ? (
           <div className="fixed right-4 top-4 z-[9998] md:right-6 md:top-5">
             <AnimatePresence>
@@ -7731,8 +7724,8 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         </AnimatePresence>
 
         {isLiveSelectorActive && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-40 overflow-hidden">
-            <div className="relative flex items-center justify-center w-full max-w-[520px] h-[520px]" style={{ transform: "translateY(-25px)" }}>
+          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center z-[60] md:z-40 overflow-hidden saheli-live-selector-overlay">
+            <div className="relative flex items-center justify-center w-full max-w-[520px] h-[min(480px,58vh)] md:h-[520px] saheli-live-selector-container md:-translate-y-[25px]">
               {(() => {
                 const themeStyles = THEME_SLIDER_CARD_CLASSES[activeTheme] || THEME_SLIDER_CARD_CLASSES.pink;
                 const hoverBgMap: Record<string, string> = {
@@ -7756,7 +7749,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         e.stopPropagation();
                         handleSlideCharacter("prev");
                       }}
-                      className={`absolute left-[-20px] md:left-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer ${arrowHover}`}
+                      className={`absolute left-2 md:left-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer saheli-live-selector-prev-btn ${arrowHover}`}
                       style={{
                         boxShadow: `0 12px 28px rgba(0,0,0,0.4), 0 0 15px ${themeStyles.glow}`
                       }}
@@ -7772,7 +7765,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         e.stopPropagation();
                         handleSlideCharacter("next");
                       }}
-                      className={`absolute right-[-20px] md:right-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer ${arrowHover}`}
+                      className={`absolute right-2 md:right-[-60px] z-[50] p-3.5 rounded-full border border-white/10 bg-[#0f0a15]/80 text-white hover:scale-105 active:scale-95 transition-all duration-300 flex items-center justify-center pointer-events-auto cursor-pointer saheli-live-selector-next-btn ${arrowHover}`}
                       style={{
                         boxShadow: `0 12px 28px rgba(0,0,0,0.4), 0 0 15px ${themeStyles.glow}`
                       }}
@@ -7783,7 +7776,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
                     {/* Done/Exit control panel */}
                     <div 
-                      className={`absolute bottom-[-75px] z-[50] flex items-center gap-3.5 px-5 py-3 rounded-2xl border ${themeStyles.border} bg-[#0c0616]/75 backdrop-blur-[35px] saturate-[180%] pointer-events-auto animate-fade-in`}
+                      className={`fixed bottom-[calc(76px+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:absolute md:bottom-[-75px] z-[70] md:z-[50] flex items-center gap-2 sm:gap-3.5 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-2xl border ${themeStyles.border} bg-[#0c0616]/85 md:bg-[#0c0616]/75 backdrop-blur-[35px] saturate-[180%] pointer-events-auto animate-fade-in max-w-[94vw] saheli-live-selector-panel`}
                       style={{
                         fontFamily: "'Outfit', 'Inter', sans-serif",
                         boxShadow: `0 24px 60px rgba(0,0,0,0.7), 0 0 30px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
