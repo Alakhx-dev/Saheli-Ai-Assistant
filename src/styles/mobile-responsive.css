@@ -613,12 +613,6 @@
     max-width: 160px !important;
   }
 
-  /* Skip login button */
-  #skip-login-btn, #modal-skip-login-btn {
-    padding: 8px !important;
-    font-size: 12px !important;
-  }
-
   /* Social auth buttons */
   .cinematic-card .flex.items-center.gap-4 button {
     width: 40px !important;

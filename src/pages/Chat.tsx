@@ -3292,7 +3292,6 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
 
   const handleLogout = async () => {
     await signOut(auth);
-    sessionStorage.removeItem("devMode");
     navigate("/login");
   };
 

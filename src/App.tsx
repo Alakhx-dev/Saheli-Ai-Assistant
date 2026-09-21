@@ -9,10 +9,9 @@ import GlobalReminderTrigger from "./components/reminders/GlobalReminderTrigger"
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [user, loading] = useAuthState(auth);
-  const devMode = sessionStorage.getItem('devMode');
   
   if (loading) return <CuteLoader />;
-  if (!user && !devMode) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
