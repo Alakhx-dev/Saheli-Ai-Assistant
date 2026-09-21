@@ -7854,23 +7854,30 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 50, scale: 0.95 }}
               transition={{ type: "spring", damping: 22, stiffness: 220 }}
-              className="fixed bottom-6 left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-[100] w-full max-w-[540px] px-4 pointer-events-auto"
+              className="fixed z-[140] pointer-events-auto bottom-[calc(10px+env(safe-area-inset-bottom,0px))] inset-x-2.5 sm:inset-x-auto sm:bottom-6 sm:left-6 sm:translate-x-0 sm:w-full sm:max-w-[540px] sm:px-4"
             >
               <div
-                className={`rounded-[28px] border ${themeStyles.border} bg-[#0c0616]/92 backdrop-blur-[40px] p-6 text-white flex flex-col gap-4 relative overflow-hidden`}
+                className={`rounded-[28px] border ${themeStyles.border} bg-[#0c0616]/95 backdrop-blur-[40px] max-sm:bg-transparent max-sm:backdrop-blur-none max-sm:border-white/15 p-6 max-sm:p-3.5 max-sm:rounded-[24px] text-white flex flex-col gap-4 max-sm:gap-2.5 relative overflow-hidden max-sm:max-h-[82dvh] max-sm:h-auto`}
                 style={{
                   fontFamily: "'Outfit', 'Inter', sans-serif",
-                  boxShadow: `0 24px 60px rgba(0,0,0,0.8), 0 0 40px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
+                  boxShadow: typeof window !== "undefined" && window.innerWidth < 640 ? "none" : `0 24px 60px rgba(0,0,0,0.8), 0 0 40px ${themeStyles.glow}, inset 0 1px 1px rgba(255, 255, 255, 0.12)`
                 }}
               >
+                {/* Mobile Drag Handle Indicator */}
+                <div className="sm:hidden mx-auto -mt-1 mb-1 h-1 w-12 rounded-full bg-white/20 shrink-0" />
+
                 {/* Header */}
                 <div 
-                  onPointerDown={(e) => dragControls.start(e)}
-                  className="flex items-center justify-between border-b border-white/10 pb-3 cursor-grab active:cursor-grabbing select-none"
+                  onPointerDown={(e) => {
+                    if (typeof window !== "undefined" && window.innerWidth >= 640) {
+                      dragControls.start(e);
+                    }
+                  }}
+                  className="flex items-center justify-between border-b border-white/10 pb-3 max-sm:pb-2 cursor-grab active:cursor-grabbing select-none shrink-0"
                 >
-                  <div className="flex items-center gap-2">
-                    <Sliders className={`h-4.5 w-4.5 ${themeStyles.text.split(" ")[0]} animate-pulse`} />
-                    <span className="text-sm font-bold tracking-tight">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sliders className={`h-4.5 w-4.5 max-sm:h-4 max-sm:w-4 ${themeStyles.text.split(" ")[0]} animate-pulse shrink-0`} />
+                    <span className="text-sm max-sm:text-xs font-bold tracking-tight truncate max-w-[340px] max-sm:max-w-[240px]">
                       {adjustingStudioLightOnly ? "Studio Light Adjustments" : `Adjust companion: ${adjustingCharacter.name}`}
                     </span>
                   </div>
@@ -7891,17 +7898,18 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                       setActiveSlider(null);
                       toast.info("Adjustments discarded.");
                     }}
-                    className="p-1 rounded-full hover:bg-white/10 transition text-white/50 hover:text-white cursor-pointer"
+                    className="p-1 rounded-full hover:bg-white/10 active:scale-90 transition text-white/50 hover:text-white cursor-pointer shrink-0 ml-2"
                   >
                     <X className="h-4 w-4" />
                   </button>
                 </div>
 
-                {/* Controls Layout */}
+                {/* Controls Layout Scrollable Wrapper for Mobile */}
+                <div className="flex-1 overflow-y-auto max-sm:max-h-[calc(82dvh-125px)] no-scrollbar pr-0.5 flex flex-col gap-3">
                 {adjustingStudioLightOnly ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 sm:gap-5 items-start">
                     {/* Position Suite for Studio Light */}
-                    <div className="sm:col-span-5 flex flex-col border-r border-white/5 pr-4 min-h-[260px]">
+                    <div className="sm:col-span-5 flex flex-col sm:border-r sm:border-white/5 sm:pr-4 sm:min-h-[260px] pb-3 sm:pb-0 border-b sm:border-b-0 border-white/5">
                       <div className="flex justify-between items-center w-full mb-1">
                         <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
                         {(studioLightAdjustments.leftExpansion !== studioLightAdjustments.originalLeftExpansion ||
@@ -7928,7 +7936,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                       {/* Centered Controls Area */}
                       <div className="flex-grow flex flex-col items-center justify-center gap-3 w-full py-1.5 my-auto">
                         {/* Joystick D-pad */}
-                        <div className={`relative ${activeSlider ? "w-24 h-24" : "w-36 h-36"} bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40 transition-all duration-300`}>
+                        <div className={`relative ${activeSlider ? "w-24 h-24" : "w-36 h-36"} bg-[#150d22] max-sm:bg-black/35 max-sm:backdrop-blur-none rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40 transition-all duration-300`}>
                           {/* Up Arrow - Shrink Bottom (Moves Bottom Up, reduces height) */}
                           <button
                             type="button"
@@ -8125,18 +8133,18 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-start">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 sm:gap-5 items-start">
                     {/* Position Suite */}
-                    <div className="sm:col-span-5 flex flex-col items-center gap-4 border-r border-white/5 pr-4">
+                    <div className="sm:col-span-5 flex flex-col items-center gap-3 sm:gap-4 sm:border-r sm:border-white/5 sm:pr-4 pb-3 sm:pb-0 border-b sm:border-b-0 border-white/5">
                       <span className="text-[10px] uppercase font-bold text-white/40 tracking-wider">Positioning Suite</span>
                       
                       {/* Joystick D-pad */}
-                      <div className="relative w-28 h-28 bg-[#150d22] rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40">
+                      <div className="relative w-24 h-24 sm:w-28 sm:h-28 bg-[#150d22] max-sm:bg-black/35 max-sm:backdrop-blur-none rounded-full border border-white/10 flex items-center justify-center shadow-lg shadow-black/40">
                         {/* Up Arrow */}
                         <button
                           type="button"
                           onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset - 5 } : null)}
-                          className="absolute top-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          className="absolute top-0.5 sm:top-1 p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                           title="Move Up"
                         >
                           <ArrowUp className="h-4 w-4" />
@@ -8146,7 +8154,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         <button
                           type="button"
                           onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset - 5 } : null)}
-                          className="absolute left-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          className="absolute left-0.5 sm:left-1 p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                           title="Move Left"
                         >
                           <ArrowLeft className="h-4 w-4" />
@@ -8164,7 +8172,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                             saturation: prev.originalSaturation, 
                             contrast: prev.originalContrast 
                           } : null)}
-                          className={`p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
+                          className={`p-2 sm:p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/15 text-white/80 active:scale-90 transition duration-200 cursor-pointer ${themeHoverClasses.split(" ")[2]}`}
                           title="Reset All"
                         >
                           <RotateCcw className="h-4 w-4" />
@@ -8174,7 +8182,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         <button
                           type="button"
                           onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, xOffset: prev.xOffset + 5 } : null)}
-                          className="absolute right-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          className="absolute right-0.5 sm:right-1 p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                           title="Move Right"
                         >
                           <ArrowRight className="h-4 w-4" />
@@ -8184,7 +8192,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         <button
                           type="button"
                           onClick={() => setAdjustingCharacter(prev => prev ? { ...prev, yOffset: prev.yOffset + 5 } : null)}
-                          className="absolute bottom-1 p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
+                          className="absolute bottom-0.5 sm:bottom-1 p-1.5 sm:p-2 rounded-full hover:bg-white/10 text-white/70 hover:text-white transition duration-200 cursor-pointer active:scale-90"
                           title="Move Down"
                         >
                           <ArrowDown className="h-4 w-4" />
@@ -8276,8 +8284,9 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                     </div>
                   </div>
                 )}
+                </div>
 
-                <div className="flex items-center gap-2 pt-2.5 border-t border-white/5">
+                <div className="flex items-center gap-2 pt-2.5 max-sm:pt-2 border-t border-white/5 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
@@ -8300,7 +8309,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                       setActiveSlider(null);
                       toast.info("Adjustments discarded.");
                     }}
-                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white transition duration-200 cursor-pointer text-center"
+                    className="flex-1 py-2.5 max-sm:py-2 rounded-xl text-xs font-semibold border border-white/10 bg-white/5 text-white/85 hover:bg-white/10 hover:text-white active:scale-95 transition duration-200 cursor-pointer text-center"
                   >
                     Cancel
                   </button>
@@ -8374,7 +8383,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
                         toast.error("Failed to save adjustments.");
                       }
                     }}
-                    className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition duration-200 cursor-pointer shadow-md text-center ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
+                    className={`flex-1 py-2.5 max-sm:py-2 rounded-xl text-xs font-bold active:scale-95 transition duration-200 cursor-pointer shadow-md text-center ${themeStyles.buttonBg} ${themeStyles.buttonText}`}
                   >
                     Done & Save
                   </button>

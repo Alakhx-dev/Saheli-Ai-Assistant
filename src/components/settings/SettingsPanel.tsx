@@ -3003,7 +3003,7 @@ export default function SettingsPanel({
                           } as any);
                         }
                       }}
-                      className="absolute top-1.5 left-1.5 p-1 rounded-md bg-black/50 hover:bg-white/15 text-white/70 hover:text-white transition opacity-0 group-hover:opacity-100 duration-200 z-10"
+                      className="absolute top-1.5 left-1.5 p-1 rounded-md max-sm:bg-transparent sm:bg-black/50 hover:bg-white/15 text-white/70 hover:text-white transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 duration-200 z-10"
                       title="Adjust position, size & effects"
                     >
                       <SlidersHorizontal className="h-3 w-3" />
