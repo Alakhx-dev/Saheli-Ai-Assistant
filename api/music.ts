@@ -179,7 +179,7 @@ export default async function handler(req: any, res?: any) {
         const playableUrl = await executeResolveUrl(encryptedMediaUrl);
         const proxiedUrl = `/api/music?action=stream&url=${encodeURIComponent(playableUrl)}`;
         res.setHeader("Content-Type", "application/json");
-        return res.end(JSON.stringify({ streamUrl: playableUrl, proxiedUrl, directUrl: playableUrl }));
+        return res.end(JSON.stringify({ streamUrl: proxiedUrl, proxiedUrl, directUrl: playableUrl }));
       }
 
       if (action === "stream") {
@@ -189,18 +189,36 @@ export default async function handler(req: any, res?: any) {
           res.setHeader("Content-Type", "application/json");
           return res.end(JSON.stringify({ error: "Missing stream URL parameter" }));
         }
+
+        const fetchHeaders: Record<string, string> = { ...JIOSAAVN_HEADERS };
+        if (req.headers && req.headers.range) {
+          fetchHeaders["Range"] = req.headers.range;
+        }
+
         const cdnResponse = await fetch(streamUrl, {
           method: "GET",
-          headers: JIOSAAVN_HEADERS,
+          headers: fetchHeaders,
         });
-        if (!cdnResponse.ok) {
+
+        if (!cdnResponse.ok && cdnResponse.status !== 206) {
           res.statusCode = cdnResponse.status;
           res.setHeader("Content-Type", "application/json");
           return res.end(JSON.stringify({ error: `CDN error ${cdnResponse.status}` }));
         }
-        res.statusCode = 200;
+
+        res.statusCode = cdnResponse.status;
         res.setHeader("Content-Type", cdnResponse.headers.get("Content-Type") || "audio/mp4");
         res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Headers", "Range, *");
+        res.setHeader("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
+        if (cdnResponse.headers.has("Content-Length")) {
+          res.setHeader("Content-Length", cdnResponse.headers.get("Content-Length")!);
+        }
+        if (cdnResponse.headers.has("Content-Range")) {
+          res.setHeader("Content-Range", cdnResponse.headers.get("Content-Range")!);
+        }
+
         const buf = Buffer.from(await cdnResponse.arrayBuffer());
         return res.end(buf);
       }
@@ -273,7 +291,7 @@ export default async function handler(req: any, res?: any) {
       }
       const playableUrl = await executeResolveUrl(encryptedMediaUrl);
       const proxiedUrl = `/api/music?action=stream&url=${encodeURIComponent(playableUrl)}`;
-      return new Response(JSON.stringify({ streamUrl: playableUrl, proxiedUrl, directUrl: playableUrl }), {
+      return new Response(JSON.stringify({ streamUrl: proxiedUrl, proxiedUrl, directUrl: playableUrl }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -287,11 +305,16 @@ export default async function handler(req: any, res?: any) {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      const fetchHeaders: Record<string, string> = { ...JIOSAAVN_HEADERS };
+      const rangeHeader = req.headers?.get ? req.headers.get("range") : null;
+      if (rangeHeader) {
+        fetchHeaders["Range"] = rangeHeader;
+      }
       const cdnResponse = await fetch(streamUrl, {
         method: "GET",
-        headers: JIOSAAVN_HEADERS,
+        headers: fetchHeaders,
       });
-      if (!cdnResponse.ok) {
+      if (!cdnResponse.ok && cdnResponse.status !== 206) {
         return new Response(JSON.stringify({ error: `CDN error ${cdnResponse.status}` }), {
           status: cdnResponse.status,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -300,8 +323,16 @@ export default async function handler(req: any, res?: any) {
       const headers = new Headers();
       headers.set("Content-Type", cdnResponse.headers.get("Content-Type") || "audio/mp4");
       headers.set("Access-Control-Allow-Origin", "*");
+      headers.set("Access-Control-Allow-Headers", "Range, *");
+      headers.set("Access-Control-Expose-Headers", "Content-Range, Content-Length, Accept-Ranges");
       headers.set("Accept-Ranges", "bytes");
-      return new Response(cdnResponse.body, { status: 200, headers });
+      if (cdnResponse.headers.has("Content-Length")) {
+        headers.set("Content-Length", cdnResponse.headers.get("Content-Length")!);
+      }
+      if (cdnResponse.headers.has("Content-Range")) {
+        headers.set("Content-Range", cdnResponse.headers.get("Content-Range")!);
+      }
+      return new Response(cdnResponse.body, { status: cdnResponse.status, headers });
     }
 
     return new Response(JSON.stringify({ error: `Unsupported action: ${action}` }), {
