@@ -14,9 +14,6 @@ export interface CloudflareFluxOptions {
   numSteps?: number;
 }
 
-const DEFAULT_CF_ACCOUNT_ID = Buffer.from("ZTc4Njc4MTZmOTc3M2U1MDkzNThjMTYyMzQzNTg0OWI=", "base64").toString("utf-8");
-const DEFAULT_CF_API_TOKEN = Buffer.from("Y2Z1dF9IN2FIeEJCbFNJMW9nYXZtYllEOUdObHZ6QWxtT21uT3RZN1Fudk5WNDM2ZGM5ODc=", "base64").toString("utf-8");
-
 export async function generateCloudflareFluxBase64(
   options: CloudflareFluxOptions,
   envVars?: { CLOUDFLARE_ACCOUNT_ID?: string; CLOUDFLARE_API_TOKEN?: string }
@@ -25,86 +22,96 @@ export async function generateCloudflareFluxBase64(
     envVars?.CLOUDFLARE_ACCOUNT_ID ||
     process.env.CLOUDFLARE_ACCOUNT_ID ||
     process.env.VITE_CLOUDFLARE_ACCOUNT_ID ||
-    DEFAULT_CF_ACCOUNT_ID
+    ""
   ).trim();
   const apiToken = (
     envVars?.CLOUDFLARE_API_TOKEN ||
     process.env.CLOUDFLARE_API_TOKEN ||
     process.env.VITE_CLOUDFLARE_API_TOKEN ||
-    DEFAULT_CF_API_TOKEN
+    ""
   ).trim();
 
   if (!accountId || !apiToken) {
-    throw new Error("Missing Cloudflare Workers AI credentials (CLOUDFLARE_ACCOUNT_ID & CLOUDFLARE_API_TOKEN)");
+    throw new Error("Missing Cloudflare Workers AI credentials. Please ensure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN (or VITE_CLOUDFLARE_ACCOUNT_ID & VITE_CLOUDFLARE_API_TOKEN) are set in your environment variables.");
   }
 
   const sanitizedPrompt = options.prompt
     .replace(/\b(bed|bedroom|lingerie|bikini|naked|nude|sexy|hot)\b/gi, "cozy room")
     .trim();
 
-  // Sequential Cloudflare Workers AI model pipeline
-  const cfModels = [
-    "@cf/black-forest-labs/flux-1-schnell",
-    "@cf/bytedance/stable-diffusion-xl-lightning",
-    "@cf/stabilityai/stable-diffusion-xl-base-1.0",
-  ];
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`;
 
   let lastError = "";
 
-  for (const modelPath of cfModels) {
+  // Retry up to 3 attempts with slight backoff for concurrency/rate-limit
+  for (let attempt = 1; attempt <= 3; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 28000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
-      const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${modelPath}`;
-      const isFlux = modelPath.includes("flux");
-
-      const payload = isFlux 
-        ? { prompt: sanitizedPrompt, steps: options.numSteps || 4 }
-        : { prompt: sanitizedPrompt, num_steps: 4 };
-
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          prompt: sanitizedPrompt,
+          steps: options.numSteps || 4,
+        }),
         signal: controller.signal,
       });
 
       if (!response.ok) {
         const errText = await response.text();
-        console.warn(`[Cloudflare AI Model ${modelPath} returned ${response.status}]:`, errText);
-        lastError = `Cloudflare AI (${modelPath}): ${errText}`;
-        continue;
+        console.warn(`[Cloudflare FLUX attempt ${attempt} returned ${response.status}]:`, errText);
+        lastError = `FLUX Error (${response.status}): ${errText}`;
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1200 * attempt));
+          continue;
+        }
+        break;
       }
 
       const contentType = response.headers.get("content-type") || "";
 
+      let rawBase64 = "";
       if (contentType.includes("application/json")) {
         const json: any = await response.json();
         if (json?.result?.image) {
-          const imgStr = String(json.result.image);
-          return imgStr.startsWith("data:")
-            ? imgStr
-            : `data:image/png;base64,${imgStr}`;
+          rawBase64 = String(json.result.image).replace(/^data:image\/[a-z]+;base64,/, "");
         }
+      } else {
+        const arrayBuffer = await response.arrayBuffer();
+        rawBase64 = Buffer.from(arrayBuffer).toString("base64");
       }
 
-      // Handle binary PNG stream
-      const arrayBuffer = await response.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
-      return `data:image/png;base64,${base64}`;
+      // Check if image is a blank/black safety filter artifact (blank image is under 35KB)
+      if (!rawBase64 || rawBase64.length < 40000) {
+        console.warn(`[Cloudflare FLUX attempt ${attempt}]: Image too small or black (${rawBase64.length} chars), retrying...`);
+        lastError = "Generated image was blank/black artifact";
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        break;
+      }
+
+      // Determine correct mime type
+      const mime = rawBase64.startsWith("/9j/") ? "image/jpeg" : "image/png";
+      return `data:${mime};base64,${rawBase64}`;
     } catch (err: any) {
-      console.warn(`[Cloudflare AI Model ${modelPath} fetch exception]:`, err);
+      console.warn(`[Cloudflare FLUX attempt ${attempt} exception]:`, err);
       lastError = err?.message || String(err);
+      if (attempt < 3) {
+        await new Promise((r) => setTimeout(r, 1200 * attempt));
+      }
     } finally {
       clearTimeout(timeoutId);
     }
   }
 
-  throw new Error(`Cloudflare Workers AI generation failed: ${lastError}`);
+  throw new Error(`Cloudflare FLUX generation failed: ${lastError}`);
 }
 
 async function parseFluxBody(req: any): Promise<CloudflareFluxOptions> {
@@ -198,8 +205,6 @@ export default async function handler(req: any, res?: any) {
 
       const imageBase64 = await generateCloudflareFluxBase64({
         prompt,
-        width: payload.width,
-        height: payload.height,
         numSteps: payload.numSteps,
       });
 
@@ -247,8 +252,6 @@ export default async function handler(req: any, res?: any) {
 
     const imageBase64 = await generateCloudflareFluxBase64({
       prompt,
-      width: payload.width,
-      height: payload.height,
       numSteps: payload.numSteps,
     });
 

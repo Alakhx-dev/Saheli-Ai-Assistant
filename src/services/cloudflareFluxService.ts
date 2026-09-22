@@ -15,74 +15,35 @@ export interface ImageGenOptions {
 export interface ImageGenResult {
   imageUrl: string;
   revisedPrompt?: string;
-  provider: "cloudflare-flux" | "pollinations-flux";
+  provider: "cloudflare-flux";
 }
 
 export async function generateFluxImage(options: ImageGenOptions): Promise<ImageGenResult> {
-  const { prompt, aspectRatio = "1:1" } = options;
+  const { prompt } = options;
 
-  let width = 1024;
-  let height = 1024;
-  if (aspectRatio === "16:9") {
-    width = 1024;
-    height = 576;
-  } else if (aspectRatio === "9:16") {
-    width = 576;
-    height = 1024;
-  } else if (aspectRatio === "4:5") {
-    width = 800;
-    height = 1000;
-  }
+  const response = await fetch("/api/flux", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: prompt,
+    }),
+  });
 
-  // 1. Primary: Call server-side /api/flux endpoint (handled by Vercel serverless / dev server)
-  try {
-    const response = await fetch("/api/flux", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        width,
-        height,
-      }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.image) {
-        return {
-          imageUrl: data.image,
-          provider: "cloudflare-flux",
-        };
-      }
-    } else {
-      const errText = await response.text().catch(() => "");
-      console.warn("Cloudflare FLUX /api/flux returned non-200:", response.status, errText);
-    }
-  } catch (apiErr) {
-    console.warn("Cloudflare FLUX /api/flux request failed, trying fallback:", apiErr);
-  }
-
-  // 2. High-reliability fallback: Direct Pollinations FLUX.1
-  try {
-    const cleanPrompt = prompt.replace(/\b(bed|bedroom|lingerie|bikini|naked|nude|sexy|hot)\b/gi, "cozy room").trim();
-    const seed = Math.floor(Math.random() * 1000000);
-    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(cleanPrompt)}?width=${width}&height=${height}&model=flux&nologo=true&seed=${seed}`;
-
-    // Verify image loads
-    const checkRes = await fetch(pollinationsUrl, { method: "HEAD" }).catch(() => null);
-    if (!checkRes || checkRes.ok || checkRes.status === 200 || checkRes.status === 302 || checkRes.status === 304) {
+  if (response.ok) {
+    const data = await response.json();
+    if (data.image) {
       return {
-        imageUrl: pollinationsUrl,
-        provider: "pollinations-flux",
+        imageUrl: data.image,
+        provider: "cloudflare-flux",
       };
     }
-  } catch (fallbackErr) {
-    console.error("Pollinations fallback failed:", fallbackErr);
   }
 
-  throw new Error("Image generation failed across all available providers.");
+  const errData = await response.text().catch(() => "");
+  console.error("Cloudflare FLUX /api/flux error:", response.status, errData);
+  throw new Error(`Cloudflare FLUX API Error (${response.status}): ${errData}`);
 }
 
 /**
