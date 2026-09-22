@@ -8,6 +8,9 @@
     },
     "api/music.ts": {
       "maxDuration": 30
+    },
+    "api/flux.ts": {
+      "maxDuration": 60
     }
   },
   "rewrites": [
