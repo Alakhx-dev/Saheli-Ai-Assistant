@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { handleWeatherRequest } from "../lib/weatherService";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,9 +46,9 @@ export default async function handler(request: Request) {
     }
 
     const data = await handleWeatherRequest(latitude, longitude, action);
-    return jsonResponse(data);
+    return jsonResponse(data, 200);
   } catch (error: any) {
     console.error("Weather endpoint error:", error);
-    return jsonResponse({ error: error?.message || "Internal Server Error" }, 500);
+    return jsonResponse({ location: null, weather: null, error: error?.message || "Weather fetch failed" }, 200);
   }
 }
