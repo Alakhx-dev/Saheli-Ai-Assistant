@@ -119,6 +119,14 @@ function stopCurrentPlayback() {
     currentTtsAbortController = null;
   }
 
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      // ignore
+    }
+  }
+
   clearCurrentAudio();
   clearPrefetchedAudio();
 }
@@ -256,7 +264,19 @@ export async function speakSaheli(text: string) {
     });
   } catch (error) {
     if (token === speakToken) {
-      console.error("Polly Frontend Error:", error);
+      console.warn("Polly TTS failed, falling back to browser speech synthesis:", error);
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(cleanText);
+          utterance.lang = "hi-IN";
+          utterance.rate = 1.0;
+          utterance.pitch = 1.1;
+          window.speechSynthesis.speak(utterance);
+        } catch {
+          // ignore
+        }
+      }
     }
   } finally {
     if (currentTtsAbortController?.signal.aborted === false) {

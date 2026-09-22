@@ -2,6 +2,9 @@
   "functions": {
     "api/weather.ts": {
       "maxDuration": 30
+    },
+    "api/tts.ts": {
+      "maxDuration": 30
     }
   },
   "rewrites": [

@@ -4,11 +4,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
 
-      match /chat_history/{messageId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
-
-      match /images/{imageId} {
+      match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
@@ -26,6 +22,11 @@ service cloud.firestore {
     
     match /imageMemory/{imageId} {
       allow read, write: if request.auth != null && (request.auth.uid == resource.data.userId || request.auth.uid == request.resource.data.userId);
+    }
+
+    match /shared_chats/{sharedId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }
