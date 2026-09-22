@@ -24,8 +24,8 @@ function resolveHotColdState(temperatureC: number): "hot" | "cold" | "mild" {
 async function fetchWithTimeout(
   url: string,
   options: RequestInit = {},
-  timeoutMs = 15000,
-  retries = 2
+  timeoutMs = 6000,
+  retries = 1
 ): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
@@ -40,8 +40,8 @@ async function fetchWithTimeout(
       if (attempt === retries) {
         throw err;
       }
-      // Wait before retrying (exponential backoff: 1.5s, 3s)
-      await new Promise((resolve) => globalThis.setTimeout(resolve, 1500 * Math.pow(2, attempt)));
+      // Wait before retrying (exponential backoff: 800ms)
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 800 * Math.pow(2, attempt)));
     } finally {
       globalThis.clearTimeout(id);
     }
@@ -60,14 +60,36 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
     return { city: null, region: null, country: null, timezone: null };
   }
 
-  // Use Nominatim directly since Open-Meteo geocoding search does not support reverse lookups (always 404s)
+  // 1. Try BigDataCloud reverse geocode first (fast <200ms, no IP block on cloud serverless, 100% real live data)
+  try {
+    const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`;
+    const bdcRes = await fetchWithTimeout(bdcUrl, {}, 5000, 1);
+    if (bdcRes.ok) {
+      const bdcData: any = await bdcRes.json();
+      const city = bdcData.city || bdcData.locality || bdcData.principalSubdivision || null;
+      const region = bdcData.principalSubdivision || bdcData.countrySubdivisionCode || null;
+      const country = bdcData.countryName || null;
+      if (city || region || country) {
+        return {
+          city,
+          region,
+          country,
+          timezone: null,
+        };
+      }
+    }
+  } catch (bdcErr) {
+    // Silently proceed to Nominatim fallback
+  }
+
+  // 2. Fallback to OpenStreetMap Nominatim
   try {
     const osmUrl = `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=en`;
     const response = await fetchWithTimeout(osmUrl, {
       headers: {
         "User-Agent": "Saheli-AI-Assistant/1.0 (aniraj@saheli.app)"
       }
-    }, 10000);
+    }, 4000, 0);
     
     if (response.ok) {
       const data: any = await response.json();
@@ -84,7 +106,7 @@ export async function fetchGeocoding(latitude: number, longitude: number) {
     // Nominatim fallback fails. Catch silently.
   }
 
-  // If Nominatim fails, return a default safe structure
+  // If both fail, return a default safe structure
   return {
     city: null,
     region: null,

@@ -124,33 +124,232 @@ function getCurrentPosition(): Promise<GeolocationPosition> {
 }
 
 async function reverseGeocode(latitude: number, longitude: number): Promise<Partial<LocationSnapshot>> {
-  const response = await fetch(
-    `/api/weather?lat=${latitude}&lon=${longitude}&action=geocode`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Reverse geocode failed: ${response.status}`);
+  // 1. Try backend API first
+  try {
+    const response = await fetch(
+      `/api/weather?lat=${latitude}&lon=${longitude}&action=geocode`
+    );
+    if (response.ok) {
+      const data = await response.json();
+      if (data.location && (data.location.city || data.location.region || data.location.country)) {
+        return data.location;
+      }
+    }
+  } catch {
+    // Silently fall through to direct client geocoding
   }
 
-  const data = await response.json();
-  return data.location || {};
+  // 2. Direct client fallback: BigDataCloud reverse geocode (100% real data, free, CORS-enabled)
+  try {
+    const bdcRes = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+    );
+    if (bdcRes.ok) {
+      const bdcData = await bdcRes.json();
+      return {
+        city: bdcData.city || bdcData.locality || bdcData.principalSubdivision || undefined,
+        region: bdcData.principalSubdivision || undefined,
+        country: bdcData.countryName || undefined,
+        timezone: undefined,
+      };
+    }
+  } catch {
+    // Ignore fallback failure
+  }
+
+  return {};
+}
+
+async function fetchWeatherDirect(latitude: number, longitude: number): Promise<WeatherSnapshot> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,is_day,relative_humidity_2m,wind_speed_10m,uv_index&hourly=temperature_2m,weather_code,precipitation_probability,relative_humidity_2m,wind_speed_10m&daily=sunrise,sunset&forecast_days=2&timezone=auto`;
+  const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi`;
+
+  const [weatherRes, aqiRes] = await Promise.allSettled([
+    fetch(url),
+    fetch(aqiUrl),
+  ]);
+
+  if (weatherRes.status !== "fulfilled" || !weatherRes.value.ok) {
+    throw new Error("Direct real-time weather fetch failed");
+  }
+
+  const weatherData = await weatherRes.value.json();
+  let aqiData: any = null;
+  if (aqiRes.status === "fulfilled" && aqiRes.value.ok) {
+    try {
+      aqiData = await aqiRes.value.json();
+    } catch {
+      // ignore
+    }
+  }
+
+  const current = weatherData.current;
+  const hourly = weatherData.hourly;
+  const daily = weatherData.daily;
+
+  const temperatureC = typeof current?.temperature_2m === "number" ? current.temperature_2m : 0;
+  const feelsLikeC = typeof current?.apparent_temperature === "number" ? current.apparent_temperature : undefined;
+  const weatherCode = typeof current?.weather_code === "number" ? current.weather_code : 0;
+  const uvIndex = typeof current?.uv_index === "number" ? current.uv_index : 0;
+  const weatherMeta = weatherConditionFromCode(weatherCode);
+
+  const forecastTimes = hourly?.time ?? [];
+  const forecastTemps = hourly?.temperature_2m ?? [];
+  const forecastCodes = hourly?.weather_code ?? [];
+  const forecastRain = hourly?.precipitation_probability ?? [];
+  const forecastHumidity = hourly?.relative_humidity_2m ?? [];
+  const forecastWind = hourly?.wind_speed_10m ?? [];
+
+  const currentTimeIso = current?.time ? String(current.time).slice(0, 13) : null;
+  const matchedCurrentIndex = currentTimeIso
+    ? forecastTimes.findIndex((timeIso: string) => String(timeIso).slice(0, 13) === currentTimeIso)
+    : -1;
+
+  const currentHour = new Date().getHours();
+  const startIndex = matchedCurrentIndex >= 0
+    ? matchedCurrentIndex
+    : forecastTimes.length > 0
+      ? Math.min(Math.max(currentHour, 0), Math.max(forecastTimes.length - 1, 0))
+      : 0;
+
+  const sunrise = daily?.sunrise?.[0];
+  const sunset = daily?.sunset?.[0];
+  let moonPhase = 0.0;
+  try {
+    const now = new Date();
+    const newMoonRef = new Date(Date.UTC(2000, 0, 6, 18, 14, 0));
+    const diffMs = now.getTime() - newMoonRef.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+    const cycle = 29.530588853;
+    const phase = (diffDays / cycle) % 1;
+    moonPhase = phase < 0 ? phase + 1 : phase;
+  } catch {
+    moonPhase = 0.5;
+  }
+
+  let sunriseHour = 6.0;
+  let sunsetHour = 18.0;
+  if (sunrise) {
+    try {
+      const srDate = new Date(sunrise);
+      sunriseHour = srDate.getHours() + srDate.getMinutes() / 60;
+    } catch {
+      // ignore
+    }
+  }
+  if (sunset) {
+    try {
+      const ssDate = new Date(sunset);
+      sunsetHour = ssDate.getHours() + ssDate.getMinutes() / 60;
+    } catch {
+      // ignore
+    }
+  }
+
+  const hourlyForecast = forecastTimes
+    .slice(startIndex, startIndex + 6)
+    .map((timeIso: string, index: number) => {
+      const absoluteIndex = startIndex + index;
+      const temperature = typeof forecastTemps[absoluteIndex] === "number" ? forecastTemps[absoluteIndex] : temperatureC;
+      const code = typeof forecastCodes[absoluteIndex] === "number" ? forecastCodes[absoluteIndex] : weatherCode;
+      const rainProbability = typeof forecastRain[absoluteIndex] === "number" ? forecastRain[absoluteIndex] : undefined;
+      const humidity = typeof forecastHumidity[absoluteIndex] === "number" ? forecastHumidity[absoluteIndex] : undefined;
+      const wind = typeof forecastWind[absoluteIndex] === "number" ? forecastWind[absoluteIndex] : undefined;
+      const meta = weatherConditionFromCode(code);
+      const date = new Date(timeIso);
+
+      return {
+        timeIso,
+        hourLabel: date.toLocaleTimeString("en-US", { hour: "numeric", hour12: true }),
+        temperatureC: temperature,
+        weatherCode: code,
+        condition: meta.condition,
+        precipitationProbabilityPercent: rainProbability,
+        isRainy: meta.isRainy,
+        isCloudy: meta.isCloudy,
+        dayState: (date.getHours() >= sunriseHour && date.getHours() < sunsetHour ? "day" : "night") as "day" | "night",
+        humidityPercent: humidity,
+        windSpeedKph: wind,
+      };
+    });
+
+  const currentForecastIndex = matchedCurrentIndex >= 0 ? matchedCurrentIndex : startIndex;
+  const humidityPercent = typeof current?.relative_humidity_2m === "number"
+    ? current.relative_humidity_2m
+    : typeof forecastHumidity[currentForecastIndex] === "number"
+      ? forecastHumidity[currentForecastIndex]
+      : undefined;
+
+  const windSpeedKph = typeof current?.wind_speed_10m === "number"
+    ? current.wind_speed_10m
+    : typeof forecastWind[currentForecastIndex] === "number"
+      ? forecastWind[currentForecastIndex]
+      : undefined;
+
+  const rainProbabilityPercent = typeof forecastRain[currentForecastIndex] === "number"
+    ? forecastRain[currentForecastIndex]
+    : undefined;
+
+  const usAqi = typeof aqiData?.current?.us_aqi === "number" ? aqiData.current.us_aqi : undefined;
+  let aqiStatus: string | undefined = undefined;
+  if (usAqi !== undefined) {
+    if (usAqi <= 50) aqiStatus = "Good";
+    else if (usAqi <= 100) aqiStatus = "Moderate";
+    else if (usAqi <= 150) aqiStatus = "Sensitive Groups";
+    else if (usAqi <= 200) aqiStatus = "Unhealthy";
+    else if (usAqi <= 300) aqiStatus = "Very Unhealthy";
+    else aqiStatus = "Hazardous";
+  }
+
+  let activeAlert = "No Active Alerts";
+  if ([95, 96, 99].includes(weatherCode)) activeAlert = "Thunderstorm";
+  else if (temperatureC >= 40 || temperatureC <= 0) activeAlert = "Extreme Weather";
+  else if ([65, 82].includes(weatherCode)) activeAlert = "Heavy Rain";
+  else if ((windSpeedKph ?? 0) >= 40) activeAlert = "High Wind";
+  else if (uvIndex >= 6) activeAlert = "High UV";
+
+  return {
+    temperatureC,
+    feelsLikeC,
+    humidityPercent,
+    windSpeedKph,
+    rainProbabilityPercent,
+    hotColdState: resolveHotColdState(temperatureC),
+    weatherCode,
+    condition: weatherMeta.condition,
+    isRainy: weatherMeta.isRainy,
+    isCloudy: weatherMeta.isCloudy,
+    dayState: current?.is_day === 1 ? "day" : "night",
+    updatedAt: Date.now(),
+    hourlyForecast,
+    aqi: usAqi,
+    aqiStatus,
+    activeAlert,
+    sunrise,
+    sunset,
+    moonPhase,
+  };
 }
 
 async function fetchWeather(latitude: number, longitude: number): Promise<WeatherSnapshot> {
-  const response = await fetch(
-    `/api/weather?lat=${latitude}&lon=${longitude}&action=weather`
-  );
+  // 1. Try backend API first
+  try {
+    const response = await fetch(
+      `/api/weather?lat=${latitude}&lon=${longitude}&action=weather`
+    );
 
-  if (!response.ok) {
-    throw new Error(`Weather fetch failed: ${response.status}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.weather) {
+        return data.weather;
+      }
+    }
+  } catch {
+    // Backend API failed, proceed to direct client fetch
   }
 
-  const data = await response.json();
-  if (!data.weather) {
-    throw new Error(data.weatherError || "Weather data missing in response");
-  }
-
-  return data.weather;
+  // 2. Direct client fallback to Open-Meteo (100% real live meteorological data)
+  return fetchWeatherDirect(latitude, longitude);
 }
 
 export function useRealtimeAwareness(): UseRealtimeAwarenessResult {

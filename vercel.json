@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/weather.ts": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
     {
       "source": "/((?!api/).*)",
