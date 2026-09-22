@@ -109,38 +109,34 @@ export interface VisionParseResult {
 }
 
 const AI_PIPELINE_CONFIG = {
+  // 1. BESTIE: Flirty, playful, friendly, warm, casual Hinglish banter, fast micro-replies
   bestie: [
-    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash" },
-    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.3-70b-instruct:free" },
-    { provider: "groq", modelId: "llama-3.3-70b-specdec" },
-    { provider: "groq", modelId: "llama3-70b-8192" },
-    { provider: "groq", modelId: "llama3-8b-8192" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "groq", modelId: "qwen/qwen3.8-27b" },
+    { provider: "gemini", modelId: "gemini-flash-lite-latest" },
+    { provider: "openrouter", modelId: "nex-agi/nex-n2.5-pro:free" },
+    { provider: "openrouter", modelId: "inclusionai/ling-3.0-flash-vl:free" },
   ],
+  // 2. MENTOR: Coding, algorithms, mathematics, complex problem solving, logic, structured explanations
   mentor: [
-    { provider: "gemini", modelId: "gemini-2.5-pro" },
-    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.3-70b-instruct:free" },
-    { provider: "openrouter", modelId: "qwen/qwen-2.5-72b-instruct:free" },
-    { provider: "groq", modelId: "llama-3.3-70b-specdec" },
-    { provider: "groq", modelId: "llama3-70b-8192" },
-    { provider: "groq", modelId: "llama3-8b-8192" },
+    { provider: "gemini", modelId: "gemini-3-flash-preview" },
+    { provider: "groq", modelId: "openai/gpt-oss-120b" },
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "groq", modelId: "openai/gpt-oss-20b" },
   ],
+  // 3. VISION: High capacity OCR text reading, notes, documents, screen captures & scene parsing
   vision: [
-    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash" },
-    { provider: "gemini", modelId: "gemini-2.5-pro" },
-    { provider: "openrouter", modelId: "google/gemma-2-9b-it:free" },
-    { provider: "groq", modelId: "llama-3.2-11b-vision-instruct" },
-    { provider: "groq", modelId: "llama-3.2-90b-vision-instruct" },
+    { provider: "gemini", modelId: "gemini-3.1-flash-lite" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "gemini", modelId: "gemini-flash-lite-latest" },
+    { provider: "openrouter", modelId: "inclusionai/ling-3.0-flash-vl:free" },
   ],
+  // 4. TITLE: Ultra-fast, minimal token usage 2-3 word chat title generator
   title: [
-    { provider: "gemini", modelId: "gemini-3.5-flash-lite" },
-    { provider: "gemini", modelId: "gemini-2.5-flash" },
-    { provider: "openrouter", modelId: "meta-llama/llama-3.1-8b-instruct:free" },
-    { provider: "groq", modelId: "llama3-8b-8192" },
+    { provider: "groq", modelId: "qwen/qwen3.8-27b" },
+    { provider: "gemini", modelId: "gemini-2.5-flash-lite" },
+    { provider: "openrouter", modelId: "nex-agi/nex-n2.5-pro:free" },
   ],
 } as const;
 
@@ -658,7 +654,9 @@ type ProviderResponseData = {
   choices?: Array<{
     message?: {
       content?: string;
+      reasoning?: string;
     };
+    text?: string;
   }>;
   error?: {
     message?: string;
@@ -743,7 +741,18 @@ function buildRequestBody(
 }
 
 function extractCompletionText(data: ProviderResponseData): string {
-  return data?.choices?.[0]?.message?.content?.trim() || "";
+  const choice = data?.choices?.[0];
+  const msg = choice?.message;
+  if (typeof msg?.content === "string" && msg.content.trim()) {
+    return msg.content.trim();
+  }
+  if (typeof choice?.text === "string" && choice.text.trim()) {
+    return choice.text.trim();
+  }
+  if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
+    return msg.reasoning.trim();
+  }
+  return "";
 }
 
 function extractProviderError(data: ProviderResponseData, response: Response, providerLabel: string): string {
@@ -810,7 +819,8 @@ async function callGeminiNativeAPI(
   }
 
   const controller = new AbortController();
-  const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  const GEMINI_TIMEOUT_MS = 10000;
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
 
   try {
     const response = await fetch(url, {
@@ -911,7 +921,7 @@ async function executeOpenRouterFetch(
   apiKey: string,
 ): Promise<string> {
   const apiUrl = "https://openrouter.ai/api/v1/chat/completions";
-  const requestBody = buildRequestBody(
+  const requestBody: any = buildRequestBody(
     modelId,
     payload.systemPrompt,
     payload.messages,
@@ -921,11 +931,15 @@ async function executeOpenRouterFetch(
     0.9,
   );
 
+  // Disable reasoning tokens on OpenRouter to avoid token starvation and timeout
+  requestBody.reasoning = { effort: "none" };
+
   const controller = new AbortController();
-  const timeoutId = globalThis.setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
+  const OPENROUTER_TIMEOUT_MS = 8000;
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS);
 
   try {
-    const response = await fetch(apiUrl, {
+    let response = await fetch(apiUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -936,6 +950,22 @@ async function executeOpenRouterFetch(
       signal: controller.signal,
       body: JSON.stringify(requestBody),
     });
+
+    // If model rejects reasoning param with 400, retry once cleanly without it
+    if (response.status === 400 && requestBody.reasoning) {
+      delete requestBody.reasoning;
+      response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://github.com/Alakhx-dev/Saheli-Ai-Assistant",
+          "X-Title": "Saheli AI Assistant",
+        },
+        signal: controller.signal,
+        body: JSON.stringify(requestBody),
+      });
+    }
 
     const data = (await response.json().catch(() => ({}))) as ProviderResponseData;
     if (!response.ok) {
@@ -1014,7 +1044,9 @@ function isModelVisionCompatible(modelId: string): boolean {
     lower.includes("pixtral") ||
     lower.includes("claude-3") ||
     lower.includes("gpt-4o") ||
-    lower.includes("gpt-4-vision")
+    lower.includes("gpt-4-vision") ||
+    lower.includes("-vl") ||
+    lower.includes("ling-")
   );
 }
 
@@ -1088,9 +1120,21 @@ async function executeWithFallback(
 ): Promise<{ text: string; tierIndex: number; tier: PipelineTier }> {
   let lastError: any = null;
   const isVisionRequest = Boolean(payload.imageBase64 && payload.imageBase64.trim());
+  let openRouterRateLimited = false;
+  let geminiRateLimited = false;
 
   for (let i = 0; i < tierArray.length; i++) {
     const tier = tierArray[i];
+
+    if (tier.provider === "gemini" && geminiRateLimited) {
+      console.warn(`Layer ${i} (${tier.provider}/${tier.modelId}) skipped: Gemini is temporarily rate-limited.`);
+      continue;
+    }
+
+    if (tier.provider === "openrouter" && openRouterRateLimited) {
+      console.warn(`Layer ${i} (${tier.provider}/${tier.modelId}) skipped: OpenRouter is temporarily rate-limited.`);
+      continue;
+    }
 
     if (isVisionRequest && !isModelVisionCompatible(tier.modelId)) {
       console.warn(`Skipping non-vision-compatible model ${tier.provider}/${tier.modelId} for vision request`);
@@ -1115,7 +1159,27 @@ async function executeWithFallback(
       debugLog(`Tier ${i} succeeded: ${tier.provider}/${tier.modelId}`);
       return { text, tierIndex: i, tier };
     } catch (error: any) {
-      console.warn(`Layer ${i} (${tier.provider}/${tier.modelId}) failed:`, error?.message || error);
+      const errorMsg = error?.message || String(error);
+      console.warn(`Layer ${i} (${tier.provider}/${tier.modelId}) failed:`, errorMsg);
+      if (
+        tier.provider === "gemini" &&
+        (errorMsg.includes("429") ||
+          errorMsg.toLowerCase().includes("quota exceeded") ||
+          errorMsg.toLowerCase().includes("rate-limit") ||
+          errorMsg.toLowerCase().includes("resource_exhausted") ||
+          errorMsg.includes("limit: 20"))
+      ) {
+        geminiRateLimited = true;
+      }
+      if (
+        tier.provider === "openrouter" &&
+        (errorMsg.includes("429") ||
+          errorMsg.toLowerCase().includes("rate limit") ||
+          errorMsg.includes("credits") ||
+          errorMsg.includes("free-models-per-day"))
+      ) {
+        openRouterRateLimited = true;
+      }
       lastError = error;
     }
   }
@@ -1147,11 +1211,11 @@ async function executeVisionPipeline(
 
   let visionTiers = [...AI_PIPELINE_CONFIG.vision];
   if (isStudyOrText) {
-    const proIndex = visionTiers.findIndex((t) => t.modelId === "gemini-2.5-pro");
-    if (proIndex > 0) {
-      const [proTier] = visionTiers.splice(proIndex, 1);
-      visionTiers.unshift(proTier);
-      debugLog("Vision Pipeline: Study/Text context detected. Prioritizing gemini-2.5-pro for deep understanding.");
+    const studyIndex = visionTiers.findIndex((t) => t.modelId === "gemini-3.1-flash-lite");
+    if (studyIndex > 0) {
+      const [studyTier] = visionTiers.splice(studyIndex, 1);
+      visionTiers.unshift(studyTier);
+      debugLog("Vision Pipeline: Study/Text context detected. Prioritizing gemini-3.1-flash-lite for deep understanding.");
     }
   }
 
@@ -1639,10 +1703,10 @@ export async function extractUnifiedMemoryAI(
   currentPermanentMemories: string[] = [],
 ): Promise<UnifiedMemoryExtraction> {
   const extractTiers = [
-    { provider: "gemini" as const, modelId: "gemini-3.5-flash-lite" },
-    { provider: "gemini" as const, modelId: "gemini-2.5-flash" },
-    { provider: "groq" as const, modelId: "llama3-70b-8192" },
-    { provider: "groq" as const, modelId: "llama3-8b-8192" }
+    { provider: "gemini" as const, modelId: "gemini-2.5-flash-lite" },
+    { provider: "gemini" as const, modelId: "gemini-flash-lite-latest" },
+    { provider: "groq" as const, modelId: "qwen/qwen3.8-27b" },
+    { provider: "groq" as const, modelId: "openai/gpt-oss-120b" }
   ];
 
   // Inject current time and current memories into the prompt

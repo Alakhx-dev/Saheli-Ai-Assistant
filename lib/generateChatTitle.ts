@@ -8,7 +8,7 @@ function clean(value: string | undefined) {
 }
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
-const GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+const GROQ_MODEL = "qwen/qwen3.8-27b";
 
 export async function generateChatTitle(firstMessage: string): Promise<string> {
   const message = firstMessage.trim();
