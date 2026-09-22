@@ -263,14 +263,18 @@ export default function Login() {
   const handleSocialAuth = async (provider: AuthProvider) => {
     setError("");
     try {
-      if (isMobile()) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-
       await signInWithPopup(auth, provider);
       navigate("/chat");
     } catch (err: any) {
+      if (err?.code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (redirectErr: any) {
+          setError(redirectErr instanceof Error ? redirectErr.message : "Social authentication failed.");
+          return;
+        }
+      }
       setError(err instanceof Error ? err.message : "Social authentication failed.");
     }
   };
@@ -544,7 +548,7 @@ export default function Login() {
 
   return (
     <div className="login-screen-wrapper min-h-screen h-[100dvh] max-h-[100dvh] w-full flex flex-col md:flex-row items-center justify-between md:justify-around bg-[#0a0a0f] p-2 md:p-4 overflow-hidden relative overscroll-none select-none">
-      <div className="login-character-stage w-full md:w-1/2 flex flex-col justify-center items-center h-[calc(100dvh-75px)] md:h-screen relative group select-none overflow-hidden">
+      <div className="login-character-stage w-full md:w-1/2 flex flex-col justify-center items-center h-[calc(100dvh-75px)] md:h-screen relative group select-none overflow-hidden md:overflow-visible z-10 md:z-30">
         <div className="relative flex flex-col items-center justify-center w-full max-w-[520px]">
 
           {/* Anchored Chat Bubble: Toggled by Hover/Focus */}
@@ -556,7 +560,7 @@ export default function Login() {
                 animate={{ opacity: 1, scale: 1, y: -5 }}
                 exit={{ opacity: 0, scale: 0.8, y: -20 }}
                 transition={{ duration: 0.4 }}
-                className="absolute z-50 left-[60%] md:left-[80%] top-[10%] drop-shadow-md pointer-events-none"
+                className="absolute z-50 left-[60%] md:left-[75%] top-[10%] drop-shadow-md pointer-events-none"
               >
                 <AnimatePresence mode="wait">
                   <motion.div 
@@ -565,7 +569,7 @@ export default function Login() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2 }}
-                    className="bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-xs md:text-sm font-medium px-3 py-1.5 rounded-2xl w-max max-w-[200px] md:max-w-[260px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)]"
+                    className="bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-xs md:text-sm font-medium px-3.5 py-2 rounded-2xl w-max max-w-[200px] md:max-w-[280px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)] whitespace-normal break-words"
                   >
                     {message}
                   </motion.div>
@@ -584,9 +588,9 @@ export default function Login() {
                   animate={{ opacity: 1, scale: effect.isText ? 1 : 1.3, y: -5 }}
                   exit={{ opacity: 0, scale: 0.8, y: -20 }}
                   transition={{ duration: 0.4 }}
-                  className={`absolute z-50 left-[75%] md:left-[85%] top-[10%] drop-shadow-md pointer-events-none ${
+                  className={`absolute z-50 left-[75%] md:left-[80%] top-[10%] drop-shadow-md pointer-events-none ${
                     effect.isText 
-                      ? "bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-sm md:text-[15px] font-medium px-3 py-1.5 rounded-2xl w-max max-w-[180px] md:max-w-[220px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)]"
+                      ? "bg-[#1a0a14]/70 border border-pink-500/20 text-pink-100 text-sm md:text-[15px] font-medium px-3.5 py-2 rounded-2xl w-max max-w-[180px] md:max-w-[260px] text-center tracking-wide shadow-[0_0_15px_rgba(236,72,153,0.15)] whitespace-normal break-words"
                       : "text-3xl md:text-4xl emoji-native"
                   }`}
                 >
