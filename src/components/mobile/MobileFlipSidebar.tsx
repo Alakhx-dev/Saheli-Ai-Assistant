@@ -170,9 +170,9 @@ export const MobileFlipSidebar: React.FC<MobileFlipSidebarProps> = ({
 
   const [namingTheme, setNamingTheme] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("saheli_naming_theme") || "cute";
+      return localStorage.getItem("saheli_naming_theme") || "basic";
     }
-    return "cute";
+    return "basic";
   });
 
   const [memoryEnabled, setMemoryEnabledState] = useState<boolean>(() => {

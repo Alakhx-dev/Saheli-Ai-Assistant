@@ -2362,7 +2362,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
         if (saved) {
           const parsed = JSON.parse(saved);
           return {
-            color: parsed.color ?? "#ff0078",
+            color: parsed.color ?? "#D01C3F",
             opacity: parsed.opacity ?? 100,
             size: parsed.size ?? 100,
             width: parsed.width ?? 100,
@@ -2372,7 +2372,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
             rightExpansion: parsed.rightExpansion ?? 44,
             brightness: parsed.brightness ?? 100,
             saturation: parsed.saturation ?? 100,
-            originalColor: parsed.originalColor ?? parsed.color ?? "#ff0078",
+            originalColor: parsed.originalColor ?? parsed.color ?? "#D01C3F",
             originalOpacity: parsed.originalOpacity ?? parsed.opacity ?? 100,
             originalSize: parsed.originalSize ?? parsed.size ?? 100,
             originalWidth: parsed.originalWidth ?? parsed.width ?? 100,
@@ -2389,7 +2389,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       }
     }
     return {
-      color: "#ff0078",
+      color: "#D01C3F",
       opacity: 100,
       size: 100,
       width: 100,
@@ -2399,7 +2399,7 @@ const [weatherThemeOverride, setWeatherThemeOverride] = useState<"auto" | "day" 
       rightExpansion: 44,
       brightness: 100,
       saturation: 100,
-      originalColor: "#ff0078",
+      originalColor: "#D01C3F",
       originalOpacity: 100,
       originalSize: 100,
       originalWidth: 100,

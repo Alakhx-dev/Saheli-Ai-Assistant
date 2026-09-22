@@ -841,7 +841,7 @@ export default function SettingsPanel({
         return saved;
       }
     }
-    return "cute";
+    return "basic";
   });
 
   interface CustomTheme {
